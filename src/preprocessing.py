@@ -2,7 +2,7 @@ import numpy as np
 
 # TODO: Vectorized cut functions
 
-def build_covariance_matrix(data: np.ndarray) -> np.ndarray:
+def build_covariance_matrix(data: np.ndarray, offset: float = 1e-323) -> np.ndarray:
     """Given a data array with shape (N,M), populate a set of 
     covariance matrices with the shape (3,3,N). If any covariance
     matrix has a zero or negative determinant, a small value is
@@ -35,6 +35,9 @@ def build_covariance_matrix(data: np.ndarray) -> np.ndarray:
     # add constant to covs with negative determinant
     cov_swapped = cov.swapaxes(0,2) # axis swapped view of cov
     idx_neg_det = np.linalg.det(cov_swapped) <= 0
-    cov_swapped[idx_neg_det] += 1e-323
+    cov_swapped[idx_neg_det] += offset
+
+    # TODO: Check if all are positive definite, and if so
+    # raise error
 
     return cov
