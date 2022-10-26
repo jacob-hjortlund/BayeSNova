@@ -1,5 +1,7 @@
 import numpy as np
 
+# TODO: Vectorized cut functions
+
 def build_covariance_matrix(data: np.ndarray) -> np.ndarray:
     """Given a data array with shape (N,M), populate a set of 
     covariance matrices with the shape (3,3,N). If any covariance
