@@ -1,4 +1,5 @@
 import numpy as np
+import src.utils as utils
 
 # TODO: Vectorized cut functions
 
@@ -34,10 +35,7 @@ def build_covariance_matrix(data: np.ndarray, offset: float = 1e-323) -> np.ndar
 
     # add constant to covs with negative determinant
     cov_swapped = cov.swapaxes(0,2) # axis swapped view of cov
-    idx_neg_det = np.linalg.det(cov_swapped) <= 0
-    cov_swapped[idx_neg_det] += offset
+    posdef_covs = utils.ensure_posdef(cov_swapped)
+    posdef_covs = posdef_covs.swapaxes(0,2)
 
-    # TODO: Check if all are positive definite, and if so
-    # raise error
-
-    return cov
+    return posdef_covs
