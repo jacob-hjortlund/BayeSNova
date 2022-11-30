@@ -1,0 +1,16 @@
+ratio_par_name: w
+shared_param_names: [
+  alpha,
+  beta,
+  s,
+  sig_s,
+  Rb,
+  sig_Rb,
+  tau,
+  alpha_g
+]
+independent_param_names: [
+  Mb,
+  c,
+  sig_c
+]
