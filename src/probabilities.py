@@ -13,7 +13,7 @@ def _log_prior(
 
     return 1
 
-def population_covariance(
+def _population_covariance(
     alpha: float, beta: float, sig_s: float, sig_c: float, sig_int: float
 ) -> np.ndarray:
     """Calculate the covariance matrix shared by all SN in a given population
