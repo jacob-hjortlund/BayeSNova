@@ -74,6 +74,53 @@ def _population_r(
 
     return r
 
+def _convolved_probability(
+    covs: np.ndarray, r: np.ndarray, rb: float,
+    sig_rb: float, tau: float, alpha_g: float,
+    lower_bound: float = 0., upper_bound: float = 10.
+) -> np.ndarray:
+    """Vectorized numerical convolution of partial posterior and
+    dust reddening gamma distribution.
+
+    Args:
+        covs (np.ndarray): Covariance matrices with shape (N,3,3)
+        r (np.ndarray): Residuals with shape (N,3)
+        rb (float): Population extinction coefficient
+        sig_rb (float): Population extinction coefficient scatter
+        tau (float): Population extinction dist scale parameter
+        alpha_g (float): Population extinction dist shape parameter
+        lower_bound (float, optional): Lower bound on integral. Defaults to 0.
+        upper_bound (float, optional): Upper bound on integral. Defaults to 10.
+
+    Returns:
+        np.ndarray: _description_
+    """
+
+    def f(x):
+        # Update residual
+        r[:,0] -= rb * tau * x
+        r[:,2] -= tau * x
+
+        # Update covariances
+        covs[:,0,0] += sig_rb**2 * tau**2 * x**2
+
+        # Setup expression
+        dets = np.linalg.det(covs)
+        inv_covs = np.linalg.inv(covs)
+        inv_det_r = np.dot(inv_covs, r.swapaxes(0,1))
+        r_inv_det_r = np.diag(
+            np.dot(r, inv_det_r.swapaxes(0,1))
+        )
+        values = np.exp(-0.5 * r_inv_det_r - x) * x**(alpha_g - 1.) / dets**2
+
+        return values
+
+    p_convoluted = sp_integrate.quad_vec(
+        f, lower_bound, upper_bound
+    )[0]
+        
+    return p_convoluted
+
 def _log_likelihood(
     mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
     sig_c_1, rb_1, sig_rb_1, tau_1, alpha_g_1,
