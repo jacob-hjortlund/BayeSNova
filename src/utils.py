@@ -12,7 +12,7 @@ def gen_pop_par_names(par_names):
 
 
 def theta_to_dict(
-    theta, shared_par_names, independent_par_names, ratio_par='w'
+    theta, shared_par_names, independent_par_names, ratio_par_name='w'
 ):
 
     extended_shared_par_names = gen_pop_par_names(shared_par_names)
@@ -32,7 +32,7 @@ def theta_to_dict(
         arg_dict[extended_shared_par_names[i + 1]] = theta[i]
     for i in range(n_independent_pars):
         arg_dict[extended_independent_par_names[i]] = theta[i]
-    arg_dict[ratio_par] = theta[-1]
+    arg_dict[ratio_par_name] = theta[-1]
 
     return arg_dict
 
