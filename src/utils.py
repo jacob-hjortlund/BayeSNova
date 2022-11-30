@@ -1,5 +1,41 @@
 import numpy as np
 
+def gen_pop_par_names(par_names):
+    n_pars = len(par_names)
+    extended_par_names = [""] * n_pars
+
+    for i, par_name in enumerate(par_names):
+        extended_par_names[i] = par_name + "_1"
+        extended_par_names[i + 1] = par_name + "_2"
+    
+    return extended_par_names
+
+
+def theta_to_dict(
+    theta, shared_par_names, independent_par_names, ratio_par='w'
+):
+
+    extended_shared_par_names = gen_pop_par_names(shared_par_names)
+    extended_independent_par_names = gen_pop_par_names(independent_par_names)
+
+    n_shared_pars = len(shared_par_names)
+    n_independent_pars = len(extended_independent_par_names)
+
+    if len(theta) != n_shared_pars + n_independent_pars + 1:
+        raise ValueError(
+            "MCMC parameter dimensions does not match no. of shared and independent parameters."
+        )
+
+    arg_dict = {}
+    for i in range(n_shared_pars):
+        arg_dict[extended_shared_par_names[i]] = theta[i]
+        arg_dict[extended_shared_par_names[i + 1]] = theta[i]
+    for i in range(n_independent_pars):
+        arg_dict[extended_independent_par_names[i]] = theta[i]
+    arg_dict[ratio_par] = theta[-1]
+
+    return arg_dict
+
 def ensure_posdef(
     covs: np.ndarray, offset: float = 1e-323
 ) -> np.ndarray:
