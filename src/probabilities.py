@@ -176,13 +176,32 @@ def population_prob(
     return dust_reddening_convolved_prob
 
 def _log_likelihood(
-    mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
-    sig_c_1, rb_1, sig_rb_1, tau_1, alpha_g_1,
-    mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
-    sig_c_2, rb_2, sig_rb_2, tau_2, alpha_g_2
+    mb, z, s, c,
+    Mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
+    sig_c_1, sig_int_1, rb_1, sig_rb_1, tau_1, alpha_g_1,
+    Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
+    sig_c_2, sig_int_2, rb_2, sig_rb_2, tau_2, alpha_g_2,
+    w, H0
 ):
 
-    return 1
+    pop1_probs = population_prob(
+        mb, z, s, c, Mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1, 
+        sig_c_1, sig_int_1, rb_1, sig_rb_1, tau_1, alpha_g_1, H0
+    )
+
+    pop2_probs = population_prob(
+        mb, z, s, c, Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2, 
+        sig_c_2, sig_int_2, rb_2, sig_rb_2, tau_2, alpha_g_2, H0
+    )
+
+    if np.any(pop1_probs < 0.) | np.any(pop2_probs < 0.):
+        return -np.inf
+
+    log_prob = np.sum(
+        np.log(w * pop1_probs + (1-w) * pop2_probs)
+    )
+
+    return log_prob
 
 def generate_log_prob(
     shared_par_names: list, independent_par_names: list, ratio_par_name: list,
