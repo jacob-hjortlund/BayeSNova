@@ -74,7 +74,7 @@ def _population_r(
 
     return r
 
-def _convolved_probability(
+def _dust_reddening_convolved_probability(
     covs: np.ndarray, r: np.ndarray, rb: float,
     sig_rb: float, tau: float, alpha_g: float,
     lower_bound: float = 0., upper_bound: float = 10.
