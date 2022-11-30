@@ -4,7 +4,12 @@ import scipy.integrate as sp_integrate
 
 import src.utils as utils
 
-def _log_prior(**kwargs):
+def _log_prior(
+    mb_1, alpha_1, beta_1, s_1, sig_s_1,c_1,
+    sig_c_1, rb_1, sig_rb_1, tau_1, alpha_g_1,
+    mb_2, alpha_2, beta_2, s_2, sig_s_2,c_2,
+    sig_c_2, rb_2, sig_rb_2, tau_2, alpha_g_2
+):
 
     return 1
 
