@@ -6,20 +6,22 @@ import src.utils as utils
 from astropy.cosmology import Planck18_arXiv_v2 as cosmo
 
 def _log_prior(
-    mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
+    Mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
     sig_c_1, sig_int_1, rb_1, sig_rb_1, tau_1, alpha_g_1,
-    mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
+    Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
     sig_c_2, sig_int_2, rb_2, sig_rb_2, tau_2, alpha_g_2
 ):
 
     return 1
 
 def _population_covariance(
-    alpha: float, beta: float, sig_s: float, sig_c: float, sig_int: float
-) -> tuple:
+    z: np.ndarray, alpha: float, beta: float,
+    sig_s: float, sig_c: float, sig_int: float
+) -> np.ndarray:
     """Calculate the covariance matrix shared by all SN in a given population
 
     Args:
+        z (np.ndarray): SN redshifts
         alpha (float): Stretch correction
         beta (float): Intrinsic color correction
         sig_s (float): Stretch uncertainty
@@ -27,24 +29,29 @@ def _population_covariance(
         sig_int (float): Intrinsic scatter
 
     Returns:
-        tuple: Shared covariance matrix
+        np.ndarray: Shared covariance matrix
     """
 
-    mu = np.zeros(3)
-    cov = np.zeros((3,3))
-    cov[0,0] = sig_int**2 + alpha**2 * sig_s**2 + beta**2 * sig_c**2
-    cov[1,1] = sig_s**2
-    cov[2,2] = sig_c**2
-    cov[0,1] = alpha * sig_s**2
-    cov[0,2] = beta * sig_c**2
-    cov[1,0] = cov[0,1]
-    cov[2,0] = cov[0,2]
+    cov = np.zeros((len(z),3,3))
+    disp_v_pec = 200. # km / s
+    c = 300000. # km / s
+    cov[:,0,0] = sig_int**2 + alpha**2 * sig_s**2 + beta**2 * sig_c**2
+    cov[:,0,0] += z**(-2) * (
+        (5. / np.log(10.))**2
+        * (disp_v_pec / c)**2
+    )
+    cov[:,1,1] = sig_s**2
+    cov[:,2,2] = sig_c**2
+    cov[:,0,1] = alpha * sig_s**2
+    cov[:,0,2] = beta * sig_c**2
+    cov[:,1,0] = cov[:,0,1]
+    cov[:,2,0] = cov[:,0,2]
 
     return cov
 
 def _population_r(
-    mb: np.ndarray, s: np.ndarray, c: np.ndarray, Mb: float, alpha_h: float, 
-    beta_h: float, s_h: float, c_h: float, H0: float, z: np.ndarray
+    mb: np.ndarray, s: np.ndarray, c: np.ndarray, z: np.ndarray, Mb: float,
+    alpha_h: float, beta_h: float, s_h: float, c_h: float, H0: float,
 ) -> np.ndarray:
     """Calculate residual between data and mean vector
 
@@ -52,13 +59,13 @@ def _population_r(
         mb (np.ndarray): Apparent magnitudes
         s (np.ndarray): SN stretches
         c (np.ndarray): SN intrinsic colors
+        z (np.ndarray): SN redshifts
         Mb (float): Population absolute magnitude
         alpha_h (float): Population stretch correction
         beta_h (float): Population intrinsic color correction
         s_h (float): Population stretch
         c_h (float): Population intrinsic color
         H0 (float): Hubble constant
-        z (np.ndarray): SN redshifts
 
     Returns:
         np.ndarray: Residuals
@@ -115,11 +122,58 @@ def _dust_reddening_convolved_probability(
 
         return values
 
+    norm = sp_special.gammainc(alpha_g, upper_bound) * sp_special.gamma(alpha_g)
     p_convoluted = sp_integrate.quad_vec(
         f, lower_bound, upper_bound
-    )[0]
+    )[0] / norm
         
     return p_convoluted
+
+def population_prob(
+    mb: np.ndarray, z: np.ndarray, s: np.ndarray, c: np.ndarray,
+    Mb_h: float, alpha_h: float, beta_h: float, s_h: float, sig_s_h: float,
+    c_h: float, sig_c_h: float, sig_int: float, rb_h: float, sig_rb_h: float,
+    tau_h: float, alpha_g: float, H0: float, lower_bound: float = 0., upper_bound: float = 10.
+
+) -> np.ndarray:
+    """Calculate convolved probabilities for given population distribution
+
+    Args:
+        mb (np.ndarray): _description_
+        z (np.ndarray): _description_
+        s (np.ndarray): _description_
+        c (np.ndarray): _description_
+        Mb_h (float): _description_
+        alpha_h (float): _description_
+        beta_h (float): _description_
+        s_h (float): _description_
+        sig_s_h (float): _description_
+        c_h (float): _description_
+        sig_c_h (float): _description_
+        sig_int (float): _description_
+        rb_h (float): _description_
+        sig_rb_h (float): _description_
+        tau_h (float): _description_
+        alpha_g (float): _description_
+        H0 (float): _description_
+        lower_bound (float, optional): _description_. Defaults to 0..
+        upper_bound (float, optional): _description_. Defaults to 10..
+
+    Returns:
+        _type_: _description_
+    """
+    
+    covs = _population_covariance(
+        z, alpha_h, beta_h, sig_s_h, sig_c_h, sig_int
+    )
+    r = _population_r(
+        mb, s, c, z, Mb_h, alpha_h, beta_h, s_h, c_h, H0
+    )
+    dust_reddening_convolved_prob = _dust_reddening_convolved_probability(
+        covs, r, rb_h, sig_rb_h, tau_h, alpha_g, lower_bound, upper_bound
+    )
+
+    return dust_reddening_convolved_prob
 
 def _log_likelihood(
     mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
