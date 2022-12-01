@@ -6,13 +6,22 @@ import src.utils as utils
 from astropy.cosmology import Planck18_arXiv_v2 as cosmo
 
 def _log_prior(
-    prior_bounds, **kwargs
+    prior_bounds: dict, ratio_par_name: str, **kwargs
 ):
 
-    for param, key in prior_bounds:
-        print(param, key)
+    value = 0.
+    for value_key in kwargs.keys:
+        if value_key != ratio_par_name:
+            bounds_key = "_".join(value_key.split("_")[:-1])
+        else:
+            bounds_key = value_key
+        
+        if bounds_key in prior_bounds.keys():
+            value += utils.uniform(
+                kwargs[value_key], *prior_bounds[bounds_key]
+            )
 
-    return 1
+    return value
 
 def _population_covariance(
     sn_cov: np.ndarray, z: np.ndarray, alpha: float,
@@ -229,6 +238,6 @@ def generate_log_prob(
         
         log_likelihood = _log_likelihood(**arg_dict)
 
-        return log_likelihood + log_prior
+        return log_likelihood
     
     return log_prob_f
