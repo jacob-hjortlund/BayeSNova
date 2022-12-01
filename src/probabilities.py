@@ -177,13 +177,16 @@ def population_prob(
     """
     
     covs = _population_covariance(
-        sn_cov, sn_z, alpha, beta, sig_s, sig_c, sig_int
+        sn_cov=sn_cov, z=sn_z, alpha=alpha, beta=beta,
+        sig_s=sig_s, sig_c=sig_c, sig_int=sig_int
     )
     r = _population_r(
-        sn_mb, sn_s, sn_c, sn_z, Mb, alpha, beta, s, c, H0
+        sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c, sn_z=sn_z,
+        Mb=Mb, alpha=alpha, beta=beta, s=s, c=c, H0=H0
     )
     dust_reddening_convolved_prob = _dust_reddening_convolved_probability(
-        covs, r, rb, sig_rb, tau, alpha_g, lower_bound, upper_bound
+        covs=covs, r=r, rb=rb, sig_rb=sig_rb, tau=tau, alpha_g=alpha_g,
+        lower_bound=lower_bound, upper_bound=upper_bound
     )
 
     return dust_reddening_convolved_prob
@@ -198,13 +201,17 @@ def _log_likelihood(
 ):
 
     pop1_probs = population_prob(
-        sn_cov, sn_mb, sn_z, sn_s, sn_c, Mb_1, alpha_1, beta_1, s_1, sig_s_1,
-        c_1, sig_c_1, sig_int_1, rb_1, sig_rb_1, tau_1, alpha_g_1, H0
+        sn_cov=sn_cov, sn_mb=sn_mb, sn_z=sn_z, sn_s=sn_s, sn_c=sn_c,
+        Mb=Mb_1, alpha=alpha_1, beta=beta_1, s=s_1, sig_s=sig_s_1,
+        c=c_1, sig_c=sig_c_1, sig_int=sig_int_1, rb=rb_1, sig_rb=sig_rb_1,
+        tau=tau_1, alpha_g=alpha_g_1, H0=H0
     )
 
     pop2_probs = population_prob(
-        sn_cov, sn_mb, sn_z, sn_s, sn_c, Mb_2, alpha_2, beta_2, s_2, sig_s_2,
-        c_2, sig_c_2, sig_int_2, rb_2, sig_rb_2, tau_2, alpha_g_2, H0
+        sn_cov=sn_cov, sn_mb=sn_mb, sn_z=sn_z, sn_s=sn_s, sn_c=sn_c,
+        Mb=Mb_2, alpha=alpha_2, beta=beta_2, s=s_2, sig_s=sig_s_2,
+        c=c_2, sig_c=sig_c_2, sig_int=sig_int_2, rb=rb_2, sig_rb=sig_rb_2,
+        tau=tau_2, alpha_g=alpha_g_2, H0=H0
     )
 
     # Check if any probs had non-posdef cov
@@ -233,16 +240,16 @@ def generate_log_prob(
     def log_prob_f(theta):
 
         arg_dict = init_arg_dict | utils.theta_to_dict(
-            theta, model_cfg['shared_par_names'], 
-            model_cfg['independent_par_names'],
-            model_cfg['ratio_par_name'],
-            model_cfg['cfg']['use_sigmoid'],
-            model_cfg['sigmoid_settings']
+            theta=theta, shared_par_names=model_cfg['shared_par_names'], 
+            independent_par_names=model_cfg['independent_par_names'],
+            ratio_par_name=model_cfg['ratio_par_name'],
+            use_sigmoid=model_cfg['cfg']['use_sigmoid'],
+            sigmoid_cfg=model_cfg['sigmoid_settings']
         )
 
         log_prior = _log_prior(
-            model_cfg['prior_bounds'],
-            model_cfg['ratio_par_name'],
+            prior_bounds=model_cfg['prior_bounds'],
+            ratio_par_name=model_cfg['ratio_par_name'],
             **arg_dict
         )
         if np.isinf(log_prior):
