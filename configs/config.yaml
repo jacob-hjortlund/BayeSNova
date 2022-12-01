@@ -15,6 +15,10 @@ model_par_cfg:
     c,
     sig_c
   ]
+  preset_values:
+    H0: 73.0
+    sig_int_1: 0.
+    sig_int_2: 0.
   prior_bounds:
     beta: [1, 5]
     s: [0]

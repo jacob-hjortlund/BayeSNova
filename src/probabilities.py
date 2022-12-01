@@ -218,19 +218,25 @@ def _log_likelihood(
     return log_prob
 
 def generate_log_prob(
-    shared_par_names: list, independent_par_names: list, ratio_par_name: str, prior_bounds: dict,
-    sn_covs: np.ndarray, sn_mb: np.ndarray, sn_s: np.ndarray, sn_c: np.ndarray, sn_z: np.ndarray
+    shared_par_names: list, independent_par_names: list,
+    ratio_par_name: str, preset_values: dict, 
+    prior_bounds: dict, sn_covs: np.ndarray, 
+    sn_mb: np.ndarray, sn_s: np.ndarray,
+    sn_c: np.ndarray, sn_z: np.ndarray
 ):
+
+    init_arg_dict = preset_values
+    init_arg_dict['sn_mb'] = sn_mb
+    init_arg_dict['sn_s'] = sn_s
+    init_arg_dict['sn_c'] = sn_c
+    init_arg_dict['sn_z'] = sn_z
+    init_arg_dict['sn_cov'] = sn_covs
+
     def log_prob_f(theta):
 
-        arg_dict = utils.theta_to_dict(
+        arg_dict = init_arg_dict | utils.theta_to_dict(
             theta, shared_par_names, independent_par_names, ratio_par_name 
         )
-        arg_dict['sn_mb'] = sn_mb
-        arg_dict['sn_s'] = sn_s
-        arg_dict['sn_c'] = sn_c
-        arg_dict['sn_z'] = sn_z
-        arg_dict['sn_cov'] = sn_covs
 
         log_prior = _log_prior(prior_bounds, ratio_par_name, **arg_dict)
         if np.isinf(log_prior):
