@@ -1,4 +1,4 @@
-model_par_cfg:
+model_cfg:
   ratio_par_name: w
   shared_par_names: [
     alpha,
@@ -30,3 +30,7 @@ model_par_cfg:
     tau: [0]
     alpha_g: [1., 7.]
     w: [0.12, 0.88]
+  use_sigmoid: False
+  sigmoid_cfg:
+    scale: 1.
+    shift: 0.
