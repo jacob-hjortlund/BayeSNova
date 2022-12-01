@@ -15,18 +15,18 @@ def _log_prior(
     return 1
 
 def _population_covariance(
-    z: np.ndarray, alpha: float, beta: float,
-    sig_s: float, sig_c: float, sig_int: float
+    z: np.ndarray, alpha_h: float, beta_h: float,
+    sig_s_h: float, sig_c_h: float, sig_int: float
 ) -> np.ndarray:
     """Calculate the covariance matrix shared by all SN in a given population
 
     Args:
         z (np.ndarray): SN redshifts
-        alpha (float): Stretch correction
-        beta (float): Intrinsic color correction
-        sig_s (float): Stretch uncertainty
-        sig_c (float): Intrinsic color uncertainty
-        sig_int (float): Intrinsic scatter
+        alpha_h (float): Population stretch correction
+        beta_h (float): Population intrinsic color correction
+        sig_s_h (float): Population stretch uncertainty
+        sig_c_h (float): Population intrinsic color uncertainty
+        sig_int (float): Population intrinsic scatter
 
     Returns:
         np.ndarray: Shared covariance matrix
@@ -35,15 +35,15 @@ def _population_covariance(
     cov = np.zeros((len(z),3,3))
     disp_v_pec = 200. # km / s
     c = 300000. # km / s
-    cov[:,0,0] = sig_int**2 + alpha**2 * sig_s**2 + beta**2 * sig_c**2
+    cov[:,0,0] = sig_int**2 + alpha_h**2 * sig_s_h**2 + beta_h**2 * sig_c_h**2
     cov[:,0,0] += z**(-2) * (
         (5. / np.log(10.))**2
         * (disp_v_pec / c)**2
     )
-    cov[:,1,1] = sig_s**2
-    cov[:,2,2] = sig_c**2
-    cov[:,0,1] = alpha * sig_s**2
-    cov[:,0,2] = beta * sig_c**2
+    cov[:,1,1] = sig_s_h**2
+    cov[:,2,2] = sig_c_h**2
+    cov[:,0,1] = alpha_h * sig_s_h**2
+    cov[:,0,2] = beta_h * sig_c_h**2
     cov[:,1,0] = cov[:,0,1]
     cov[:,2,0] = cov[:,0,2]
 
@@ -139,28 +139,28 @@ def population_prob(
     """Calculate convolved probabilities for given population distribution
 
     Args:
-        mb (np.ndarray): _description_
-        z (np.ndarray): _description_
-        s (np.ndarray): _description_
-        c (np.ndarray): _description_
-        Mb_h (float): _description_
-        alpha_h (float): _description_
-        beta_h (float): _description_
-        s_h (float): _description_
-        sig_s_h (float): _description_
-        c_h (float): _description_
-        sig_c_h (float): _description_
-        sig_int (float): _description_
-        rb_h (float): _description_
-        sig_rb_h (float): _description_
-        tau_h (float): _description_
-        alpha_g (float): _description_
-        H0 (float): _description_
-        lower_bound (float, optional): _description_. Defaults to 0..
-        upper_bound (float, optional): _description_. Defaults to 10..
+        mb (np.ndarray): Apparent magnitudes
+        z (np.ndarray): Redshifts
+        s (np.ndarray): Stretch parameters
+        c (np.ndarray): Intrinsic colour
+        Mb_h (float): Population absolute magnitudes
+        alpha_h (float): Population stretch correction
+        beta_h (float): Population intrinsic colour correction
+        s_h (float): Population stretch parameter
+        sig_s_h (float): Population stretch parameter scatter
+        c_h (float): Population intrinsic colour
+        sig_c_h (float): Population intrinsic colour scatter
+        sig_int (float): Population intrinsic scatter
+        rb_h (float): Population extinction coefficient
+        sig_rb_h (float): Population extinction coefficient scatter
+        tau_h (float): Population dust reddening dist scale
+        alpha_g (float): Population dust reddening dist shapeparameter
+        H0 (float): Hubble constant
+        lower_bound (float, optional): Dust reddening convolution lower bound. Defaults to 0.
+        upper_bound (float, optional): Dust reddening convolution lower bound. Defaults to 10.
 
     Returns:
-        _type_: _description_
+        np.ndarray: Convolved population probabilities
     """
     
     covs = _population_covariance(
@@ -194,6 +194,7 @@ def _log_likelihood(
         sig_c_2, sig_int_2, rb_2, sig_rb_2, tau_2, alpha_g_2, H0
     )
 
+    # Check if any probs had non-posdef cov
     if np.any(pop1_probs < 0.) | np.any(pop2_probs < 0.):
         return -np.inf
 
