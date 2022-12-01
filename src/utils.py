@@ -22,7 +22,6 @@ def gen_pop_par_names(par_names):
     
     return extended_par_names
 
-
 def theta_to_dict(
     theta: np.ndarray, shared_par_names: list, independent_par_names: list,
     ratio_par_name: str, use_sigmoid: bool, sigmoid_cfg: dict

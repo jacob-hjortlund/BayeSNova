@@ -1,3 +1,6 @@
+data_cfg:
+  path: './data/Super_0.023_0.15_zHD_cut_22_no_2007rx'
+  sep: ' '
 model_cfg:
   ratio_par_name: w
   shared_par_names: [

@@ -3,7 +3,7 @@ import src.utils as utils
 
 # TODO: Vectorized cut functions
 
-def build_covariance_matrix(data: np.ndarray, offset: float = 1e-323) -> np.ndarray:
+def build_covariance_matrix(data: np.ndarray) -> np.ndarray:
     """Given a data array with shape (N,M), populate a set of 
     covariance matrices with the shape (N,3,3). If any covariance
     matrix has a zero or negative determinant, a small value is
