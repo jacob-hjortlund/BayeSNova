@@ -6,78 +6,81 @@ import src.utils as utils
 from astropy.cosmology import Planck18_arXiv_v2 as cosmo
 
 def _log_prior(
-    Mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
-    sig_c_1, sig_int_1, rb_1, sig_rb_1, tau_1, alpha_g_1,
-    Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
-    sig_c_2, sig_int_2, rb_2, sig_rb_2, tau_2, alpha_g_2
+    prior_bounds, **kwargs
 ):
+
+    for param, key in prior_bounds:
+        print(param, key)
 
     return 1
 
 def _population_covariance(
-    z: np.ndarray, alpha_h: float, beta_h: float,
-    sig_s_h: float, sig_c_h: float, sig_int: float
+    sn_cov: np.ndarray, z: np.ndarray, alpha: float,
+    beta: float, sig_s: float, sig_c: float, sig_int: float
 ) -> np.ndarray:
     """Calculate the covariance matrix shared by all SN in a given population
 
     Args:
+        sn_cov (np.ndarray): SN covariance matrices
         z (np.ndarray): SN redshifts
-        alpha_h (float): Population stretch correction
-        beta_h (float): Population intrinsic color correction
-        sig_s_h (float): Population stretch uncertainty
-        sig_c_h (float): Population intrinsic color uncertainty
+        alpha (float): Population stretch correction
+        beta (float): Population intrinsic color correction
+        sig_s (float): Population stretch uncertainty
+        sig_c (float): Population intrinsic color uncertainty
         sig_int (float): Population intrinsic scatter
 
     Returns:
         np.ndarray: Shared covariance matrix
     """
 
-    cov = np.zeros((len(z),3,3))
+    cov = np.zeros(sn_cov.shape)
     disp_v_pec = 200. # km / s
     c = 300000. # km / s
-    cov[:,0,0] = sig_int**2 + alpha_h**2 * sig_s_h**2 + beta_h**2 * sig_c_h**2
+    cov[:,0,0] = sig_int**2 + alpha**2 * sig_s**2 + beta**2 * sig_c**2
     cov[:,0,0] += z**(-2) * (
         (5. / np.log(10.))**2
         * (disp_v_pec / c)**2
     )
-    cov[:,1,1] = sig_s_h**2
-    cov[:,2,2] = sig_c_h**2
-    cov[:,0,1] = alpha_h * sig_s_h**2
-    cov[:,0,2] = beta_h * sig_c_h**2
+    cov[:,1,1] = sig_s**2
+    cov[:,2,2] = sig_c**2
+    cov[:,0,1] = alpha * sig_s**2
+    cov[:,0,2] = beta * sig_c**2
     cov[:,1,0] = cov[:,0,1]
     cov[:,2,0] = cov[:,0,2]
+
+    cov += sn_cov
 
     return cov
 
 def _population_r(
-    mb: np.ndarray, s: np.ndarray, c: np.ndarray, z: np.ndarray, Mb: float,
-    alpha_h: float, beta_h: float, s_h: float, c_h: float, H0: float,
+    sn_mb: np.ndarray, sn_s: np.ndarray, sn_c: np.ndarray, sn_z: np.ndarray,
+    Mb: float, alpha: float, beta: float, s: float, c: float, H0: float,
 ) -> np.ndarray:
     """Calculate residual between data and mean vector
 
     Args:
-        mb (np.ndarray): Apparent magnitudes
-        s (np.ndarray): SN stretches
-        c (np.ndarray): SN intrinsic colors
-        z (np.ndarray): SN redshifts
+        sn_mb (np.ndarray): SN apparent magnitudes
+        sn_s (np.ndarray): SN stretches
+        sn_c (np.ndarray): SN intrinsic colors
+        sn_z (np.ndarray): SN redshifts
         Mb (float): Population absolute magnitude
-        alpha_h (float): Population stretch correction
-        beta_h (float): Population intrinsic color correction
-        s_h (float): Population stretch
-        c_h (float): Population intrinsic color
+        alpha (float): Population stretch correction
+        beta (float): Population intrinsic color correction
+        s (float): Population stretch
+        c (float): Population intrinsic color
         H0 (float): Hubble constant
 
     Returns:
         np.ndarray: Residuals
     """
 
-    r = np.zeros((len(mb), 3))
-    distance_modulus = cosmo.distmod(z) + 5. * np.log10(cosmo.H0.value / H0)
-    r[:, 0] = mb - (
-        Mb + cosmo.distmod(z) + alpha_h * s + beta_h * c + distance_modulus
+    r = np.zeros((len(sn_mb), 3))
+    distance_modulus = cosmo.distmod(sn_z) + 5. * np.log10(cosmo.H0.value / H0)
+    r[:, 0] = sn_mb - (
+        Mb + cosmo.distmod(sn_z) + alpha * s + beta * c + distance_modulus
     ) 
-    r[:, 1] = s - s_h
-    r[:, 2] = c - c_h
+    r[:, 1] = sn_s - s
+    r[:, 2] = sn_c - c
 
     return r
 
@@ -130,30 +133,31 @@ def _dust_reddening_convolved_probability(
     return p_convoluted
 
 def population_prob(
-    mb: np.ndarray, z: np.ndarray, s: np.ndarray, c: np.ndarray,
-    Mb_h: float, alpha_h: float, beta_h: float, s_h: float, sig_s_h: float,
-    c_h: float, sig_c_h: float, sig_int: float, rb_h: float, sig_rb_h: float,
-    tau_h: float, alpha_g: float, H0: float, lower_bound: float = 0., upper_bound: float = 10.
+    sn_cov: np.ndarray, sn_mb: np.ndarray, sn_z: np.ndarray, sn_s: np.ndarray, sn_c: np.ndarray,
+    Mb: float, alpha: float, beta: float, s: float, sig_s: float,
+    c: float, sig_c: float, sig_int: float, rb: float, sig_rb: float,
+    tau: float, alpha_g: float, H0: float, lower_bound: float = 0., upper_bound: float = 10.
 
 ) -> np.ndarray:
     """Calculate convolved probabilities for given population distribution
 
     Args:
-        mb (np.ndarray): Apparent magnitudes
-        z (np.ndarray): Redshifts
-        s (np.ndarray): Stretch parameters
-        c (np.ndarray): Intrinsic colour
-        Mb_h (float): Population absolute magnitudes
-        alpha_h (float): Population stretch correction
-        beta_h (float): Population intrinsic colour correction
-        s_h (float): Population stretch parameter
-        sig_s_h (float): Population stretch parameter scatter
-        c_h (float): Population intrinsic colour
-        sig_c_h (float): Population intrinsic colour scatter
+        sn_cov (np.ndarray): SN covariance matrices
+        sn_mb (np.ndarray): SN apparent magnitudes
+        sn_z (np.ndarray): SN redshifts
+        sn_s (np.ndarray): SN stretch parameters
+        sn_c (np.ndarray): SN intrinsic colour
+        Mb (float): Population absolute magnitudes
+        alpha (float): Population stretch correction
+        beta (float): Population intrinsic colour correction
+        s (float): Population stretch parameter
+        sig_s (float): Population stretch parameter scatter
+        c (float): Population intrinsic colour
+        sig_c (float): Population intrinsic colour scatter
         sig_int (float): Population intrinsic scatter
-        rb_h (float): Population extinction coefficient
-        sig_rb_h (float): Population extinction coefficient scatter
-        tau_h (float): Population dust reddening dist scale
+        rb (float): Population extinction coefficient
+        sig_rb (float): Population extinction coefficient scatter
+        tau (float): Population dust reddening dist scale
         alpha_g (float): Population dust reddening dist shapeparameter
         H0 (float): Hubble constant
         lower_bound (float, optional): Dust reddening convolution lower bound. Defaults to 0.
@@ -164,19 +168,19 @@ def population_prob(
     """
     
     covs = _population_covariance(
-        z, alpha_h, beta_h, sig_s_h, sig_c_h, sig_int
+        sn_cov, sn_z, alpha, beta, sig_s, sig_c, sig_int
     )
     r = _population_r(
-        mb, s, c, z, Mb_h, alpha_h, beta_h, s_h, c_h, H0
+        sn_mb, sn_s, sn_c, sn_z, Mb, alpha, beta, s, c, H0
     )
     dust_reddening_convolved_prob = _dust_reddening_convolved_probability(
-        covs, r, rb_h, sig_rb_h, tau_h, alpha_g, lower_bound, upper_bound
+        covs, r, rb, sig_rb, tau, alpha_g, lower_bound, upper_bound
     )
 
     return dust_reddening_convolved_prob
 
 def _log_likelihood(
-    mb, z, s, c,
+    sn_cov, sn_mb, sn_z, sn_s, sn_c,
     Mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
     sig_c_1, sig_int_1, rb_1, sig_rb_1, tau_1, alpha_g_1,
     Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
@@ -185,13 +189,13 @@ def _log_likelihood(
 ):
 
     pop1_probs = population_prob(
-        mb, z, s, c, Mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1, 
-        sig_c_1, sig_int_1, rb_1, sig_rb_1, tau_1, alpha_g_1, H0
+        sn_cov, sn_mb, sn_z, sn_s, sn_c, Mb_1, alpha_1, beta_1, s_1, sig_s_1,
+        c_1, sig_c_1, sig_int_1, rb_1, sig_rb_1, tau_1, alpha_g_1, H0
     )
 
     pop2_probs = population_prob(
-        mb, z, s, c, Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2, 
-        sig_c_2, sig_int_2, rb_2, sig_rb_2, tau_2, alpha_g_2, H0
+        sn_cov, sn_mb, sn_z, sn_s, sn_c, Mb_2, alpha_2, beta_2, s_2, sig_s_2,
+        c_2, sig_c_2, sig_int_2, rb_2, sig_rb_2, tau_2, alpha_g_2, H0
     )
 
     # Check if any probs had non-posdef cov
@@ -205,16 +209,21 @@ def _log_likelihood(
     return log_prob
 
 def generate_log_prob(
-    shared_par_names: list, independent_par_names: list, ratio_par_name: list,
-    covariance: np.ndarray, z: np.ndarray
+    shared_par_names: list, independent_par_names: list, ratio_par_name: list, prior_bounds: dict,
+    sn_covariances: np.ndarray, mb: np.ndarray, s: np.ndarray, c: np.ndarray, z: np.ndarray
 ):
-    def log_prob(theta):
+    def log_prob_f(theta):
 
         arg_dict = utils.theta_to_dict(
             theta, shared_par_names, independent_par_names, ratio_par_name 
         )
+        arg_dict['sn_mb'] = mb
+        arg_dict['sn_s'] = s
+        arg_dict['sn_c'] = c
+        arg_dict['sn_z'] = z
+        arg_dict['sn_cov'] = sn_covariances
 
-        log_prior = _log_prior(**arg_dict)
+        log_prior = _log_prior(prior_bounds, **arg_dict)
         if np.isinf(log_prior):
             return log_prior
         
@@ -222,4 +231,4 @@ def generate_log_prob(
 
         return log_likelihood + log_prior
     
-    return log_prob
+    return log_prob_f
