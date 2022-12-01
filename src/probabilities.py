@@ -218,7 +218,7 @@ def _log_likelihood(
     return log_prob
 
 def generate_log_prob(
-    shared_par_names: list, independent_par_names: list, ratio_par_name: list, prior_bounds: dict,
+    shared_par_names: list, independent_par_names: list, ratio_par_name: str, prior_bounds: dict,
     sn_covs: np.ndarray, sn_mb: np.ndarray, sn_s: np.ndarray, sn_c: np.ndarray, sn_z: np.ndarray
 ):
     def log_prob_f(theta):
@@ -232,7 +232,7 @@ def generate_log_prob(
         arg_dict['sn_z'] = sn_z
         arg_dict['sn_cov'] = sn_covs
 
-        log_prior = _log_prior(prior_bounds, **arg_dict)
+        log_prior = _log_prior(prior_bounds, ratio_par_name, **arg_dict)
         if np.isinf(log_prior):
             return log_prior
         
