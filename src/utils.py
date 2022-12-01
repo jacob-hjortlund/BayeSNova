@@ -1,12 +1,12 @@
 import numpy as np
 
 def gen_pop_par_names(par_names):
-    n_pars = len(par_names)
+    n_pars = 2 * len(par_names)
     extended_par_names = [""] * n_pars
 
-    for i, par_name in enumerate(par_names):
-        extended_par_names[i] = par_name + "_1"
-        extended_par_names[i + 1] = par_name + "_2"
+    for i in range(0, n_pars, 2):
+        extended_par_names[i] = par_names[i//2] + "_1"
+        extended_par_names[i + 1] = par_names[i//2] + "_2"
     
     return extended_par_names
 

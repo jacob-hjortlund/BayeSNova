@@ -210,18 +210,18 @@ def _log_likelihood(
 
 def generate_log_prob(
     shared_par_names: list, independent_par_names: list, ratio_par_name: list, prior_bounds: dict,
-    sn_covariances: np.ndarray, mb: np.ndarray, s: np.ndarray, c: np.ndarray, z: np.ndarray
+    sn_covs: np.ndarray, sn_mb: np.ndarray, sn_s: np.ndarray, sn_c: np.ndarray, sn_z: np.ndarray
 ):
     def log_prob_f(theta):
 
         arg_dict = utils.theta_to_dict(
             theta, shared_par_names, independent_par_names, ratio_par_name 
         )
-        arg_dict['sn_mb'] = mb
-        arg_dict['sn_s'] = s
-        arg_dict['sn_c'] = c
-        arg_dict['sn_z'] = z
-        arg_dict['sn_cov'] = sn_covariances
+        arg_dict['sn_mb'] = sn_mb
+        arg_dict['sn_s'] = sn_s
+        arg_dict['sn_c'] = sn_c
+        arg_dict['sn_z'] = sn_z
+        arg_dict['sn_cov'] = sn_covs
 
         log_prior = _log_prior(prior_bounds, **arg_dict)
         if np.isinf(log_prior):
