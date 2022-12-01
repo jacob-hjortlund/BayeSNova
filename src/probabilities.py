@@ -123,6 +123,9 @@ def _dust_reddening_convolved_probability(
         # Update covariances
         covs[:,0,0] += sig_rb**2 * tau**2 * x**2
 
+        if np.any(np.linalg.det(covs) <= 0.):
+            raise ValueError('Bad covs present')
+
         # Setup expression
         dets = np.linalg.det(covs)
         inv_covs = np.linalg.inv(covs)

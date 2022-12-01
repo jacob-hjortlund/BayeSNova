@@ -38,13 +38,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     # Setup MCMC
     dims = len(cfg['model_cfg']['shared_par_names']) + 2 * len(cfg['model_cfg']['independent_par_names']) + 1
-    init = np.random.rand(dims)
-    nll = lambda *args: -log_prob(*args)
-    soln = minimize(nll, init)
+    init = np.random.rand(100,dims)
+    sampler = em.EnsembleSampler(100, dims, log_prob)
+    sampler.run_mcmc(init, 1000, skip_initial_state_check=True, progress=True)
 
     print(1)
-
-    # How to initialize?
-
 if __name__ == "__main__":
     main()

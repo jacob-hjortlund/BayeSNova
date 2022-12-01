@@ -6,17 +6,17 @@ model_cfg:
   shared_par_names: [
     alpha,
     beta,
-    s,
-    sig_s,
     Rb,
     sig_Rb,
-    tau,
     alpha_g
   ]
   independent_par_names: [
     Mb,
     c,
-    sig_c
+    sig_c,
+    s,
+    sig_s,
+    tau
   ]
   preset_values:
     H0: 73.0

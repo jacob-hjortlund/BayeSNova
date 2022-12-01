@@ -9,7 +9,7 @@ def sigmoid(value: float, shift: float = 0., scale: float = 1.):
 
 def uniform(value: float, lower: float = -np.inf, upper: float = np.inf):
     if value < lower or value > upper:
-        return -1e100#np.inf
+        return -np.inf
     else:
         return 0.
 
