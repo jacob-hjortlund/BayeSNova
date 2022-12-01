@@ -9,7 +9,7 @@ def sigmoid(value: float, shift: float = 0., scale: float = 1.):
 
 def uniform(value: float, lower: float = -np.inf, upper: float = np.inf):
     if value < lower or value > upper:
-        return -np.inf
+        return -1e100#np.inf
     else:
         return 0.
 
@@ -41,8 +41,8 @@ def theta_to_dict(
 
     arg_dict = {}
     for i in range(n_shared_pars):
-        arg_dict[extended_shared_par_names[i]] = theta[i]
-        arg_dict[extended_shared_par_names[i + 1]] = theta[i]
+        arg_dict[extended_shared_par_names[2 * i]] = theta[i]
+        arg_dict[extended_shared_par_names[2 * i + 1]] = theta[i]
 
     if use_sigmoid:
         for i in range(n_independent_pars):

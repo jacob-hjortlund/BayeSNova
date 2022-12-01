@@ -10,7 +10,7 @@ def _log_prior(
 ):
 
     value = 0.
-    for value_key in kwargs.keys:
+    for value_key in kwargs.keys():
         if value_key != ratio_par_name:
             bounds_key = "_".join(value_key.split("_")[:-1])
         else:
@@ -84,9 +84,9 @@ def _population_r(
     """
 
     r = np.zeros((len(sn_mb), 3))
-    distance_modulus = cosmo.distmod(sn_z) + 5. * np.log10(cosmo.H0.value / H0)
+    distance_modulus = cosmo.distmod(sn_z).value + 5. * np.log10(cosmo.H0.value / H0)
     r[:, 0] = sn_mb - (
-        Mb + cosmo.distmod(sn_z) + alpha * s + beta * c + distance_modulus
+        Mb + alpha * s + beta * c + distance_modulus
     ) 
     r[:, 1] = sn_s - s
     r[:, 2] = sn_c - c
@@ -127,6 +127,8 @@ def _dust_reddening_convolved_probability(
         dets = np.linalg.det(covs)
         inv_covs = np.linalg.inv(covs)
         inv_det_r = np.dot(inv_covs, r.swapaxes(0,1))
+        idx = np.arange(len(r))
+        inv_det_r = inv_det_r[idx,:,idx]
         r_inv_det_r = np.diag(
             np.dot(r, inv_det_r.swapaxes(0,1))
         )
@@ -194,23 +196,23 @@ def population_prob(
 def _log_likelihood(
     sn_cov, sn_mb, sn_z, sn_s, sn_c,
     Mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
-    sig_c_1, sig_int_1, rb_1, sig_rb_1, tau_1, alpha_g_1,
+    sig_c_1, sig_int_1, Rb_1, sig_Rb_1, tau_1, alpha_g_1,
     Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
-    sig_c_2, sig_int_2, rb_2, sig_rb_2, tau_2, alpha_g_2,
+    sig_c_2, sig_int_2, Rb_2, sig_Rb_2, tau_2, alpha_g_2,
     w, H0
 ):
 
     pop1_probs = population_prob(
         sn_cov=sn_cov, sn_mb=sn_mb, sn_z=sn_z, sn_s=sn_s, sn_c=sn_c,
         Mb=Mb_1, alpha=alpha_1, beta=beta_1, s=s_1, sig_s=sig_s_1,
-        c=c_1, sig_c=sig_c_1, sig_int=sig_int_1, rb=rb_1, sig_rb=sig_rb_1,
+        c=c_1, sig_c=sig_c_1, sig_int=sig_int_1, rb=Rb_1, sig_rb=sig_Rb_1,
         tau=tau_1, alpha_g=alpha_g_1, H0=H0
     )
 
     pop2_probs = population_prob(
         sn_cov=sn_cov, sn_mb=sn_mb, sn_z=sn_z, sn_s=sn_s, sn_c=sn_c,
         Mb=Mb_2, alpha=alpha_2, beta=beta_2, s=s_2, sig_s=sig_s_2,
-        c=c_2, sig_c=sig_c_2, sig_int=sig_int_2, rb=rb_2, sig_rb=sig_rb_2,
+        c=c_2, sig_c=sig_c_2, sig_int=sig_int_2, rb=Rb_2, sig_rb=sig_Rb_2,
         tau=tau_2, alpha_g=alpha_g_2, H0=H0
     )
 
@@ -218,8 +220,11 @@ def _log_likelihood(
     if np.any(pop1_probs < 0.) | np.any(pop2_probs < 0.):
         return -np.inf
 
+    # TODO: Fix numerical stability by using logsumexp somehow
     log_prob = np.sum(
-        np.log(w * pop1_probs + (1-w) * pop2_probs)
+        np.log(
+            w * pop1_probs + (1-w) * pop2_probs
+        )
     )
 
     return log_prob
@@ -243,8 +248,8 @@ def generate_log_prob(
             theta=theta, shared_par_names=model_cfg['shared_par_names'], 
             independent_par_names=model_cfg['independent_par_names'],
             ratio_par_name=model_cfg['ratio_par_name'],
-            use_sigmoid=model_cfg['cfg']['use_sigmoid'],
-            sigmoid_cfg=model_cfg['sigmoid_settings']
+            use_sigmoid=model_cfg['use_sigmoid'],
+            sigmoid_cfg=model_cfg['sigmoid_cfg']
         )
 
         log_prior = _log_prior(
