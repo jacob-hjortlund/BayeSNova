@@ -1,5 +1,11 @@
 import numpy as np
 
+def uniform(value, lower=-np.inf, upper=np.inf):
+    if value < lower or value > upper:
+        return -np.inf
+    else:
+        return 0.
+
 def gen_pop_par_names(par_names):
     n_pars = 2 * len(par_names)
     extended_par_names = [""] * n_pars
