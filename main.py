@@ -15,7 +15,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     
     # Import data
     data = pd.read_csv(
-        path=cfg['data_cfg']['path'], sep=cfg['data_cfg']['sep']
+        filepath_or_buffer=cfg['data_cfg']['path'], sep=cfg['data_cfg']['sep']
     )
 
     # Preprocess

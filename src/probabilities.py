@@ -3,7 +3,7 @@ import scipy.special as sp_special
 import scipy.integrate as sp_integrate
 import src.utils as utils
 
-from astropy.cosmology import Planck18_arXiv_v2 as cosmo
+from astropy.cosmology import Planck18 as cosmo
 
 def _log_prior(
     prior_bounds: dict, ratio_par_name: str, **kwargs
@@ -223,7 +223,7 @@ def generate_log_prob(
     sn_c: np.ndarray, sn_z: np.ndarray
 ):
 
-    init_arg_dict = model_cfg['preset_values']
+    init_arg_dict = {key: value for key, value in model_cfg['preset_values'].items()}
     init_arg_dict['sn_mb'] = sn_mb
     init_arg_dict['sn_s'] = sn_s
     init_arg_dict['sn_c'] = sn_c
