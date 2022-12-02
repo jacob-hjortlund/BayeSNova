@@ -116,29 +116,32 @@ def _dust_reddening_convolved_probability(
     """
 
     def f(x):
+        # copy arrays
+        r_tmp = r.copy()
+        covs_tmp = covs.copy()
+
         # Update residual
-        r[:,0] -= rb * tau * x
-        r[:,2] -= tau * x
+        r_tmp[:,0] -= rb * tau * x
+        r_tmp[:,2] -= tau * x
 
         # Update covariances
-        covs[:,0,0] += sig_rb**2 * tau**2 * x**2
+        covs_tmp[:,0,0] += sig_rb**2 * tau**2 * x**2
 
-        if np.any(np.linalg.det(covs) <= 0.):
+        if np.any(np.linalg.det(covs_tmp) <= 0.):
             raise ValueError('Bad covs present')
 
         # Setup expression
-        dets = np.linalg.det(covs)
-        inv_covs = np.linalg.inv(covs)
-        inv_det_r = np.dot(inv_covs, r.swapaxes(0,1))
-        idx = np.arange(len(r))
+        dets = np.linalg.det(covs_tmp)
+        inv_covs = np.linalg.inv(covs_tmp)
+        inv_det_r = np.dot(inv_covs, r_tmp.swapaxes(0,1))
+        idx = np.arange(len(r_tmp))
         inv_det_r = inv_det_r[idx,:,idx]
         r_inv_det_r = np.diag(
-            np.dot(r, inv_det_r.swapaxes(0,1))
+            np.dot(r_tmp, inv_det_r.swapaxes(0,1))
         )
-        values = np.exp(-0.5 * r_inv_det_r - x) * x**(alpha_g - 1.) / dets**2
+        values = np.exp(-0.5 * r_inv_det_r - x) * x**(alpha_g - 1.) / dets**0.5
 
         return values
-
     norm = sp_special.gammainc(alpha_g, upper_bound) * sp_special.gamma(alpha_g)
     p_convoluted = sp_integrate.quad_vec(
         f, lower_bound, upper_bound
