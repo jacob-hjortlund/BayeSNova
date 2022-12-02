@@ -23,16 +23,29 @@ model_cfg:
     sig_int_1: 0.
     sig_int_2: 0.
   prior_bounds:
-    beta: [1, 5]
-    s: [0]
-    sig_s: [0]
-    sig_c: [0]
-    sig_int: [0]
-    Rb: [1., 6.]
-    sig_Rb: [0., 1.5]
-    tau: [0]
-    alpha_g: [1., 7.]
-    w: [0.12, 0.88]
+    beta:
+      lower: 1.
+      upper: 5.
+    sig_s:
+      lower: 0.
+    sig_c: 
+      lower: 0.
+    sig_int:
+      lower: 0.
+    Rb:
+      lower: 1.
+      upper: 6.
+    sig_Rb:
+      lower: 0.
+      upper: 1.5
+    tau:
+      lower: 0.
+    alpha_g:
+      lower: 1.
+      upper: 7.
+    w:
+      lower: 0.12
+      upper: 0.88
   use_sigmoid: False
   sigmoid_cfg:
     scale: 1.

@@ -18,7 +18,7 @@ def _log_prior(
         
         if bounds_key in prior_bounds.keys():
             value += utils.uniform(
-                kwargs[value_key], *prior_bounds[bounds_key]
+                kwargs[value_key], **prior_bounds[bounds_key]
             )
 
     return value
