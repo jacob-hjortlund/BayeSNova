@@ -248,6 +248,8 @@ def generate_log_prob(
     init_arg_dict['sn_z'] = sn_z
     init_arg_dict['sn_cov'] = sn_covs
 
+    global log_prob_f
+
     def log_prob_f(theta):
 
         arg_dict = {
