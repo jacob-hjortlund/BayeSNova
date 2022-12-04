@@ -250,13 +250,15 @@ def generate_log_prob(
 
     def log_prob_f(theta):
 
-        arg_dict = init_arg_dict | utils.theta_to_dict(
-            theta=theta, shared_par_names=model_cfg['shared_par_names'], 
-            independent_par_names=model_cfg['independent_par_names'],
-            ratio_par_name=model_cfg['ratio_par_name'],
-            use_sigmoid=model_cfg['use_sigmoid'],
-            sigmoid_cfg=model_cfg['sigmoid_cfg']
-        )
+        arg_dict = {
+            **init_arg_dict, **utils.theta_to_dict(
+                theta=theta, shared_par_names=model_cfg['shared_par_names'], 
+                independent_par_names=model_cfg['independent_par_names'],
+                ratio_par_name=model_cfg['ratio_par_name'],
+                use_sigmoid=model_cfg['use_sigmoid'],
+                sigmoid_cfg=model_cfg['sigmoid_cfg']
+            )
+        }
 
         log_prior = _log_prior(
             prior_bounds=model_cfg['prior_bounds'],

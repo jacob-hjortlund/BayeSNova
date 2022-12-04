@@ -1,5 +1,4 @@
 import numpy as np
-import statsmodels.stats as stats
 
 def sigmoid(value: float, shift: float = 0., scale: float = 1.):
 

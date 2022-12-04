@@ -1,5 +1,6 @@
 import hydra
 import omegaconf
+import sys
 
 import emcee as em
 import numpy as np
@@ -37,26 +38,46 @@ def main(cfg: omegaconf.DictConfig) -> None:
         sn_z=sn_z
     )
 
-    init_pos = np.array([
-        -19.3,-0.14,3.1,-0.25, 1.1, -0.09, 0.05,3.7,0.04,0.6,2.9, -19.3,0.1, 1.1, -0.09,0.04,0.4, 0.03 
-    ])
-    theta = np.array([-0.14, 3.1, 3.7, 0.6, 2.9, -19.3, -19.3, -0.09, -0.09, 0.05, 0.03, -0.25, 0.1, 1.1, 1.1, 0.04, 0.04, 0.4])
-    n_pars = len(theta)
-    idx = np.empty(n_pars)
+    # init_pos = np.array([
+    #     -19.3,-0.14,3.1,-0.25, 1.1, -0.09, 0.05,3.7,0.04,0.6,2.9, -19.3,0.1, 1.1, -0.09,0.04,0.4, 0.03 
+    # ])
 
-    for i in range(n_pars):
-        tmp_idx = theta == init_pos[i]
-        idx[tmp_idx] = i
+    t0 = time()
+    with swbd.MPIPool() as pool:
+        if not pool.is_master():
+            pool.wait()
+            sys.exit(0)
+        theta = np.array([
+            -0.14, 3.1, 3.7, 0.6, 2.9, -19.3, -19.3, -0.09, -0.09, 0.05, 0.03, -0.25, 0.1, 1.1, 1.1, 0.04, 0.04, 0.4
+        ]) +3e-2 * np.random.rand(128,18)
+        nwalkers, ndim = theta.shape
+        sampler = em.EnsembleSampler(nwalkers, ndim, log_prob, pool=pool)
+        sampler.run_mcmc(theta, 1000)
+    avg_eval_time = (time()-t0) / (nwalkers * 1000)
+        
+    samples = sampler.get_chain()
+    np.savez_compressed('/groups/dark/osman/Thesis/data/full_chain',results=samples)
+    flat_samples = sampler.get_chain(discard=500, thin=48, flat=True)
+    print(flat_samples.shape)
+    np.savez_compressed('/groups/dark/osman/Thesis/data/reduced_chain',results=flat_samples)
+    tau = sampler.get_autocorr_time()
+    print(tau)
+    # n_pars = len(theta)
+    # idx = np.empty(n_pars)
 
-    chains = np.load('./data/test.npz')['results'][100:499, idx.astype('int')]
+    # for i in range(n_pars):
+    #     tmp_idx = theta == init_pos[i]
+    #     idx[tmp_idx] = i
 
-    t_tot = 0.
-    for chain_theta in tqdm(chains):
-        t0 = time()
-        _ = log_prob(chain_theta)
-        t_tot += time()-t0
-    print("Total time logged:", t_tot)
-    print("Avg time pr. evaluation:", t_tot / len(chains))
+    # chains = np.load('/groups/dark/osman/Thesis//data/test.npz')['results'][100:499, idx.astype('int')]
+
+    # t_tot = 0.
+    # for chain_theta in tqdm(chains):
+    #     t0 = time()
+    #     _ = log_prob(chain_theta)
+    #     t_tot += time()-t0
+    # print("Total time logged:", t_tot)
+    # print("Avg time pr. evaluation:", t_tot / len(chains))
     
 
     # # Setup MCMC
