@@ -93,6 +93,49 @@ def _population_r(
 
     return r
 
+def _extinction_coefficient_convolved_probability(
+    covs: np.ndarray, pars: np.ndarray
+):
+
+    print('hello world')
+
+def _non_vectorized_dust_reddening_convolved_probability(
+    covs: np.ndarray, r: np.ndarray, rb: float,
+    sig_rb: float, tau: float, alpha_g: float,
+    lower_bound: float = 0., upper_bound: float = 10.
+):
+
+    n_sn = len(covs)
+    log_p = np.zeros(n_sn)
+    norm = sp_special.gammainc(alpha_g, upper_bound) * sp_special.gamma(alpha_g)
+    for i in range(n_sn):
+        
+        def f(x):
+            r_tmp = r[i].copy()
+            cov_tmp = covs[i].copy()
+        
+            # Update residual
+            r_tmp[0] -= rb * tau * x
+            r_tmp[2] -= tau * x
+
+            # Update covariances
+            cov_tmp[0,0] += sig_rb**2 * tau**2 * x**2
+            
+            # Setup expression
+            dets = np.linalg.det(cov_tmp)
+            inv_covs = np.linalg.inv(cov_tmp)
+            inv_det_r = np.dot(inv_covs, r_tmp)
+            r_inv_det_r = np.dot(r_tmp, inv_det_r)
+            values = np.exp(-0.5 * r_inv_det_r - x) * x**(alpha_g - 1.) / dets**0.5
+
+            return values
+        
+        log_p[i] = sp_integrate.quad(f, lower_bound, upper_bound)[0]
+    
+    log_p /= norm
+
+    return log_p
+
 def _dust_reddening_convolved_probability(
     covs: np.ndarray, r: np.ndarray, rb: float,
     sig_rb: float, tau: float, alpha_g: float,
@@ -192,7 +235,7 @@ def population_prob(
         sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c, sn_z=sn_z,
         Mb=Mb, alpha=alpha, beta=beta, s=s, c=c, H0=H0
     )
-    dust_reddening_convolved_prob = _dust_reddening_convolved_probability(
+    dust_reddening_convolved_prob = _non_vectorized_dust_reddening_convolved_probability(
         covs=covs, r=r, rb=rb, sig_rb=sig_rb, tau=tau, alpha_g=alpha_g,
         lower_bound=lower_bound, upper_bound=upper_bound
     )
