@@ -48,8 +48,8 @@ model_cfg:
       upper: 0.88
   use_sigmoid: False
   sigmoid_cfg:
-    scale: 1.
-    shift: 0.
+    scale: 100.
+    shift: 0.9
 emcee_cfg:
   n_walkers: 128
   n_steps: 100

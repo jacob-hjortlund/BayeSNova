@@ -44,18 +44,18 @@ def theta_to_dict(
         arg_dict[extended_shared_par_names[2 * i + 1]] = theta[i]
 
     if use_sigmoid:
+        s1 = sigmoid(theta[-1], **sigmoid_cfg)
+        sigmoid_cfg['shift'] = 1 - sigmoid_cfg['shift']
+        s2 = sigmoid(theta[-1], **sigmoid_cfg)
         for i in range(n_independent_pars):
-            is_even = i % 2
-            s1 = sigmoid(theta[-1], **sigmoid_cfg)
-            sigmoid_cfg['shift'] = 1 - sigmoid_cfg['shift']
-            s2 = sigmoid_cfg(theta[-1], **sigmoid_cfg)
-            if is_even:
+            is_odd = i % 2
+            if not is_odd:
                 arg_dict[extended_independent_par_names[i]] = (
-                    (1 - s2) * theta[n_shared_pars + i] + s2 * theta[n_shared_pars + i + 1]
+                    s2 * theta[n_shared_pars + i] + (1 - s2) * theta[n_shared_pars + i + 1]
                 )
             else:
                 arg_dict[extended_independent_par_names[i]] = (
-                    (1 - s1) * theta[n_shared_pars + i] + s1 * theta[n_shared_pars + i - 1]
+                    s1 * theta[n_shared_pars + i - 1] + (1 - s1) * theta[n_shared_pars + i]
                 )
     else:
         for i in range(n_independent_pars):
