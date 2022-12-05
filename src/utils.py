@@ -31,9 +31,9 @@ def theta_to_dict(
     extended_independent_par_names = gen_pop_par_names(independent_par_names)
 
     n_shared_pars = len(shared_par_names)
-    n_independent_pars = len(extended_independent_par_names)
+    n_independent_pars = len(independent_par_names)
 
-    if len(theta) != n_shared_pars + n_independent_pars + 1:
+    if len(theta) != n_shared_pars + 2 * n_independent_pars + 1:
         raise ValueError(
             "MCMC parameter dimensions does not match no. of shared and independent parameters."
         )
@@ -47,18 +47,27 @@ def theta_to_dict(
         s1 = sigmoid(theta[-1], **sigmoid_cfg)
         sigmoid_cfg['shift'] = 1 - sigmoid_cfg['shift']
         s2 = sigmoid(theta[-1], **sigmoid_cfg)
-        for i in range(n_independent_pars):
-            is_odd = i % 2
-            if not is_odd:
-                arg_dict[extended_independent_par_names[i]] = (
-                    s2 * theta[n_shared_pars + i] + (1 - s2) * theta[n_shared_pars + i + 1]
-                )
-            else:
-                arg_dict[extended_independent_par_names[i]] = (
-                    s1 * theta[n_shared_pars + i - 1] + (1 - s1) * theta[n_shared_pars + i]
-                )
+        v1 = np.array([s2, s1] * n_independent_pars)
+        v2 = np.array([1 - s2, 1 - s1] * n_independent_pars)
+        independent_pars_1 = theta[n_shared_pars:-1:2]
+        independent_pars_2 = theta[n_shared_pars+1:-1:2]
+        tmp_independent_pars = np.zeros_like(v1)
+        tmp_independent_pars[::2] = v1[::2] * independent_pars_1 + v2[::2] * independent_pars_2
+        tmp_independent_pars[1::2] = v1[1::2] * independent_pars_1 + v2[1::2] * independent_pars_2
+        for i in range(2 * n_independent_pars):
+            arg_dict[extended_independent_par_names[i]] = tmp_independent_pars[i]
+        # for i in range(n_independent_pars):
+        #     is_odd = i % 2
+        #     if not is_odd:
+        #         arg_dict[extended_independent_par_names[i]] = (
+        #             s2 * theta[n_shared_pars + i] + (1 - s2) * theta[n_shared_pars + i + 1]
+        #         )
+        #     else:
+        #         arg_dict[extended_independent_par_names[i]] = (
+        #             s1 * theta[n_shared_pars + i - 1] + (1 - s1) * theta[n_shared_pars + i]
+        #         )
     else:
-        for i in range(n_independent_pars):
+        for i in range(2 * n_independent_pars):
             arg_dict[extended_independent_par_names[i]] = theta[n_shared_pars + i]
         
     
