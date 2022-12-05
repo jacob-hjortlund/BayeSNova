@@ -1,5 +1,18 @@
 import numpy as np
 
+class _FunctionWrapper:
+    """
+    Object to wrap user's function, allowing picklability
+    """
+    def __init__(self, f, args=()):
+        self.f = f
+        if not isinstance(args, tuple):
+            args = (args,)
+        self.args = [] if args is None else args
+
+    def __call__(self, x):
+        return self.f(x, *self.args)
+
 def sigmoid(value: float, shift: float = 0., scale: float = 1.):
 
     denom = 1. + np.exp(- scale * ( value - shift ))

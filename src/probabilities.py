@@ -2,6 +2,8 @@ import numpy as np
 import scipy.special as sp_special
 import scipy.integrate as sp_integrate
 import src.utils as utils
+import os
+from time import time
 
 from astropy.cosmology import Planck18 as cosmo
 
@@ -136,10 +138,41 @@ def _non_vectorized_dust_reddening_convolved_probability(
 
     return log_p
 
+def dust_integral(
+    x, covs, r, rb, sig_rb, tau, alpha_g
+):
+    # copy arrays
+    r_tmp = r.copy()
+    covs_tmp = covs.copy()
+
+    # Update residual
+    r_tmp[:,0] -= rb * tau * x
+    r_tmp[:,2] -= tau * x
+
+    # Update covariances
+    covs_tmp[:,0,0] += sig_rb**2 * tau**2 * x**2
+
+    if np.any(np.linalg.det(covs_tmp) <= 0.):
+        raise ValueError('Bad covs present')
+
+    # Setup expression
+    dets = np.linalg.det(covs_tmp)
+    inv_covs = np.linalg.inv(covs_tmp)
+    inv_det_r = np.dot(inv_covs, r_tmp.swapaxes(0,1))
+    idx = np.arange(len(r_tmp))
+    inv_det_r = inv_det_r[idx,:,idx]
+    r_inv_det_r = np.diag(
+        np.dot(r_tmp, inv_det_r.swapaxes(0,1))
+    )
+    values = np.exp(-0.5 * r_inv_det_r - x) * x**(alpha_g - 1.) / dets**0.5
+
+    return values
+
 def _dust_reddening_convolved_probability(
     covs: np.ndarray, r: np.ndarray, rb: float,
     sig_rb: float, tau: float, alpha_g: float,
-    lower_bound: float = 0., upper_bound: float = 10.
+    lower_bound: float = 0., upper_bound: float = 10.,
+    n_workers: int = 1
 ) -> np.ndarray:
     """Vectorized numerical convolution of partial posterior and
     dust reddening gamma distribution.
@@ -157,38 +190,18 @@ def _dust_reddening_convolved_probability(
     Returns:
         np.ndarray: _description_
     """
-
-    def dust_integral(x):
-        # copy arrays
-        r_tmp = r.copy()
-        covs_tmp = covs.copy()
-
-        # Update residual
-        r_tmp[:,0] -= rb * tau * x
-        r_tmp[:,2] -= tau * x
-
-        # Update covariances
-        covs_tmp[:,0,0] += sig_rb**2 * tau**2 * x**2
-
-        if np.any(np.linalg.det(covs_tmp) <= 0.):
-            raise ValueError('Bad covs present')
-
-        # Setup expression
-        dets = np.linalg.det(covs_tmp)
-        inv_covs = np.linalg.inv(covs_tmp)
-        inv_det_r = np.dot(inv_covs, r_tmp.swapaxes(0,1))
-        idx = np.arange(len(r_tmp))
-        inv_det_r = inv_det_r[idx,:,idx]
-        r_inv_det_r = np.diag(
-            np.dot(r_tmp, inv_det_r.swapaxes(0,1))
-        )
-        values = np.exp(-0.5 * r_inv_det_r - x) * x**(alpha_g - 1.) / dets**0.5
-
-        return values
+    
+    dust_integral_pickleable = utils._FunctionWrapper(
+        dust_integral, args=(covs, r, rb, sig_rb, tau, alpha_g)
+    )
+    
+    print("No. of cpus found:", os.cpu_count())
     norm = sp_special.gammainc(alpha_g, upper_bound) * sp_special.gamma(alpha_g)
+    t0 = time()
     p_convoluted = sp_integrate.quad_vec(
-        dust_integral, lower_bound, upper_bound
+        dust_integral_pickleable, lower_bound, upper_bound, workers=1
     )[0] / norm
+    print("Time for integration:", time()-t0)
         
     return p_convoluted
 
@@ -196,7 +209,7 @@ def population_prob(
     sn_cov: np.ndarray, sn_mb: np.ndarray, sn_z: np.ndarray, sn_s: np.ndarray, sn_c: np.ndarray,
     Mb: float, alpha: float, beta: float, s: float, sig_s: float,
     c: float, sig_c: float, sig_int: float, rb: float, sig_rb: float,
-    tau: float, alpha_g: float, H0: float, lower_bound: float = 0., upper_bound: float = 10.
+    tau: float, alpha_g: float, H0: float, lower_bound: float = 0., upper_bound: float = 10., n_workers: int = 1
 
 ) -> np.ndarray:
     """Calculate convolved probabilities for given population distribution
@@ -222,6 +235,7 @@ def population_prob(
         H0 (float): Hubble constant
         lower_bound (float, optional): Dust reddening convolution lower bound. Defaults to 0.
         upper_bound (float, optional): Dust reddening convolution lower bound. Defaults to 10.
+        n_workers (int, optional): Number of workes for integration. -1 uses os.cpu_count(). Defaults to 1.
 
     Returns:
         np.ndarray: Convolved population probabilities
@@ -235,9 +249,9 @@ def population_prob(
         sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c, sn_z=sn_z,
         Mb=Mb, alpha=alpha, beta=beta, s=s, c=c, H0=H0
     )
-    dust_reddening_convolved_prob = _non_vectorized_dust_reddening_convolved_probability(
+    dust_reddening_convolved_prob = _dust_reddening_convolved_probability(
         covs=covs, r=r, rb=rb, sig_rb=sig_rb, tau=tau, alpha_g=alpha_g,
-        lower_bound=lower_bound, upper_bound=upper_bound
+        lower_bound=lower_bound, upper_bound=upper_bound, n_workers=n_workers
     )
 
     return dust_reddening_convolved_prob
