@@ -49,17 +49,18 @@ def main(cfg: omegaconf.DictConfig) -> None:
             sys.exit(0)
         theta = np.array([
             -0.14, 3.1, 3.7, 0.6, 2.9, -19.3, -19.3, -0.09, -0.09, 0.05, 0.03, -0.25, 0.1, 1.1, 1.1, 0.04, 0.04, 0.4
-        ]) +3e-2 * np.random.rand(128,18)
+        ]) +3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'],18)
         nwalkers, ndim = theta.shape
         sampler = em.EnsembleSampler(nwalkers, ndim, log_prob, pool=pool)
-        sampler.run_mcmc(theta, 1000)
-    avg_eval_time = (time()-t0) / (nwalkers * 1000)
+        sampler.run_mcmc(theta, cfg['emcee_cfg']['n_steps'])
+    avg_eval_time = (time()-t0) / (cfg['emcee_cfg']['n_walkers'] * cfg['emcee_cfg']['n_steps'])
+    print(f"Avg. time pr. step: {avg_eval_time} s")
         
     samples = sampler.get_chain()
-    np.savez_compressed('/groups/dark/osman/Thesis/data/full_chain',results=samples)
+    np.savez_compressed('/groups/dark/osman/Thesis/data/full_chain2',results=samples)
     flat_samples = sampler.get_chain(discard=500, thin=48, flat=True)
     print(flat_samples.shape)
-    np.savez_compressed('/groups/dark/osman/Thesis/data/reduced_chain',results=flat_samples)
+    np.savez_compressed('/groups/dark/osman/Thesis/data/reduced_chain2',results=flat_samples)
     tau = sampler.get_autocorr_time()
     print(tau)
     # n_pars = len(theta)

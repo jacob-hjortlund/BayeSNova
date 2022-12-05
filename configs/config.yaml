@@ -50,3 +50,6 @@ model_cfg:
   sigmoid_cfg:
     scale: 1.
     shift: 0.
+emcee_cfg:
+  n_walkers: 128
+  n_steps: 100

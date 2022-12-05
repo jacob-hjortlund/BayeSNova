@@ -115,7 +115,7 @@ def _dust_reddening_convolved_probability(
         np.ndarray: _description_
     """
 
-    def f(x):
+    def dust_integral(x):
         # copy arrays
         r_tmp = r.copy()
         covs_tmp = covs.copy()
@@ -144,7 +144,7 @@ def _dust_reddening_convolved_probability(
         return values
     norm = sp_special.gammainc(alpha_g, upper_bound) * sp_special.gamma(alpha_g)
     p_convoluted = sp_integrate.quad_vec(
-        f, lower_bound, upper_bound
+        dust_integral, lower_bound, upper_bound
     )[0] / norm
         
     return p_convoluted
