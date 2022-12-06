@@ -197,11 +197,9 @@ def _dust_reddening_convolved_probability(
     
     print("No. of cpus found:", os.cpu_count())
     norm = sp_special.gammainc(alpha_g, upper_bound) * sp_special.gamma(alpha_g)
-    t0 = time()
     p_convoluted = sp_integrate.quad_vec(
         dust_integral_pickleable, lower_bound, upper_bound, workers=1
     )[0] / norm
-    print("Time for integration:", time()-t0)
         
     return p_convoluted
 
@@ -245,10 +243,12 @@ def population_prob(
         sn_cov=sn_cov, z=sn_z, alpha=alpha, beta=beta,
         sig_s=sig_s, sig_c=sig_c, sig_int=sig_int
     )
+
     r = _population_r(
         sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c, sn_z=sn_z,
         Mb=Mb, alpha=alpha, beta=beta, s=s, c=c, H0=H0
     )
+
     dust_reddening_convolved_prob = _dust_reddening_convolved_probability(
         covs=covs, r=r, rb=rb, sig_rb=sig_rb, tau=tau, alpha_g=alpha_g,
         lower_bound=lower_bound, upper_bound=upper_bound, n_workers=n_workers
@@ -326,7 +326,7 @@ def generate_log_prob(
         )
         if np.isinf(log_prior):
             return log_prior
-        
+
         log_likelihood = _log_likelihood(**arg_dict)
 
         return log_likelihood
