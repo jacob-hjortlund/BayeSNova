@@ -4,6 +4,7 @@ import scipy.integrate as sp_integrate
 import src.utils as utils
 import os
 from time import time
+import multiprocessing as mp
 
 from astropy.cosmology import Planck18 as cosmo
 
@@ -101,39 +102,60 @@ def _extinction_coefficient_convolved_probability(
 
     print('hello world')
 
+def dust_integral_1sn(
+    cov_res, rb, sig_rb, tau, alpha_g, lower_bound=1., upper_bound=10.
+):
+
+    cov = cov_res[:-1]
+    res = cov_res[-1]
+
+    def f(x):
+        cov_tmp = cov.copy()
+        r_tmp = res.copy()
+
+        # Update residual
+        r_tmp[0] -= rb * tau * x
+        r_tmp[2] -= tau * x
+
+        # Update covariances
+        cov_tmp[0,0] += sig_rb**2 * tau**2 * x**2
+        
+        # Setup expression
+        dets = np.linalg.det(cov_tmp)
+        inv_covs = np.linalg.inv(cov_tmp)
+        inv_det_r = np.dot(inv_covs, r_tmp)
+        r_inv_det_r = np.dot(r_tmp, inv_det_r)
+        values = np.exp(-0.5 * r_inv_det_r - x) * x**(alpha_g - 1.) / dets**0.5
+
+        return values
+    
+    log_p = sp_integrate.quad(f, lower_bound, upper_bound)[0]
+
+    return log_p
+
 def _non_vectorized_dust_reddening_convolved_probability(
     covs: np.ndarray, r: np.ndarray, rb: float,
-    sig_rb: float, tau: float, alpha_g: float,
+    sig_rb: float, tau: float, alpha_g: float, pool,
     lower_bound: float = 0., upper_bound: float = 10.
 ):
 
     n_sn = len(covs)
     log_p = np.zeros(n_sn)
     norm = sp_special.gammainc(alpha_g, upper_bound) * sp_special.gamma(alpha_g)
-    for i in range(n_sn):
-        
-        def f(x):
-            r_tmp = r[i].copy()
-            cov_tmp = covs[i].copy()
-        
-            # Update residual
-            r_tmp[0] -= rb * tau * x
-            r_tmp[2] -= tau * x
+    iterable = np.concatenate((covs,r[:,None]), axis=1)
 
-            # Update covariances
-            cov_tmp[0,0] += sig_rb**2 * tau**2 * x**2
-            
-            # Setup expression
-            dets = np.linalg.det(cov_tmp)
-            inv_covs = np.linalg.inv(cov_tmp)
-            inv_det_r = np.dot(inv_covs, r_tmp)
-            r_inv_det_r = np.dot(r_tmp, inv_det_r)
-            values = np.exp(-0.5 * r_inv_det_r - x) * x**(alpha_g - 1.) / dets**0.5
+    dust_integral_pickleable = utils._FunctionWrapper(
+        dust_integral_1sn, args=(rb, sig_rb, tau, alpha_g, lower_bound, upper_bound)
+    )
 
-            return values
-        
-        log_p[i] = sp_integrate.quad(f, lower_bound, upper_bound)[0]
+    if pool:
+        return_values = pool.map(dust_integral_pickleable, iterable)
+    else:
+        return_values = []
+        for cov_res in iterable:
+            return_values.append(dust_integral_pickleable(cov_res))
     
+    log_p = np.array(return_values)
     log_p /= norm
 
     return log_p
@@ -207,7 +229,7 @@ def population_prob(
     sn_cov: np.ndarray, sn_mb: np.ndarray, sn_z: np.ndarray, sn_s: np.ndarray, sn_c: np.ndarray,
     Mb: float, alpha: float, beta: float, s: float, sig_s: float,
     c: float, sig_c: float, sig_int: float, rb: float, sig_rb: float,
-    tau: float, alpha_g: float, H0: float, lower_bound: float = 0., upper_bound: float = 10., n_workers: int = 1
+    tau: float, alpha_g: float, H0: float, pool, lower_bound: float = 0., upper_bound: float = 10.
 
 ) -> np.ndarray:
     """Calculate convolved probabilities for given population distribution
@@ -249,9 +271,9 @@ def population_prob(
         Mb=Mb, alpha=alpha, beta=beta, s=s, c=c, H0=H0
     )
 
-    dust_reddening_convolved_prob = _dust_reddening_convolved_probability(
+    dust_reddening_convolved_prob = _non_vectorized_dust_reddening_convolved_probability(
         covs=covs, r=r, rb=rb, sig_rb=sig_rb, tau=tau, alpha_g=alpha_g,
-        lower_bound=lower_bound, upper_bound=upper_bound, n_workers=n_workers
+        lower_bound=lower_bound, upper_bound=upper_bound, pool=pool
     )
 
     return dust_reddening_convolved_prob
@@ -262,40 +284,51 @@ def _log_likelihood(
     sig_c_1, sig_int_1, Rb_1, sig_Rb_1, tau_1, alpha_g_1,
     Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
     sig_c_2, sig_int_2, Rb_2, sig_Rb_2, tau_2, alpha_g_2,
-    w, H0
+    w, H0, n_workers
 ):
 
-    pop1_probs = population_prob(
-        sn_cov=sn_cov, sn_mb=sn_mb, sn_z=sn_z, sn_s=sn_s, sn_c=sn_c,
-        Mb=Mb_1, alpha=alpha_1, beta=beta_1, s=s_1, sig_s=sig_s_1,
-        c=c_1, sig_c=sig_c_1, sig_int=sig_int_1, rb=Rb_1, sig_rb=sig_Rb_1,
-        tau=tau_1, alpha_g=alpha_g_1, H0=H0
-    )
+    if n_workers != 1:
+        with mp.Pool(n_workers) as pool:
+            pop1_probs = population_prob(
+                sn_cov=sn_cov, sn_mb=sn_mb, sn_z=sn_z, sn_s=sn_s, sn_c=sn_c,
+                Mb=Mb_1, alpha=alpha_1, beta=beta_1, s=s_1, sig_s=sig_s_1,
+                c=c_1, sig_c=sig_c_1, sig_int=sig_int_1, rb=Rb_1, sig_rb=sig_Rb_1,
+                tau=tau_1, alpha_g=alpha_g_1, H0=H0, pool=pool
+            )
 
-    pop2_probs = population_prob(
-        sn_cov=sn_cov, sn_mb=sn_mb, sn_z=sn_z, sn_s=sn_s, sn_c=sn_c,
-        Mb=Mb_2, alpha=alpha_2, beta=beta_2, s=s_2, sig_s=sig_s_2,
-        c=c_2, sig_c=sig_c_2, sig_int=sig_int_2, rb=Rb_2, sig_rb=sig_Rb_2,
-        tau=tau_2, alpha_g=alpha_g_2, H0=H0
-    )
+            pop2_probs = population_prob(
+                sn_cov=sn_cov, sn_mb=sn_mb, sn_z=sn_z, sn_s=sn_s, sn_c=sn_c,
+                Mb=Mb_2, alpha=alpha_2, beta=beta_2, s=s_2, sig_s=sig_s_2,
+                c=c_2, sig_c=sig_c_2, sig_int=sig_int_2, rb=Rb_2, sig_rb=sig_Rb_2,
+                tau=tau_2, alpha_g=alpha_g_2, H0=H0, pool=pool
+            )
 
     # Check if any probs had non-posdef cov
     if np.any(pop1_probs < 0.) | np.any(pop2_probs < 0.):
+        print("Oh no, someones below 0")
         return -np.inf
 
     # TODO: Fix numerical stability by using logsumexp somehow
+    # t1 = w * pop1_probs
+    # t2 = (1-w) * pop2_probs
+    # t = t1+t2
+    # print("\nmax:", np.max(t))
+    # print("Tmin:", np.min(t))
+
     log_prob = np.sum(
         np.log(
             w * pop1_probs + (1-w) * pop2_probs
         )
     )
+    # print("Logp:", log_prob, "\n")
 
     return log_prob
 
 def generate_log_prob(
     model_cfg: dict, sn_covs: np.ndarray, 
     sn_mb: np.ndarray, sn_s: np.ndarray,
-    sn_c: np.ndarray, sn_z: np.ndarray
+    sn_c: np.ndarray, sn_z: np.ndarray,
+    n_workers: int
 ):
 
     init_arg_dict = {key: value for key, value in model_cfg['preset_values'].items()}
@@ -304,6 +337,7 @@ def generate_log_prob(
     init_arg_dict['sn_c'] = sn_c
     init_arg_dict['sn_z'] = sn_z
     init_arg_dict['sn_cov'] = sn_covs
+    init_arg_dict['n_workers'] = n_workers
 
     global log_prob_f
 
