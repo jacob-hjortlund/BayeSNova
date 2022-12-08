@@ -50,6 +50,8 @@ model_cfg:
   sigmoid_cfg:
     scale: 100.
     shift: 0.9
+  prior_lower_bound: 0.
+  prior_upper_bound: 10.
 emcee_cfg:
   n_walkers: 128
   n_steps: 100

@@ -35,7 +35,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
     log_prob = prob.generate_log_prob(
         cfg['model_cfg'], sn_covs=sn_covs,
         sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c,
-        sn_z=sn_z, n_workers=cfg['emcee_cfg']['n_workers']
+        sn_z=sn_z, lower_bound=cfg['model_cfg']['prior_lower_bound'],
+        upper_bound=cfg['model_cfg']['prior_upper_bound'],
+        n_workers=cfg['emcee_cfg']['n_workers']
     )
 
     init_pos = np.array([
@@ -71,7 +73,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         tmp_idx = theta == init_pos[i]
         idx[tmp_idx] = i
 
-    chains = np.load('./data/test.npz')['results'][100:499, idx.astype('int')]#[:10]
+    chains = np.load('./data/test.npz')['results'][100:499, idx.astype('int')][:10]
 
     log_p = 0.
     t0 = time()
