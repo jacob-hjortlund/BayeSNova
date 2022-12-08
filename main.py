@@ -73,7 +73,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         tmp_idx = theta == init_pos[i]
         idx[tmp_idx] = i
 
-    chains = np.load('./data/test.npz')['results'][100:499, idx.astype('int')][:10]
+    chains = np.load('./data/test.npz')['results'][100:499, idx.astype('int')]#[:10]
 
     log_p = 0.
     t0 = time()
