@@ -108,6 +108,7 @@ def dust_integral_1sn(
 
     cov = cov_res[:-1]
     res = cov_res[-1]
+    exponent = alpha_g - 1.
 
     def f(x):
         cov_tmp = cov.copy()
@@ -125,7 +126,7 @@ def dust_integral_1sn(
         inv_covs = np.linalg.inv(cov_tmp)
         inv_det_r = np.dot(inv_covs, r_tmp)
         r_inv_det_r = np.dot(r_tmp, inv_det_r)
-        values = np.exp(-0.5 * r_inv_det_r - x) * x**(alpha_g - 1.) / dets**0.5
+        values = np.exp(-0.5 * r_inv_det_r - x) * x**exponent / dets**0.5
 
         return values
     
@@ -302,6 +303,20 @@ def _log_likelihood(
                 c=c_2, sig_c=sig_c_2, sig_int=sig_int_2, rb=Rb_2, sig_rb=sig_Rb_2,
                 tau=tau_2, alpha_g=alpha_g_2, H0=H0, pool=pool
             )
+    else:
+        pop1_probs = population_prob(
+            sn_cov=sn_cov, sn_mb=sn_mb, sn_z=sn_z, sn_s=sn_s, sn_c=sn_c,
+            Mb=Mb_1, alpha=alpha_1, beta=beta_1, s=s_1, sig_s=sig_s_1,
+            c=c_1, sig_c=sig_c_1, sig_int=sig_int_1, rb=Rb_1, sig_rb=sig_Rb_1,
+            tau=tau_1, alpha_g=alpha_g_1, H0=H0, pool=None
+        )
+
+        pop2_probs = population_prob(
+            sn_cov=sn_cov, sn_mb=sn_mb, sn_z=sn_z, sn_s=sn_s, sn_c=sn_c,
+            Mb=Mb_2, alpha=alpha_2, beta=beta_2, s=s_2, sig_s=sig_s_2,
+            c=c_2, sig_c=sig_c_2, sig_int=sig_int_2, rb=Rb_2, sig_rb=sig_Rb_2,
+            tau=tau_2, alpha_g=alpha_g_2, H0=H0, pool=None
+        )
 
     # Check if any probs had non-posdef cov
     if np.any(pop1_probs < 0.) | np.any(pop2_probs < 0.):
