@@ -212,16 +212,16 @@ def _fast_prior_convolution(
             cov_2[i].ravel(), res_2[i].ravel(), params_2
         )).copy()
         tmp_params_2.astype(np.float64)
-        prob_1, _, s1, ier1 = dqags(
+        prob_1, _, s1 = dqags(
             integrate_ptr, lower_bound, upper_bound, tmp_params_1
         )
-        prob_2, _, s2, ier2 = dqags(
+        prob_2, _, s2 = dqags(
             integrate_ptr, lower_bound, upper_bound, tmp_params_2
         )
         probs[i, 0] = prob_1
         probs[i, 1] = prob_2
 
-    return probs, ier1, ier2
+    return probs
 
 def _wrapper_prior_conv(
     covs_1: np.ndarray, r_1: np.ndarray, rb_1: float,
@@ -234,7 +234,7 @@ def _wrapper_prior_conv(
     norm_1 = sp_special.gammainc(alpha_g_1, upper_bound) * sp_special.gamma(alpha_g_1)
     norm_2 = sp_special.gammainc(alpha_g_2, upper_bound) * sp_special.gamma(alpha_g_2)
 
-    probs, ier1, ier2 = _fast_prior_convolution(
+    probs = _fast_prior_convolution(
         covs_1, r_1, covs_2, r_2,
         rb_1=rb_1, sig_rb_1=sig_rb_1, tau_1=tau_1, alpha_g_1=alpha_g_1,
         rb_2=rb_2, sig_rb_2=sig_rb_2, tau_2=tau_2, alpha_g_2=alpha_g_2,
