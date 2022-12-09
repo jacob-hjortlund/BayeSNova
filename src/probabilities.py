@@ -1,11 +1,11 @@
 import numpy as np
+import numba as nb
+import src.utils as utils
+import multiprocessing as mp
 import scipy.special as sp_special
 import scipy.integrate as sp_integrate
-import src.utils as utils
-import os
-from time import time
-import multiprocessing as mp
 
+from NumbaQuadpack import quadpack_sig, dqags
 from astropy.cosmology import Planck18 as cosmo
 
 def _log_prior(
@@ -96,13 +96,7 @@ def _population_r(
 
     return r
 
-def _extinction_coefficient_convolved_probability(
-    covs: np.ndarray, pars: np.ndarray
-):
-
-    print('hello world')
-
-def prior_integral_1sn(
+def prior_integral(
     cov_res, rb, sig_rb, tau, alpha_g, lower_bound=1., upper_bound=10.
 ):
 
@@ -140,12 +134,120 @@ def dual_pop_integration(
 
     cov_res_1, cov_res_2 = np.split(cov_res, 2, axis=-1)
     prob_1 = pop1_prior_integral(cov_res_1)
-    prob_2 = pop1_prior_integral(cov_res_2)
+    prob_2 = pop2_prior_integral(cov_res_2)
     probs = np.array([[prob_1, prob_2]])
 
     return probs
 
-def _non_vectorized_prior_convolution(
+# ---------- NUMBA EXPERIMENT ------------
+
+@nb.jit
+def integral_body(
+    x, i1, i2, i3, i5,
+    i6, i9, r1, r2, r3,
+    rb, sig_rb, tau, alpha_g
+):  
+    # update res and cov
+    r1 -= rb * tau * x
+    r3 -= tau * x
+    i1 += sig_rb * sig_rb * tau * tau * x * x
+
+    # precalcs
+    exponent = alpha_g - 1
+    A1 = i5 * i9 - i6 * i6
+    A2 = i6 * i3 - i2 * i9
+    A3 = i2 * i6 - i5 * i3
+    A5 = i1 * i9 - i3 * i3
+    A6 = i2 * i3 - i1 * i6
+    A9 = i1 * i5 - i2 * i2
+    det_m1 = 1. / (i1 * A1 + i2 * A2 + i3 * A3)
+
+    # # calculate prob
+    r_inv_cov_r = det_m1 * (r1 * r1 * A1 + r2 * r2 * A5 + r3 * r3 * A9 + 2 * (r1 * r2 * A2 + r1 * r3 * A3 + r2 * r3 * A6))
+    value = np.exp(-0.5 * r_inv_cov_r - x) * x**exponent * det_m1**0.5
+
+    return value
+
+@nb.cfunc(quadpack_sig)
+def integral(x, data):
+    _data = nb.carray(data, (13,))
+    i1 = _data[0]
+    i2 = _data[1]
+    i3 = _data[2]
+    i5 = _data[4]
+    i6 = _data[5]
+    i9 = _data[8]
+    r1 = _data[9]
+    r2 = _data[10]
+    r3 = _data[11]
+    rb = _data[12]
+    sig_rb = _data[13]
+    tau = _data[14]
+    alpha_g = _data[15]
+    return integral_body(
+        x, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
+        rb, sig_rb, tau, alpha_g
+    )
+integrate_ptr = integral.address
+
+@nb.njit
+def _fast_prior_convolution(
+    cov_1: np.ndarray, res_1: np.ndarray,
+    cov_2: np.ndarray, res_2: np.ndarray,
+    rb_1: float, sig_rb_1: float, tau_1: float, alpha_g_1: float,
+    rb_2: float, sig_rb_2: float, tau_2: float, alpha_g_2: float,
+    lower_bound: float = 0., upper_bound: float = 10.,
+):
+
+    n_sn = len(cov_1)
+    probs = np.zeros((n_sn, 2))
+    params_1 = np.array([rb_1, sig_rb_1, tau_1, alpha_g_1])
+    params_2 = np.array([rb_2, sig_rb_2, tau_2, alpha_g_2])
+    for i in range(n_sn):
+        tmp_params_1 = np.concatenate((
+            cov_1[i].ravel(), res_1[i].ravel(), params_1
+        )).copy()
+        tmp_params_1.astype(np.float64)
+        tmp_params_2 = np.concatenate((
+            cov_2[i].ravel(), res_2[i].ravel(), params_2
+        )).copy()
+        tmp_params_2.astype(np.float64)
+        prob_1, _, s1, ier1 = dqags(
+            integrate_ptr, lower_bound, upper_bound, tmp_params_1
+        )
+        prob_2, _, s2, ier2 = dqags(
+            integrate_ptr, lower_bound, upper_bound, tmp_params_2
+        )
+        probs[i, 0] = prob_1
+        probs[i, 1] = prob_2
+
+    return probs, ier1, ier2
+
+def _wrapper_prior_conv(
+    covs_1: np.ndarray, r_1: np.ndarray, rb_1: float,
+    sig_rb_1: float, tau_1: float, alpha_g_1: float,
+    covs_2: np.ndarray, r_2: np.ndarray, rb_2: float,
+    sig_rb_2: float, tau_2: float, alpha_g_2: float,
+    lower_bound: float = 0., upper_bound: float = 10.,
+    n_workers: int = 1
+):
+    norm_1 = sp_special.gammainc(alpha_g_1, upper_bound) * sp_special.gamma(alpha_g_1)
+    norm_2 = sp_special.gammainc(alpha_g_2, upper_bound) * sp_special.gamma(alpha_g_2)
+
+    probs, ier1, ier2 = _fast_prior_convolution(
+        covs_1, r_1, covs_2, r_2,
+        rb_1=rb_1, sig_rb_1=sig_rb_1, tau_1=tau_1, alpha_g_1=alpha_g_1,
+        rb_2=rb_2, sig_rb_2=sig_rb_2, tau_2=tau_2, alpha_g_2=alpha_g_2,
+        lower_bound=lower_bound, upper_bound=upper_bound
+    )
+    p_1 = probs[:, 0] / norm_1
+    p_2 = probs[:, 1] / norm_2
+
+    return p_1, p_2
+
+# -------- END NUMBA EXPERIMENT ----------
+
+def _prior_convolution(
     covs_1: np.ndarray, r_1: np.ndarray, rb_1: float,
     sig_rb_1: float, tau_1: float, alpha_g_1: float,
     covs_2: np.ndarray, r_2: np.ndarray, rb_2: float,
@@ -161,10 +263,10 @@ def _non_vectorized_prior_convolution(
     iterable = np.concatenate((cov_res1, cov_res2), axis=-1)
 
     prior_integral_1 = utils._FunctionWrapper(
-        prior_integral_1sn, args=(rb_1, sig_rb_1, tau_1, alpha_g_1, lower_bound, upper_bound)
+        prior_integral, args=(rb_1, sig_rb_1, tau_1, alpha_g_1, lower_bound, upper_bound)
     )
     prior_integral_2 = utils._FunctionWrapper(
-        prior_integral_1sn, args=(rb_2, sig_rb_2, tau_2, alpha_g_2, lower_bound, upper_bound)
+        prior_integral, args=(rb_2, sig_rb_2, tau_2, alpha_g_2, lower_bound, upper_bound)
     )
     dual_pop_integral = utils._FunctionWrapper(
         dual_pop_integration, args=(prior_integral_1, prior_integral_2)
@@ -183,71 +285,6 @@ def _non_vectorized_prior_convolution(
     p_2 = probs[:, 1] / norm_2
 
     return p_1, p_2
-
-def dust_integral(
-    x, covs, r, rb, sig_rb, tau, alpha_g
-):
-    # copy arrays
-    r_tmp = r.copy()
-    covs_tmp = covs.copy()
-
-    # Update residual
-    r_tmp[:,0] -= rb * tau * x
-    r_tmp[:,2] -= tau * x
-
-    # Update covariances
-    covs_tmp[:,0,0] += sig_rb**2 * tau**2 * x**2
-
-    if np.any(np.linalg.det(covs_tmp) <= 0.):
-        raise ValueError('Bad covs present')
-
-    # Setup expression
-    dets = np.linalg.det(covs_tmp)
-    inv_covs = np.linalg.inv(covs_tmp)
-    inv_det_r = np.dot(inv_covs, r_tmp.swapaxes(0,1))
-    idx = np.arange(len(r_tmp))
-    inv_det_r = inv_det_r[idx,:,idx]
-    r_inv_det_r = np.diag(
-        np.dot(r_tmp, inv_det_r.swapaxes(0,1))
-    )
-    values = np.exp(-0.5 * r_inv_det_r - x) * x**(alpha_g - 1.) / dets**0.5
-
-    return values
-
-def _dust_reddening_convolved_probability(
-    covs: np.ndarray, r: np.ndarray, rb: float,
-    sig_rb: float, tau: float, alpha_g: float,
-    lower_bound: float = 0., upper_bound: float = 10.,
-    n_workers: int = 1
-) -> np.ndarray:
-    """Vectorized numerical convolution of partial posterior and
-    dust reddening gamma distribution.
-
-    Args:
-        covs (np.ndarray): Covariance matrices with shape (N,3,3)
-        r (np.ndarray): Residuals with shape (N,3)
-        rb (float): Population extinction coefficient
-        sig_rb (float): Population extinction coefficient scatter
-        tau (float): Population extinction dist scale parameter
-        alpha_g (float): Population extinction dist shape parameter
-        lower_bound (float, optional): Lower bound on integral. Defaults to 0.
-        upper_bound (float, optional): Upper bound on integral. Defaults to 10.
-
-    Returns:
-        np.ndarray: _description_
-    """
-    
-    dust_integral_pickleable = utils._FunctionWrapper(
-        dust_integral, args=(covs, r, rb, sig_rb, tau, alpha_g)
-    )
-    
-    print("No. of cpus found:", os.cpu_count())
-    norm = sp_special.gammainc(alpha_g, upper_bound) * sp_special.gamma(alpha_g)
-    p_convoluted = sp_integrate.quad_vec(
-        dust_integral_pickleable, lower_bound, upper_bound, workers=1
-    )[0] / norm
-        
-    return p_convoluted
 
 def _population_cov_and_residual(
     sn_cov: np.ndarray, sn_mb: np.ndarray, sn_z: np.ndarray, sn_s: np.ndarray, sn_c: np.ndarray,
@@ -309,7 +346,7 @@ def _log_likelihood(
         sig_s=sig_s_2, c=c_2, sig_c=sig_c_2, sig_int=sig_int_2, H0=H0
     )
 
-    probs_1, probs_2 = _non_vectorized_prior_convolution(
+    probs_1, probs_2 = _wrapper_prior_conv(
         covs_1=covs_1, r_1=r_1, rb_1=Rb_1, sig_rb_1=sig_Rb_1,
         tau_1=tau_1, alpha_g_1=alpha_g_1,
         covs_2=covs_2, r_2=r_2, rb_2=Rb_2, sig_rb_2=sig_Rb_2,
@@ -323,12 +360,6 @@ def _log_likelihood(
         return -np.inf
 
     # TODO: Fix numerical stability by using logsumexp somehow
-    # t1 = w * pop1_probs
-    # t2 = (1-w) * pop2_probs
-    # t = t1+t2
-    # print("\nmax:", np.max(t))
-    # print("Tmin:", np.min(t))
-
     log_prob = np.sum(
         np.log(
             w * probs_1 + (1-w) * probs_2

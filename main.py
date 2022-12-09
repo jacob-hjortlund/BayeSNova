@@ -47,6 +47,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
     n_pars = len(theta)
     idx = np.empty(n_pars)
 
+    # call func once befor loop to jit compile
+    _ = log_prob(theta)
     # t0 = time()
     # with swbd.MPIPool() as pool:
     #     if not pool.is_master():
