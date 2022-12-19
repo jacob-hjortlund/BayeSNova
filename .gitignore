@@ -2,3 +2,8 @@
 data/
 Documents/
 radeks_code/
+run.sh
+NumbaQuadpack
+.vscode/
+__pycache__/
+outputs/

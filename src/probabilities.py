@@ -9,12 +9,20 @@ from NumbaQuadpack import quadpack_sig, dqags
 from astropy.cosmology import Planck18 as cosmo
 
 def _log_prior(
-    prior_bounds: dict, ratio_par_name: str, **kwargs
+    prior_bounds: dict, ratio_par_name: str, 
+    stretch_1_par: str = "s_1", stretch_2_par: str = "s_2",
+    **kwargs
 ):
 
     value = 0.
     for value_key in kwargs.keys():
-        if value_key != ratio_par_name:
+        bounds_key = ""
+        # TODO: Remove 3-deep conditionals bleeeeh
+        if value_key == stretch_1_par or value_key == stretch_2_par:
+            if not kwargs[stretch_1_par] < kwargs[stretch_2_par]:
+                value += -np.inf
+                continue
+        elif value_key != ratio_par_name:
             bounds_key = "_".join(value_key.split("_")[:-1])
         else:
             bounds_key = value_key
