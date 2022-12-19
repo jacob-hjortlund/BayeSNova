@@ -18,7 +18,10 @@ from tqdm import tqdm
     version_base=None, config_path="configs", config_name="config"
 )
 def main(cfg: omegaconf.DictConfig) -> None:
-    
+
+    # Print cfg
+    print(cfg.pretty())    
+
     # Import data
     data = pd.read_csv(
         filepath_or_buffer=cfg['data_cfg']['path'], sep=cfg['data_cfg']['sep']
