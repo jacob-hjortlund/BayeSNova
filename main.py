@@ -67,7 +67,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
             path, cfg['emcee_cfg']['file_name']
         )
         backend = em.backends.HDFBackend(filename, name=cfg['emcee_cfg']['run_name'])
-        if not cfg['emcee_cfg']['continue_from_sample']:
+        if not cfg['emcee_cfg']['continue_from_chain']:
             backend.reset(nwalkers, ndim)
 
         sampler = em.EnsembleSampler(nwalkers, ndim, log_prob, pool=pool, backend=backend)

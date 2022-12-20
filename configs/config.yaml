@@ -56,6 +56,7 @@ emcee_cfg:
   save_path: './results/baseline'
   file_name: "chains.h5"
   run_name: "base"
+  continue_from_chain: False
   n_walkers: 128
   n_steps: 100
   n_workers: 1
