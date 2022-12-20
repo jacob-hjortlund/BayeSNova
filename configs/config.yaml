@@ -53,7 +53,7 @@ model_cfg:
   prior_lower_bound: 0.
   prior_upper_bound: 10.
 emcee_cfg:
-  save_path: './Results/baseline'
+  save_path: './results/baseline'
   file_name: "chains.h5"
   run_name: "base"
   n_walkers: 128
