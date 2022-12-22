@@ -2,6 +2,7 @@ import hydra
 import omegaconf
 import sys
 import os
+import corner
 
 import emcee as em
 import numpy as np
@@ -81,19 +82,67 @@ def main(cfg: omegaconf.DictConfig) -> None:
     avg_eval_time = (total_time) / (cfg['emcee_cfg']['n_walkers'] * cfg['emcee_cfg']['n_steps'])
     print(f"\nTotal MCMC time:", total_time)
     print(f"Avg. time pr. step: {avg_eval_time} s\n")
-        
-    tau = sampler.get_autocorr_time(
-        tol=cfg['emcee_cfg']['tau_tol']
+
+    try:
+        taus = sampler.get_autocorr_time(
+            tol=cfg['emcee_cfg']['tau_tol']
+        )
+        tau = np.max(taus)
+        print("Atuocorr lengths:\n", taus)
+        print("Max autocorr length:", tau, "\n")
+    except Exception as e:
+        print("Got exception:\n")
+        print(e, "\n")
+        tau = cfg['emcee_cfg']['default_tau']
+        print("\nUsing default tau:", tau, "\n")
+
+    print("\nMax log(P):", np.max(sampler.get_log_prob(discard=5*tau, thin=int(0.5*tau), flat=True)), "\n")
+
+    print("\n----------------- PLOTS ---------------------\n")
+
+    samples = sampler.get_chain(discard=int(5*tau), thin=int(0.5*tau), flat=True)
+    n_shared = len(cfg['model_cfg']['shared_par_names'])
+    n_independent = len(cfg['model_cfg']['independent_par_names'])
+    labels = (
+        cfg['model_cfg']['shared_par_names'] +
+        cfg['model_cfg']['independent_par_names'] +
+        [cfg['model_cfg']['ratio_par_name']]
     )
-    print("Atuocorr length:\n", tau, "\n")
-    
-    # samples = sampler.get_chain()
-    # flat_samples = sampler.get_chain(discard=500, thin=48, flat=True)
-    # np.savez_compressed(
-    #     '/groups/dark/osman/Thesis/data/baseline_full_chain',results=samples
-    # )
-    # print(flat_samples.shape)
-    # np.savez_compressed('/groups/dark/osman/Thesis/data/baseline_reduced_chain',results=flat_samples)
+
+    fx = samples[:, :n_shared]
+    fig_pop_2 = None
+
+    # Handling in case of independent parameters
+    if n_independent > 0:
+        fx = samples[:, :n_shared]
+        fx = np.concatenate(
+            (
+                fx, samples[:, n_shared:-1:2]
+            ), axis=-1
+        )
+
+        sx = samples[:, :n_shared]
+        sx = np.concatenate(
+            (
+                sx,
+                samples[:, n_shared+1:-1:2],
+                samples[:,-1][:, None]
+            ), axis=-1
+        )
+
+        fig_pop_2 = corner.corner(data=sx, color='r', **cfg['plot_cfg'])
+
+    fx = np.concatenate(
+        (
+            fx, samples[:,-1][:, None]
+        ), axis=-1
+    )
+
+    fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, labels=labels, **cfg['plot_cfg'])
+    fig_pop_1.tight_layout()
+    fig_pop_1.save_fig(
+        os.path.join(path, cfg['emcee_cfg']['run_name'], "corner.pdf")
+    )
 
 if __name__ == "__main__":
     main()

@@ -61,3 +61,9 @@ emcee_cfg:
   n_steps: 100
   n_workers: 1
   tau_tol: 25
+  default_tau: 2000
+plot_cfg:
+  smooth: 1.
+  smooth1d: 1.
+  label_kwargs:
+    fontsize: 16
