@@ -55,6 +55,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print("\n----------------- CONFIG ---------------------\n")
         print(omegaconf.OmegaConf.to_yaml(cfg),"\n")
 
+        print("\n----------------- SETUP ---------------------\n")
         # Setup init pos and log_prob
         theta = np.array([
                 -0.14, 3.1, 3.7, 0.6, 2.9, -19.3, -19.3, -0.09, -0.09, 0.05, 0.03, -0.25, 0.1, 1.1, 1.1, 0.04, 0.04, 0.4
@@ -68,8 +69,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
         )
         backend = em.backends.HDFBackend(filename, name=cfg['emcee_cfg']['run_name'])
         if not cfg['emcee_cfg']['continue_from_chain']:
+            print("Resetting backend with name", cfg['emcee_cfg']['run_name'])
             backend.reset(nwalkers, ndim)
 
+        print("\n----------------- SAMPLING ---------------------\n")
         sampler = em.EnsembleSampler(nwalkers, ndim, log_prob, pool=pool, backend=backend)
         sampler.run_mcmc(theta, cfg['emcee_cfg']['n_steps'])
     
@@ -79,7 +82,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
     print(f"\nTotal MCMC time:", total_time)
     print(f"Avg. time pr. step: {avg_eval_time} s\n")
         
-    tau = sampler.get_autocorr_time()
+    tau = sampler.get_autocorr_time(
+        tol=cfg['emcee_cfg']['tau_tol']
+    )
     print("Atuocorr length:\n", tau, "\n")
     
     # samples = sampler.get_chain()

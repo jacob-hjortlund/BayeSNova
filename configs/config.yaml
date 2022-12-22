@@ -54,9 +54,10 @@ model_cfg:
   prior_upper_bound: 10.
 emcee_cfg:
   save_path: './results/baseline'
-  file_name: "chains.h5"
+  file_name: "chains.hdf5"
   run_name: "base"
   continue_from_chain: False
   n_walkers: 128
   n_steps: 100
   n_workers: 1
+  tau_tol: 25
