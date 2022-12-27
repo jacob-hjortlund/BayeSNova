@@ -59,7 +59,6 @@ emcee_cfg:
   continue_from_chain: False
   n_walkers: 128
   n_steps: 100
-  n_workers: 1
   tau_tol: 25
   default_tau: 2000
 plot_cfg:

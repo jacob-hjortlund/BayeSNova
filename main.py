@@ -43,8 +43,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         cfg['model_cfg'], sn_covs=sn_covs,
         sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c,
         sn_z=sn_z, lower_bound=cfg['model_cfg']['prior_lower_bound'],
-        upper_bound=cfg['model_cfg']['prior_upper_bound'],
-        n_workers=cfg['emcee_cfg']['n_workers']
+        upper_bound=cfg['model_cfg']['prior_upper_bound']
     )
 
     t0 = time()

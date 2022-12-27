@@ -236,8 +236,7 @@ def _wrapper_prior_conv(
     sig_rb_1: float, tau_1: float, alpha_g_1: float,
     covs_2: np.ndarray, r_2: np.ndarray, rb_2: float,
     sig_rb_2: float, tau_2: float, alpha_g_2: float,
-    lower_bound: float = 0., upper_bound: float = 10.,
-    n_workers: int = 1
+    lower_bound: float = 0., upper_bound: float = 10.
 ):
     norm_1 = sp_special.gammainc(alpha_g_1, upper_bound) * sp_special.gamma(alpha_g_1)
     norm_2 = sp_special.gammainc(alpha_g_2, upper_bound) * sp_special.gamma(alpha_g_2)
@@ -254,45 +253,6 @@ def _wrapper_prior_conv(
     return p_1, p_2
 
 # -------- END NUMBA EXPERIMENT ----------
-
-def _prior_convolution(
-    covs_1: np.ndarray, r_1: np.ndarray, rb_1: float,
-    sig_rb_1: float, tau_1: float, alpha_g_1: float,
-    covs_2: np.ndarray, r_2: np.ndarray, rb_2: float,
-    sig_rb_2: float, tau_2: float, alpha_g_2: float,
-    lower_bound: float = 0., upper_bound: float = 10.,
-    n_workers: int = 1
-):
-
-    norm_1 = sp_special.gammainc(alpha_g_1, upper_bound) * sp_special.gamma(alpha_g_1)
-    norm_2 = sp_special.gammainc(alpha_g_2, upper_bound) * sp_special.gamma(alpha_g_2)
-    cov_res1 = np.concatenate((covs_1, r_1[:,None]), axis=1)
-    cov_res2 = np.concatenate((covs_2, r_2[:,None]), axis=1)
-    iterable = np.concatenate((cov_res1, cov_res2), axis=-1)
-
-    prior_integral_1 = utils._FunctionWrapper(
-        prior_integral, args=(rb_1, sig_rb_1, tau_1, alpha_g_1, lower_bound, upper_bound)
-    )
-    prior_integral_2 = utils._FunctionWrapper(
-        prior_integral, args=(rb_2, sig_rb_2, tau_2, alpha_g_2, lower_bound, upper_bound)
-    )
-    dual_pop_integral = utils._FunctionWrapper(
-        dual_pop_integration, args=(prior_integral_1, prior_integral_2)
-    )
-
-    if n_workers != 1:
-        with mp.Pool(n_workers) as pool:
-            return_values = pool.map(dual_pop_integral, iterable)
-    else:
-        return_values = []
-        for cov_res in iterable:
-            return_values.append(dual_pop_integral(cov_res))
-    
-    probs = np.concatenate(return_values)
-    p_1 = probs[:, 0] / norm_1
-    p_2 = probs[:, 1] / norm_2
-
-    return p_1, p_2
 
 def _population_cov_and_residual(
     sn_cov: np.ndarray, sn_mb: np.ndarray, sn_z: np.ndarray, sn_s: np.ndarray, sn_c: np.ndarray,
@@ -339,7 +299,7 @@ def _log_likelihood(
     sig_c_1, sig_int_1, Rb_1, sig_Rb_1, tau_1, alpha_g_1,
     Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
     sig_c_2, sig_int_2, Rb_2, sig_Rb_2, tau_2, alpha_g_2,
-    w, H0, lower_bound, upper_bound, n_workers
+    w, H0, lower_bound, upper_bound
 ):
 
     covs_1, r_1 = _population_cov_and_residual(
@@ -359,7 +319,7 @@ def _log_likelihood(
         tau_1=tau_1, alpha_g_1=alpha_g_1,
         covs_2=covs_2, r_2=r_2, rb_2=Rb_2, sig_rb_2=sig_Rb_2,
         tau_2=tau_2, alpha_g_2=alpha_g_2,
-        lower_bound=lower_bound, upper_bound=upper_bound, n_workers=n_workers
+        lower_bound=lower_bound, upper_bound=upper_bound
     )
 
     # Check if any probs had non-posdef cov
@@ -380,8 +340,7 @@ def generate_log_prob(
     model_cfg: dict, sn_covs: np.ndarray, 
     sn_mb: np.ndarray, sn_s: np.ndarray,
     sn_c: np.ndarray, sn_z: np.ndarray,
-    lower_bound: float, upper_bound: float,
-    n_workers: int
+    lower_bound: float, upper_bound: float
 ):
 
     init_arg_dict = {key: value for key, value in model_cfg['preset_values'].items()}
@@ -392,7 +351,6 @@ def generate_log_prob(
     init_arg_dict['sn_cov'] = sn_covs
     init_arg_dict['lower_bound'] = lower_bound
     init_arg_dict['upper_bound'] = upper_bound
-    init_arg_dict['n_workers'] = n_workers
 
     global log_prob_f
 
