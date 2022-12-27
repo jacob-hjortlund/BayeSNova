@@ -52,9 +52,11 @@ def prior_initialisation(
                 raise ValueError(f"{par} in prior config but bounds not defined. Check your config")
         else:
             init_par = 0.
-    init_values.append(init_par)
+        init_values.append(init_par)
+    
     init_values = np.array(init_values)
-    shared_init_pars, independent_init_pars = extend_theta(init_values, len(shared_par_names))
+    shared_init_pars = init_values[:len(shared_par_names)]
+    independent_init_pars = np.repeat(init_values[len(shared_par_names):-1], 2)
     init_pars = np.concatenate([shared_init_pars, independent_init_pars, [init_values[-1]]])
 
     return init_pars

@@ -47,40 +47,41 @@ def main(cfg: omegaconf.DictConfig) -> None:
     )
 
     t0 = time()
-    with swbd.MPIPool() as pool:
-        if not pool.is_master():
-            pool.wait()
-            sys.exit(0)
+    # with swbd.MPIPool() as pool:
+    #     if not pool.is_master():
+    #         pool.wait()
+    #         sys.exit(0)
 
-        # Print cfg
-        print("\n----------------- CONFIG ---------------------\n")
-        print(omegaconf.OmegaConf.to_yaml(cfg),"\n")
+    pool = None
+    # Print cfg
+    print("\n----------------- CONFIG ---------------------\n")
+    print(omegaconf.OmegaConf.to_yaml(cfg),"\n")
 
-        print("\n----------------- SETUP ---------------------\n")
-        # Setup init pos and log_prob
-        # theta = np.array([
-        #         -0.14, 3.1, 3.7, 0.6, 2.9, -19.3, -19.3, -0.09, -0.09, 0.05, 0.03, -0.25, 0.1, 1.1, 1.1, 0.04, 0.04, 0.4
-        #     ]) 
-        init_theta = utils.prior_initialisation(
-            cfg['model_cfg']['prior_bounds'], cfg['model_cfg']['shared_par_names'],
-            cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name']
-        )
-        init_theta += 3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'], len(init_theta))
-        _ = log_prob(init_theta[0]) # call func once befor loop to jit compile
-        nwalkers, ndim = init_theta.shape
+    print("\n----------------- SETUP ---------------------\n")
+    # Setup init pos and log_prob
+    theta = np.array([
+            -0.14, 3.1, 3.7, 0.6, 2.9, -19.3, -19.3, -0.09, -0.09, 0.05, 0.03, -0.25, 0.1, 1.1, 1.1, 0.04, 0.04, 0.4
+        ]) 
+    init_theta = utils.prior_initialisation(
+        cfg['model_cfg']['prior_bounds'], cfg['model_cfg']['shared_par_names'],
+        cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name']
+    )
+    init_theta = init_theta + 3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'], len(init_theta))
+    _ = log_prob(init_theta[0]) # call func once befor loop to jit compile
+    nwalkers, ndim = init_theta.shape
 
-        # Setup emcee backend
-        filename = os.path.join(
-            path, cfg['emcee_cfg']['file_name']
-        )
-        backend = em.backends.HDFBackend(filename, name=cfg['emcee_cfg']['run_name'])
-        if not cfg['emcee_cfg']['continue_from_chain']:
-            print("Resetting backend with name", cfg['emcee_cfg']['run_name'])
-            backend.reset(nwalkers, ndim)
+    # Setup emcee backend
+    filename = os.path.join(
+        path, cfg['emcee_cfg']['file_name']
+    )
+    backend = em.backends.HDFBackend(filename, name=cfg['emcee_cfg']['run_name'])
+    if not cfg['emcee_cfg']['continue_from_chain']:
+        print("Resetting backend with name", cfg['emcee_cfg']['run_name'])
+        backend.reset(nwalkers, ndim)
 
-        print("\n----------------- SAMPLING ---------------------\n")
-        sampler = em.EnsembleSampler(nwalkers, ndim, log_prob, pool=pool, backend=backend)
-        sampler.run_mcmc(init_theta, cfg['emcee_cfg']['n_steps'])
+    print("\n----------------- SAMPLING ---------------------\n")
+    sampler = em.EnsembleSampler(nwalkers, ndim, log_prob, pool=pool, backend=backend)
+    sampler.run_mcmc(init_theta, cfg['emcee_cfg']['n_steps'])
     
     t1 = time()
     total_time = t1-t0
