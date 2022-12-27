@@ -25,6 +25,40 @@ def uniform(value: float, lower: float = -np.inf, upper: float = np.inf):
     else:
         return 0.
 
+def extend_theta(theta: np.ndarray, n_shared_pars: int) -> tuple:
+
+    shared_pars = np.repeat(theta[:n_shared_pars], 2)
+    independent_pars = theta[n_shared_pars:-1]
+
+    return shared_pars, independent_pars
+
+def prior_initialisation(
+    priors: dict, shared_par_names: list, independent_par_names: list, ratio_par_name: str
+):
+
+    par_names = shared_par_names + independent_par_names + [ratio_par_name]
+    init_values = []
+    # 3-deep conditional bleeeh
+    for par in par_names:
+        if par in priors.keys():
+            bounds = priors[par]
+            if len(bounds) == 2:
+                init_par = (bounds["lower"] + bounds["upper"]) / 2
+            elif "lower" in bounds.keys():
+                init_par = bounds["lower"] + np.random.uniform()
+            elif "upper" in bounds.keys():
+                init_par = bounds["upper"] - np.random.uniform()
+            else:
+                raise ValueError(f"{par} in prior config but bounds not defined. Check your config")
+        else:
+            init_par = 0.
+    init_values.append(init_par)
+    init_values = np.array(init_values)
+    shared_init_pars, independent_init_pars = extend_theta(init_values, len(shared_par_names))
+    init_pars = np.concatenate([shared_init_pars, independent_init_pars, [init_values[-1]]])
+
+    return init_pars
+
 def gen_pop_par_names(par_names):
     n_pars = 2 * len(par_names)
     extended_par_names = [""] * n_pars
@@ -34,13 +68,6 @@ def gen_pop_par_names(par_names):
         extended_par_names[i + 1] = par_names[i//2] + "_2"
     
     return extended_par_names
-
-def extend_theta(theta: np.ndarray, n_shared_pars: int) -> tuple:
-
-    shared_pars = np.repeat(theta[:n_shared_pars], 2)
-    independent_pars = theta[n_shared_pars:-1]
-
-    return shared_pars, independent_pars
 
 def theta_to_dict(
     theta: np.ndarray, shared_par_names: list, independent_par_names: list,

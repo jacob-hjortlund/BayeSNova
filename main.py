@@ -59,11 +59,16 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         print("\n----------------- SETUP ---------------------\n")
         # Setup init pos and log_prob
-        theta = np.array([
-                -0.14, 3.1, 3.7, 0.6, 2.9, -19.3, -19.3, -0.09, -0.09, 0.05, 0.03, -0.25, 0.1, 1.1, 1.1, 0.04, 0.04, 0.4
-            ]) +3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'],18)
-        _ = log_prob(theta[0]) # call func once befor loop to jit compile
-        nwalkers, ndim = theta.shape
+        # theta = np.array([
+        #         -0.14, 3.1, 3.7, 0.6, 2.9, -19.3, -19.3, -0.09, -0.09, 0.05, 0.03, -0.25, 0.1, 1.1, 1.1, 0.04, 0.04, 0.4
+        #     ]) 
+        init_theta = utils.prior_initialisation(
+            cfg['model_cfg']['prior_bounds'], cfg['model_cfg']['shared_par_names'],
+            cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name']
+        )
+        init_theta += 3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'], len(init_theta))
+        _ = log_prob(init_theta[0]) # call func once befor loop to jit compile
+        nwalkers, ndim = init_theta.shape
 
         # Setup emcee backend
         filename = os.path.join(
@@ -76,7 +81,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         print("\n----------------- SAMPLING ---------------------\n")
         sampler = em.EnsembleSampler(nwalkers, ndim, log_prob, pool=pool, backend=backend)
-        sampler.run_mcmc(theta, cfg['emcee_cfg']['n_steps'])
+        sampler.run_mcmc(init_theta, cfg['emcee_cfg']['n_steps'])
     
     t1 = time()
     total_time = t1-t0
@@ -109,7 +114,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         max_thetas, len(cfg['model_cfg']['shared_par_names'])
     )
     max_pars = np.concatenate(
-        [max_shared_pars, max_independent_pars, [theta[-1]]]
+        [max_shared_pars, max_independent_pars, [max_thetas[-1]]]
     )
 
     kde = sp_stats.gaussian_kde(transposed_sample_thetas)
