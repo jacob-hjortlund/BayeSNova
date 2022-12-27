@@ -38,7 +38,7 @@ def gen_pop_par_names(par_names):
 def extend_theta(theta: np.ndarray, n_shared_pars: int) -> tuple:
 
     shared_pars = np.repeat(theta[:n_shared_pars], 2)
-    independent_pars = theta[n_shared_pars:]
+    independent_pars = theta[n_shared_pars:-1]
 
     return shared_pars, independent_pars
 
