@@ -108,24 +108,19 @@ def main(cfg: omegaconf.DictConfig) -> None:
     sample_log_probs = sampler.get_log_prob(discard=5*tau, thin=int(0.5*tau), flat=True)
     idx_max = np.argmax(sample_log_probs)
     max_sample_log_prob = sample_log_probs[idx_max]
-    
     max_thetas = sample_thetas[idx_max]
-    max_shared_pars, max_independent_pars = utils.extend_theta(
-        max_thetas, len(cfg['model_cfg']['shared_par_names'])
-    )
-    max_pars = np.concatenate(
-        [max_shared_pars, max_independent_pars, [max_thetas[-1]]]
-    )
 
     kde = sp_stats.gaussian_kde(transposed_sample_thetas)
-    nlp = lambda *args: -kde(*args)
-    sol = sp_opt.minimize(nlp, max_pars)
-    
-    if not sol.success:
-        raise AssertionError(sol.message)
+    nlp = lambda *args: -kde(*args)[0]
+    sol = sp_opt.minimize(nlp, max_thetas)
     
     opt_pars = sol.x
     opt_log_prob = -nlp(opt_pars)
+    
+    if not sol.success:
+        print("Optimization not successful:", sol.message, "\n")
+        print("Using init values corresponding to max sample log(P).")
+        opt_log_prob = -nlp(max_thetas)
     
     print("Max sample log(P):", max_sample_log_prob)
     print("Optimized log(P):", opt_log_prob, "\n")
@@ -170,8 +165,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, labels=labels, **cfg['plot_cfg'])
     fig_pop_1.tight_layout()
-    fig_pop_1.save_fig(
-        os.path.join(path, cfg['emcee_cfg']['run_name'], "corner.pdf")
+    fig_pop_1.savefig(
+        os.path.join(path, cfg['emcee_cfg']['run_name']+".pdf")
     )
 
 if __name__ == "__main__":
