@@ -7,12 +7,13 @@ import corner
 import emcee as em
 import numpy as np
 import pandas as pd
+import scipy.stats as sp_stats
+import scipy.optimize as sp_opt
 import schwimmbad as swbd
 import src.utils as utils
 import src.preprocessing as prep
 import src.probabilities as prob
 
-from scipy.optimize import minimize
 from time import time
 from tqdm import tqdm
 
@@ -96,11 +97,35 @@ def main(cfg: omegaconf.DictConfig) -> None:
         tau = cfg['emcee_cfg']['default_tau']
         print("\nUsing default tau:", tau, "\n")
 
-    print("\nMax log(P):", np.max(sampler.get_log_prob(discard=5*tau, thin=int(0.5*tau), flat=True)), "\n")
+    print("\n----------------- MAX LOG(P) ---------------------\n")
+    sample_thetas = sampler.get_chain(discard=int(5*tau), thin=int(0.5*tau), flat=True)
+    transposed_sample_thetas = sample_thetas.copy().T
+    sample_log_probs = sampler.get_log_prob(discard=5*tau, thin=int(0.5*tau), flat=True)
+    idx_max = np.argmax(sample_log_probs)
+    max_sample_log_prob = sample_log_probs[idx_max]
+    
+    max_thetas = sample_thetas[idx_max]
+    max_shared_pars, max_independent_pars = utils.extend_theta(
+        max_thetas, len(cfg['model_cfg']['shared_par_names'])
+    )
+    max_pars = np.concatenate(
+        [max_shared_pars, max_independent_pars, [theta[-1]]]
+    )
+
+    kde = sp_stats.gaussian_kde(transposed_sample_thetas)
+    nlp = lambda *args: -kde(*args)
+    sol = sp_opt.minimize(nlp, max_pars)
+    
+    if not sol.success:
+        raise AssertionError(sol.message)
+    
+    opt_pars = sol.x
+    opt_log_prob = -nlp(opt_pars)
+    
+    print("Max sample log(P):", max_sample_log_prob)
+    print("Optimized log(P):", opt_log_prob, "\n")
 
     print("\n----------------- PLOTS ---------------------\n")
-
-    samples = sampler.get_chain(discard=int(5*tau), thin=int(0.5*tau), flat=True)
     n_shared = len(cfg['model_cfg']['shared_par_names'])
     n_independent = len(cfg['model_cfg']['independent_par_names'])
     labels = (
@@ -109,24 +134,24 @@ def main(cfg: omegaconf.DictConfig) -> None:
         [cfg['model_cfg']['ratio_par_name']]
     )
 
-    fx = samples[:, :n_shared]
+    fx = sample_thetas[:, :n_shared]
     fig_pop_2 = None
 
     # Handling in case of independent parameters
     if n_independent > 0:
-        fx = samples[:, :n_shared]
+        fx = sample_thetas[:, :n_shared]
         fx = np.concatenate(
             (
-                fx, samples[:, n_shared:-1:2]
+                fx, sample_thetas[:, n_shared:-1:2]
             ), axis=-1
         )
 
-        sx = samples[:, :n_shared]
+        sx = sample_thetas[:, :n_shared]
         sx = np.concatenate(
             (
                 sx,
-                samples[:, n_shared+1:-1:2],
-                samples[:,-1][:, None]
+                sample_thetas[:, n_shared+1:-1:2],
+                sample_thetas[:,-1][:, None]
             ), axis=-1
         )
 
@@ -134,7 +159,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     fx = np.concatenate(
         (
-            fx, samples[:,-1][:, None]
+            fx, sample_thetas[:,-1][:, None]
         ), axis=-1
     )
 
