@@ -220,14 +220,22 @@ def _fast_prior_convolution(
             cov_2[i].ravel(), res_2[i].ravel(), params_2
         )).copy()
         tmp_params_2.astype(np.float64)
-        prob_1, _, s1 = dqags(
+        prob_1, _, s1, ierr1 = dqags(
             integrate_ptr, lower_bound, upper_bound, tmp_params_1
         )
-        prob_2, _, s2 = dqags(
+        prob_2, _, s2, ierr2 = dqags(
             integrate_ptr, lower_bound, upper_bound, tmp_params_2
         )
+
         probs[i, 0] = prob_1
         probs[i, 1] = prob_2
+
+        if not s1 or not s2:
+            print("\nPop1 integration status/err:", s1, "/", ierr1)
+            print("Pop2 integration status/err:", s2, "/", ierr2)
+            print("Setting to -inf.")
+            probs[i, 0] = -np.inf
+            probs[i, 1] = -np.inf
 
     return probs
 
