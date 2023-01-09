@@ -1,8 +1,9 @@
 import sys
-import mpi4py
 import numpy as np
 import numba as nb
 import schwimmbad as swbd
+
+from mpi4py import MPI
 
 
 class _FunctionWrapper:
@@ -27,14 +28,25 @@ class PoolWrapper():
         self.check_mpi()
         self.set_pool()
     
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self.pool != None:
+            self.pool.close()
+
     def check_mpi(self):
-        comm = mpi4py.MPI.COMM_WORLD
+        comm = MPI.COMM_WORLD
         size = comm.Get_size()
         if size > 1 and self.pool_type != "MPI":
-            raise Exception
-        else:
+            raise Exception # only use mpirun with MPI pool
+        elif size == 1 and self.pool_type == "MPI":
+            raise Exception #cant create mpi pool with only 1 procces
+        elif self.pool_type == "MPI":
             self.is_mpi = True
-    
+        else:
+            pass
+
     def set_pool(self):
         if self.pool_type == "MPI":
             self.pool = swbd.MPIPool()

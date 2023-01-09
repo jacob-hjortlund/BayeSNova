@@ -23,13 +23,24 @@ model_cfg:
     sig_int_1: 0.
     sig_int_2: 0.
   prior_bounds:
+    Mb:
+      lower: -100.
+      upper: 100.
     beta:
       lower: 1.
       upper: 5.
+    s:
+      lower: -100.
+      upper: 100.
     sig_s:
       lower: 0.
+      upper: 15.
+    c:
+      lower: -100.
+      upper: 100.
     sig_c: 
       lower: 0.
+      upper: 15.
     sig_int:
       lower: 0.
     Rb:
@@ -40,6 +51,7 @@ model_cfg:
       upper: 1.5
     tau:
       lower: 0.
+      upper: 100.
     alpha_g:
       lower: 1.
       upper: 7.
@@ -56,6 +68,7 @@ emcee_cfg:
   save_path: './results/baseline'
   file_name: "chains.hdf5"
   run_name: "base"
+  pool_type: "MPI"
   continue_from_chain: False
   n_walkers: 128
   n_steps: 100

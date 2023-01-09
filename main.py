@@ -85,7 +85,11 @@ def main(cfg: omegaconf.DictConfig) -> None:
         sampler = em.EnsembleSampler(
             nwalkers, ndim, log_prob, pool=wrapped_pool.pool, backend=backend
         )
-        sampler.run_mcmc(init_theta, cfg['emcee_cfg']['n_steps'])
+        # Set progress bar if pool is None
+        use_progress_bar = wrapped_pool.pool == None
+        sampler.run_mcmc(
+            init_theta, cfg['emcee_cfg']['n_steps'], progress=use_progress_bar
+        )
     
     t1 = time()
     total_time = t1-t0
