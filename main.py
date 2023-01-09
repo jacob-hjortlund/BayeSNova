@@ -47,12 +47,11 @@ def main(cfg: omegaconf.DictConfig) -> None:
     )
 
     t0 = time()
-    with swbd.MPIPool() as pool:
-        if not pool.is_master():
-            pool.wait()
-            sys.exit(0)
+    with utils.PoolWrapper(cfg['emcee_cfg']['pool_type']) as wrapped_pool:
+        
+        if wrapped_pool.is_mpi:
+            wrapped_pool.check_if_master()
 
-    #pool = None
         # Print cfg
         print("\n----------------- CONFIG ---------------------\n")
         print(omegaconf.OmegaConf.to_yaml(cfg),"\n")
@@ -62,6 +61,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         theta = np.array([
                 -0.14, 3.1, 3.7, 0.6, 2.9, -19.3, -19.3, -0.09, -0.09, 0.05, 0.03, -0.25, 0.1, 1.1, 1.1, 0.04, 0.04, 0.4
             ]) 
+        #init_theta = theta + 3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'], len(theta))
         init_theta = utils.prior_initialisation(
             cfg['model_cfg']['prior_bounds'], cfg['model_cfg']['shared_par_names'],
             cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name']
@@ -78,9 +78,13 @@ def main(cfg: omegaconf.DictConfig) -> None:
         if not cfg['emcee_cfg']['continue_from_chain']:
             print("Resetting backend with name", cfg['emcee_cfg']['run_name'])
             backend.reset(nwalkers, ndim)
+        else:
+            print("Continuing from backend with name", cfg['emcee_cfg']['run_name'])
 
         print("\n----------------- SAMPLING ---------------------\n")
-        sampler = em.EnsembleSampler(nwalkers, ndim, log_prob, pool=pool, backend=backend)
+        sampler = em.EnsembleSampler(
+            nwalkers, ndim, log_prob, pool=wrapped_pool.pool, backend=backend
+        )
         sampler.run_mcmc(init_theta, cfg['emcee_cfg']['n_steps'])
     
     t1 = time()
@@ -105,14 +109,14 @@ def main(cfg: omegaconf.DictConfig) -> None:
     print("\n----------------- MAX LOG(P) ---------------------\n")
     sample_thetas = sampler.get_chain(discard=int(5*tau), thin=int(0.5*tau), flat=True)
     transposed_sample_thetas = sample_thetas.copy().T
-    sample_log_probs = sampler.get_log_prob(discard=5*tau, thin=int(0.5*tau), flat=True)
+    sample_log_probs = sampler.get_log_prob(discard=int(5*tau), thin=int(0.5*tau), flat=True)
     idx_max = np.argmax(sample_log_probs)
     max_sample_log_prob = sample_log_probs[idx_max]
     max_thetas = sample_thetas[idx_max]
 
     kde = sp_stats.gaussian_kde(transposed_sample_thetas)
     nlp = lambda *args: -kde(*args)[0]
-    sol = sp_opt.minimize(nlp, max_thetas)#, method='Nelder-Mead', options={'adaptive': True})
+    sol = sp_opt.minimize(nlp, max_thetas, method='Nelder-Mead', options={'adaptive': True})
     
     opt_pars = sol.x
     opt_log_prob = -nlp(opt_pars)
