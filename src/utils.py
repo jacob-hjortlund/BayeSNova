@@ -1,4 +1,5 @@
 import numpy as np
+import numba as nb
 
 class _FunctionWrapper:
     """
@@ -33,7 +34,7 @@ def extend_theta(theta: np.ndarray, n_shared_pars: int) -> tuple:
     return shared_pars, independent_pars
 
 def prior_initialisation(
-    priors: dict, shared_par_names: list, independent_par_names: list, ratio_par_name: str
+    priors: dict, shared_par_names: list, independent_par_names: list, ratio_par_name: str,
 ):
 
     par_names = shared_par_names + independent_par_names + [ratio_par_name]
@@ -58,6 +59,15 @@ def prior_initialisation(
     shared_init_pars = init_values[:len(shared_par_names)]
     independent_init_pars = np.repeat(init_values[len(shared_par_names):-1], 2)
     init_pars = np.concatenate([shared_init_pars, independent_init_pars, [init_values[-1]]])
+
+    # Check if stretch is shared and correct to account for prior
+    try:
+        stretch_par_name = "s"
+        idx = np.repeat(independent_par_names,2).tolist().index(stretch_par_name)
+        idx += len(shared_par_names)
+        init_pars[idx] = init_pars[idx+1]-1.
+    except Exception:
+        pass
 
     return init_pars
 
@@ -108,6 +118,7 @@ def theta_to_dict(
 
     return arg_dict
 
+@nb.njit
 def nearestPD(A):
     """Find the nearest positive-definite matrix to input
 
@@ -151,13 +162,13 @@ def nearestPD(A):
 
     return A3
 
-
+@nb.njit
 def isPD(B):
     """Returns true when input is positive-definite, via Cholesky"""
     try:
         _ = np.linalg.cholesky(B)
         return True
-    except np.linalg.LinAlgError:
+    except Exception: #np.linalg.LinAlgError:
         return False
 
 def ensure_posdef(covs: np.ndarray) -> np.ndarray:
