@@ -111,6 +111,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print("\nUsing default tau:", tau, "\n")
 
     print("\n----------------- MAX LOG(P) ---------------------\n")
+    # TODO: Redo without interpolation
     sample_thetas = sampler.get_chain(discard=int(5*tau), thin=int(0.5*tau), flat=True)
     transposed_sample_thetas = sample_thetas.copy().T
     sample_log_probs = sampler.get_log_prob(discard=int(5*tau), thin=int(0.5*tau), flat=True)
