@@ -1,5 +1,9 @@
+import sys
+import mpi4py
 import numpy as np
 import numba as nb
+import schwimmbad as swbd
+
 
 class _FunctionWrapper:
     """
@@ -13,6 +17,36 @@ class _FunctionWrapper:
 
     def __call__(self, x):
         return self.f(x, *self.args)
+
+class PoolWrapper():
+
+    def __init__(self, pool_type: str = None) -> None:
+        self.pool_type = str(pool_type or "").upper()
+        self.pool = None
+        self.is_mpi = False
+        self.check_mpi()
+        self.set_pool()
+    
+    def check_mpi(self):
+        comm = mpi4py.MPI.COMM_WORLD
+        size = comm.Get_size()
+        if size > 1 and self.pool_type != "MPI":
+            raise Exception
+        else:
+            self.is_mpi = True
+    
+    def set_pool(self):
+        if self.pool_type == "MPI":
+            self.pool = swbd.MPIPool()
+        if self.pool_type == "MP":
+            raise NotImplementedError("MP/Multiprocessing support not yet implemented")
+    
+    def check_if_master(self):
+        if not self.is_mpi:
+            raise Exception("Check if master only applicable for MPI pools.")
+        if not self.pool.is_master():
+            self.pool.wait()
+            sys.exit(0)
 
 def sigmoid(value: float, shift: float = 0., scale: float = 1.):
 
