@@ -20,7 +20,7 @@ class _FunctionWrapper:
 
 class PoolWrapper():
 
-    def __init__(self, pool_type: str = None) -> None:
+    def __init__(self, pool_type: str) -> None:
         self.pool_type = str(pool_type or "").upper()
         self.pool = None
         self.is_mpi = False
