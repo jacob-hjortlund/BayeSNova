@@ -1,5 +1,6 @@
 import numpy as np
 import numba as nb
+import scipy as sp
 import src.utils as utils
 import multiprocessing as mp
 import scipy.special as sp_special
@@ -9,25 +10,32 @@ from NumbaQuadpack import quadpack_sig, dqags
 from astropy.cosmology import Planck18 as cosmo
 
 def _log_prior(
-    prior_bounds: dict, ratio_par_name: str, 
-    stretch_1_par: str = "s_1", stretch_2_par: str = "s_2",
-    **kwargs
+    prior_bounds: dict, ratio_par_name: str,
+    stretch_independent: bool = True, **kwargs
 ):
 
     value = 0.
+    stretch_1_par = "s_1"
+    stretch_2_par = "s_2"
+
     for value_key in kwargs.keys():
         bounds_key = ""
         # TODO: Remove 3-deep conditionals bleeeeh
-        if value_key == stretch_1_par or value_key == stretch_2_par:
+        is_independent_stretch = (value_key == stretch_1_par or value_key == stretch_2_par) and stretch_independent
+        is_not_ratio_par_name = value_key != ratio_par_name
+
+        if is_independent_stretch:
             if not kwargs[stretch_1_par] < kwargs[stretch_2_par]:
                 value += -np.inf
                 continue
-        elif value_key != ratio_par_name:
+        
+        if is_not_ratio_par_name:
             bounds_key = "_".join(value_key.split("_")[:-1])
         else:
             bounds_key = value_key
         
-        if bounds_key in prior_bounds.keys():
+        is_in_priors = bounds_key in prior_bounds.keys()
+        if is_in_priors:
             value += utils.uniform(
                 kwargs[value_key], **prior_bounds[bounds_key]
             )
@@ -147,10 +155,106 @@ def dual_pop_integration(
 
     return probs
 
+# ---------- SciPy / NUMBA EXPERIMENT ------------
+#TODO: Finish
+def jit_integrand_function(integrand_function):
+    jitted_function = nb.jit(integrand_function, nopython=True)
+    @nb.cfunc(nb.types.float64(nb.types.intc, nb.types.CPointer(nb.types.float64)))
+    def wrapped(n, xx):
+        values = nb.carray(xx,n)
+        return jitted_function(values)
+    return sp.LowLevelCallable(wrapped.ctypes)
+
+@jit_integrand_function
+def integrand(args):
+    x = args[0]
+    cov_tmp = args[1:10].copy().reshape(3,3)
+    r_tmp = args[10:13].copy()
+    rb, sig_rb, tau, alpha_g = args[13:].copy()
+    exponent = alpha_g - 1.
+
+    # Update residual
+    r_tmp[0] -= rb * tau * x
+    r_tmp[2] -= tau * x
+
+    # Update covariances
+    cov_tmp[0,0] += sig_rb**2 * tau**2 * x**2
+    
+    # Setup expression
+    dets = np.linalg.det(cov_tmp)
+    inv_covs = np.linalg.inv(cov_tmp)
+    inv_det_r = np.dot(inv_covs, r_tmp)
+    r_inv_det_r = np.dot(r_tmp, inv_det_r)
+    values = np.exp(-0.5 * r_inv_det_r - x) * x**exponent / dets**0.5
+
+    print("values:", values)
+
+    return values
+
+def _sp_fast_prior_convolution(
+    cov_1: np.ndarray, res_1: np.ndarray,
+    cov_2: np.ndarray, res_2: np.ndarray,
+    rb_1: float, sig_rb_1: float, tau_1: float, alpha_g_1: float,
+    rb_2: float, sig_rb_2: float, tau_2: float, alpha_g_2: float,
+    lower_bound: float = 0., upper_bound: float = 10.,
+):
+
+    n_sn = len(cov_1)
+    probs = np.zeros((n_sn, 2))
+    params_1 = np.array([rb_1, sig_rb_1, tau_1, alpha_g_1])
+    params_2 = np.array([rb_2, sig_rb_2, tau_2, alpha_g_2])
+
+    for i in range(n_sn):
+
+        tmp_params_1 = np.concatenate((
+            cov_1[i].ravel(), res_1[i].ravel(), params_1
+        )).copy()
+        tmp_params_1.astype(np.float64)
+        tmp_params_2 = np.concatenate((
+            cov_2[i].ravel(), res_2[i].ravel(), params_2
+        )).copy()
+        tmp_params_2.astype(np.float64)
+
+        prob_1 = sp_integrate.quad(
+            integrand, lower_bound, upper_bound, tmp_params_1
+        )[0]
+        prob_2 = sp_integrate.quad(
+            integrand, lower_bound, upper_bound, tmp_params_2
+        )[0]
+
+        probs[i, 0] = prob_1
+        probs[i, 1] = prob_2
+
+    return probs
+
+def _sp_wrapper_prior_conv(
+    covs_1: np.ndarray, r_1: np.ndarray, rb_1: float,
+    sig_rb_1: float, tau_1: float, alpha_g_1: float,
+    covs_2: np.ndarray, r_2: np.ndarray, rb_2: float,
+    sig_rb_2: float, tau_2: float, alpha_g_2: float,
+    lower_bound: float = 0., upper_bound: float = 10.
+):
+    norm_1 = sp_special.gammainc(alpha_g_1, upper_bound) * sp_special.gamma(alpha_g_1)
+    norm_2 = sp_special.gammainc(alpha_g_2, upper_bound) * sp_special.gamma(alpha_g_2)
+
+    probs = _sp_fast_prior_convolution(
+        covs_1, r_1, covs_2, r_2,
+        rb_1=rb_1, sig_rb_1=sig_rb_1, tau_1=tau_1, alpha_g_1=alpha_g_1,
+        rb_2=rb_2, sig_rb_2=sig_rb_2, tau_2=tau_2, alpha_g_2=alpha_g_2,
+        lower_bound=lower_bound, upper_bound=upper_bound
+    )
+
+    p_1 = probs[:, 0] / norm_1
+    p_2 = probs[:, 1] / norm_2
+
+    return p_1, p_2
+
+# ---------- END SciPy / NUMBA EXPERIMENT ------------
+
 # ---------- NUMBA EXPERIMENT ------------
 
 @nb.jit
-def integral_body(
+def old_integral_body(
     x, i1, i2, i3, i5,
     i6, i9, r1, r2, r3,
     rb, sig_rb, tau, alpha_g
@@ -177,7 +281,7 @@ def integral_body(
     return value
 
 @nb.cfunc(quadpack_sig)
-def integral(x, data):
+def old_integral(x, data):
     _data = nb.carray(data, (13,))
     i1 = _data[0]
     i2 = _data[1]
@@ -192,8 +296,52 @@ def integral(x, data):
     sig_rb = _data[13]
     tau = _data[14]
     alpha_g = _data[15]
-    return integral_body(
+    return old_integral_body(
         x, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
+        rb, sig_rb, tau, alpha_g
+    )
+old_integrate_ptr = old_integral.address
+
+@nb.jit
+def integral_body(
+    x, cov, res, rb, sig_rb, tau, alpha_g
+):  
+
+    # copy params
+    cov_tmp = cov.copy()
+    res_tmp = res.copy()
+
+    # update res and cov
+    res_tmp[0] -= rb * tau * x
+    res_tmp[2] -= tau * x
+    cov_tmp[0,0] += sig_rb * sig_rb * tau * tau * x * x
+
+    if not utils.isPD(cov_tmp):
+        cov_tmp = utils.nearestPD(cov_tmp)
+
+    # calculate prob
+    exponent = alpha_g - 1
+    dets = np.linalg.det(cov_tmp)
+    inv_covs = np.linalg.inv(cov_tmp)
+    inv_det_r = np.dot(inv_covs, res_tmp)
+    r_inv_det_r = np.dot(res_tmp, inv_det_r)
+    value = np.exp(-0.5 * r_inv_det_r - x) * x**exponent / dets**0.5
+
+    return value
+
+@nb.cfunc(quadpack_sig)
+def integral(x, data):
+
+    _data = nb.carray(data, (13,))
+    cov = _data[:9].reshape(3,3)
+    res = _data[9:12]
+    rb = data[12]
+    sig_rb = data[13]
+    tau = data[14]
+    alpha_g = data[15]
+
+    return integral_body(
+        x, cov, res, 
         rb, sig_rb, tau, alpha_g
     )
 integrate_ptr = integral.address
@@ -209,8 +357,10 @@ def _fast_prior_convolution(
 
     n_sn = len(cov_1)
     probs = np.zeros((n_sn, 2))
+    status = np.ones((n_sn, 2), dtype='bool')
     params_1 = np.array([rb_1, sig_rb_1, tau_1, alpha_g_1])
     params_2 = np.array([rb_2, sig_rb_2, tau_2, alpha_g_2])
+
     for i in range(n_sn):
         tmp_params_1 = np.concatenate((
             cov_1[i].ravel(), res_1[i].ravel(), params_1
@@ -221,23 +371,18 @@ def _fast_prior_convolution(
         )).copy()
         tmp_params_2.astype(np.float64)
         prob_1, _, s1, ierr1 = dqags(
-            integrate_ptr, lower_bound, upper_bound, tmp_params_1
+            old_integrate_ptr, lower_bound, upper_bound, tmp_params_1
         )
         prob_2, _, s2, ierr2 = dqags(
-            integrate_ptr, lower_bound, upper_bound, tmp_params_2
+            old_integrate_ptr, lower_bound, upper_bound, tmp_params_2
         )
 
         probs[i, 0] = prob_1
         probs[i, 1] = prob_2
+        status[i, 0] = s1
+        status[i, 1] = s2
 
-        if not s1 or not s2:
-            print("\nPop1 integration status/err:", s1, "/", ierr1)
-            print("Pop2 integration status/err:", s2, "/", ierr2)
-            print("Setting to -inf.")
-            probs[i, 0] = -np.inf
-            probs[i, 1] = -np.inf
-
-    return probs
+    return probs, status
 
 def _wrapper_prior_conv(
     covs_1: np.ndarray, r_1: np.ndarray, rb_1: float,
@@ -249,7 +394,7 @@ def _wrapper_prior_conv(
     norm_1 = sp_special.gammainc(alpha_g_1, upper_bound) * sp_special.gamma(alpha_g_1)
     norm_2 = sp_special.gammainc(alpha_g_2, upper_bound) * sp_special.gamma(alpha_g_2)
 
-    probs = _fast_prior_convolution(
+    probs, status = _fast_prior_convolution(
         covs_1, r_1, covs_2, r_2,
         rb_1=rb_1, sig_rb_1=sig_rb_1, tau_1=tau_1, alpha_g_1=alpha_g_1,
         rb_2=rb_2, sig_rb_2=sig_rb_2, tau_2=tau_2, alpha_g_2=alpha_g_2,
@@ -258,7 +403,19 @@ def _wrapper_prior_conv(
     p_1 = probs[:, 0] / norm_1
     p_2 = probs[:, 1] / norm_2
 
-    return p_1, p_2
+    p1_nans = np.isnan(p_1)
+    p2_nans = np.isnan(p_2)
+
+    if np.any(p1_nans):
+        print("Pop 1 contains nan probabilities:", np.count_nonzero(p1_nans)/len(p1_nans)*100, "%")
+        print("Pop 1 pars:", [rb_1, sig_rb_1, tau_1, alpha_g_1])
+        print("Pop 1 norm:", norm_1, "\n")
+    if np.any(p2_nans):
+        print("Pop 2 contains nan probabilities:", np.count_nonzero(p2_nans)/len(p2_nans)*100, "%")
+        print("Pop 1 pars:", [rb_2, sig_rb_2, tau_2, alpha_g_2])
+        print("Pop 2 norm:", norm_2, "\n")
+
+    return p_1, p_2, status
 
 # -------- END NUMBA EXPERIMENT ----------
 
@@ -322,7 +479,7 @@ def _log_likelihood(
         sig_s=sig_s_2, c=c_2, sig_c=sig_c_2, sig_int=sig_int_2, H0=H0
     )
 
-    probs_1, probs_2 = _wrapper_prior_conv(
+    probs_1, probs_2, status = _wrapper_prior_conv(
         covs_1=covs_1, r_1=r_1, rb_1=Rb_1, sig_rb_1=sig_Rb_1,
         tau_1=tau_1, alpha_g_1=alpha_g_1,
         covs_2=covs_2, r_2=r_2, rb_2=Rb_2, sig_rb_2=sig_Rb_2,
@@ -330,9 +487,27 @@ def _log_likelihood(
         lower_bound=lower_bound, upper_bound=upper_bound
     )
 
+    if np.any(np.isnan(probs_1)):
+        print(
+            "\nPop 1 contains nans. Parameters are:",
+            [
+                Mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
+                sig_c_1, sig_int_1, Rb_1, sig_Rb_1, tau_1, alpha_g_1
+            ], "\n"
+        )
+        
+    if np.any(np.isnan(probs_2)):
+        print(
+            "\nPop 2 contains nans. Parameters are:",
+            [
+                Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
+                sig_c_2, sig_int_2, Rb_2, sig_Rb_2, tau_2, alpha_g_2
+            ], "\n"
+        )
+
     # Check if any probs had non-posdef cov
     if np.any(probs_1 < 0.) | np.any(probs_2 < 0.):
-        print("Oh no, someones below 0")
+        print("\nOh no, someones below 0\n")
         return -np.inf
 
     # TODO: Fix numerical stability by using logsumexp somehow
@@ -341,6 +516,25 @@ def _log_likelihood(
             w * probs_1 + (1-w) * probs_2
         )
     )
+
+    s1, s2 = np.all(status[:, 0]), np.all(status[:, 1])
+    if not s1 or not s2:
+        mean1, mean2 = np.mean(probs_1), np.mean(probs_2)
+        std1, std2 = np.std(probs_1), np.std(probs_2)
+        f1, f2 = np.count_nonzero(~status[:, 0])/len(status), np.count_nonzero(~status[:, 1])/len(status)
+        print("\nPop 1 mean and std, percentage failed:", mean1, "+-", std1, ",", f1*100, "%")
+        print("Pop 2 mean and std, percentage failed:", mean2, "+-", std2, ",", f2*100, "%")
+        print("Log prob:", log_prob, "\n")
+        # s1_pars = [
+        #     Mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
+        #     sig_c_1, sig_int_1, Rb_1, sig_Rb_1, tau_1, alpha_g_1
+        # ]
+        # s2_pars = [
+        #     Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
+        #     sig_c_2, sig_int_2, Rb_2, sig_Rb_2, tau_2, alpha_g_2
+        # ]
+        # print("S1 pars:", s1_pars)
+        # print("S2 pars:", s2_pars, "\n")
 
     return log_prob
 
