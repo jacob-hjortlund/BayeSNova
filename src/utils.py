@@ -80,14 +80,17 @@ def extend_theta(theta: np.ndarray, n_shared_pars: int) -> tuple:
     return shared_pars, independent_pars
 
 def prior_initialisation(
-    priors: dict, shared_par_names: list, independent_par_names: list, ratio_par_name: str,
+    priors: dict, preset_init_values: dict, shared_par_names: list,
+    independent_par_names: list, ratio_par_name: str,
 ):
 
     par_names = shared_par_names + independent_par_names + [ratio_par_name]
     init_values = []
     # 3-deep conditional bleeeh
     for par in par_names:
-        if par in priors.keys():
+        if par in preset_init_values.keys():
+            init_par = preset_init_values[par]
+        elif par in priors.keys():
             bounds = priors[par]
             if len(bounds) == 2:
                 init_par = (bounds["lower"] + bounds["upper"]) / 2
