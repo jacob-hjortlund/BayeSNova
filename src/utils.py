@@ -172,6 +172,37 @@ def apply_sigmoid(
     
     return arg_dict
 
+def vectorized_apply_sigmoid(
+    chains: np.ndarray, sigmoid_cfg: dict,
+    shared_par_names: list
+):
+    
+    transformed_chains = chains.copy()
+    n_shared = len(shared_par_names)
+    p1 = chains[:, :, n_shared:-1:2]
+    p2 = chains[:, :, n_shared+1:-1:2]
+    n_independent = p1.shape[-1]
+
+    s1 = sigmoid(chains[:, :, -1], **sigmoid_cfg)
+    s2 = sigmoid(chains[:, :, -1], scale=sigmoid_cfg['scale'], shift=1-sigmoid_cfg['shift'])
+    s1 = np.repeat(
+        sigmoid(
+            chains[:, :, -1], scale=sigmoid_cfg['scale'], shift=sigmoid_cfg['shift']
+        )[:, :, None],
+        n_independent, -1
+    )
+    s2 = np.repeat(
+        sigmoid(
+            chains[:, :, -1], scale=sigmoid_cfg['scale'], shift=1-sigmoid_cfg['shift']
+        )[:, :, None],
+        n_independent, -1
+    )
+    
+    transformed_chains[:, :, n_shared:-1:2] = s2 * p1 + (1-s2) * p2
+    transformed_chains[:, :, n_shared+1:-1:2] = s1 * p1 + (1-s1) * p2
+
+    return transformed_chains
+
 @nb.njit
 def nearestPD(A):
     """Find the nearest positive-definite matrix to input
