@@ -34,13 +34,13 @@ model_cfg:
       upper: 100.
     sig_s:
       lower: 0.
-      upper: 15.
+      #upper: 15.
     c:
       lower: -100.
       upper: 100.
     sig_c: 
       lower: 0.
-      upper: 15.
+      #upper: 15.
     sig_int:
       lower: 0.
     Rb:
@@ -51,7 +51,7 @@ model_cfg:
       upper: 1.5
     tau:
       lower: 0.
-      upper: 100.
+      #upper: 100.
     alpha_g:
       lower: 1.
       upper: 7.
@@ -59,18 +59,18 @@ model_cfg:
       lower: 0.12
       upper: 0.88
   init_values:
-    alpha: -0.14
-    beta: 3.1
-    Rb: 3.7
-    sig_Rb: 0.6
-    alpha_g: 2.9
+    #alpha: -0.14
+    #beta: 3.1
+    #Rb: 3.7
+    #sig_Rb: 0.6
+    #alpha_g: 2.9
     Mb: -19.3
-    c: -0.09
+    #c: -0.09
     sig_c: 0.05
-    s: 0.1
+    #s: 0.1
     sig_s: 1.
     tau: 0.04
-    w: 0.4
+    #w: 0.4
   use_sigmoid: False
   sigmoid_cfg:
     scale: 100.

@@ -151,8 +151,7 @@ def theta_to_dict(
 
     if use_sigmoid:
         s1 = sigmoid(theta[-1], **sigmoid_cfg)
-        sigmoid_cfg['shift'] = 1 - sigmoid_cfg['shift']
-        s2 = sigmoid(theta[-1], **sigmoid_cfg)
+        s2 = sigmoid(theta[-1], scale=sigmoid_cfg['scale'], shift=1-sigmoid_cfg['shift'])
         v1 = np.array([s2, s1] * n_independent_pars)
         v2 = np.array([1 - s2, 1 - s1] * n_independent_pars)
         independent_pars_1 = theta[n_shared_pars:-1:2]
