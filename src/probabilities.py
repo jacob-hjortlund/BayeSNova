@@ -562,9 +562,7 @@ def generate_log_prob(
             **init_arg_dict, **utils.theta_to_dict(
                 theta=theta, shared_par_names=model_cfg['shared_par_names'], 
                 independent_par_names=model_cfg['independent_par_names'],
-                ratio_par_name=model_cfg['ratio_par_name'],
-                use_sigmoid=model_cfg['use_sigmoid'],
-                sigmoid_cfg=model_cfg['sigmoid_cfg']
+                ratio_par_name=model_cfg['ratio_par_name']
             )
         }
 
@@ -576,11 +574,12 @@ def generate_log_prob(
         if np.isinf(log_prior):
             return log_prior
         
-        arg_dict = utils.apply_sigmoid(
-            arg_dict=arg_dict, sigmoid_cfg=model_cfg['sigmoid_cfg'],
-            independent_par_names=model_cfg["independent_par_names"],
-            ratio_par_name=model_cfg["ratio_par_name"]
-        )
+        if model_cfg['use_sigmoid']:
+            arg_dict = utils.apply_sigmoid(
+                arg_dict=arg_dict, sigmoid_cfg=model_cfg['sigmoid_cfg'],
+                independent_par_names=model_cfg["independent_par_names"],
+                ratio_par_name=model_cfg["ratio_par_name"]
+            )
 
         log_likelihood = _log_likelihood(**arg_dict)
 
