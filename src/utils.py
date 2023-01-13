@@ -132,7 +132,7 @@ def gen_pop_par_names(par_names):
 
 def theta_to_dict(
     theta: np.ndarray, shared_par_names: list, independent_par_names: list,
-    ratio_par_name: str, use_sigmoid: bool, sigmoid_cfg: dict
+    ratio_par_name: str 
 ) -> dict:
 
     extended_shared_par_names = gen_pop_par_names(shared_par_names)
@@ -148,22 +148,28 @@ def theta_to_dict(
         )
 
     shared_pars, independent_pars = extend_theta(theta, n_shared_pars)
-
-    if use_sigmoid:
-        s1 = sigmoid(theta[-1], **sigmoid_cfg)
-        s2 = sigmoid(theta[-1], scale=sigmoid_cfg['scale'], shift=1-sigmoid_cfg['shift'])
-        v1 = np.array([s2, s1] * n_independent_pars)
-        v2 = np.array([1 - s2, 1 - s1] * n_independent_pars)
-        independent_pars_1 = theta[n_shared_pars:-1:2]
-        independent_pars_2 = theta[n_shared_pars+1:-1:2]
-        independent_pars = np.zeros_like(v1)
-        independent_pars[::2] = v1[::2] * independent_pars_1 + v2[::2] * independent_pars_2
-        independent_pars[1::2] = v1[1::2] * independent_pars_1 + v2[1::2] * independent_pars_2
-
     pars = np.concatenate([shared_pars, independent_pars, [theta[-1]]])
-
     arg_dict = {name: par for name, par in zip(par_names, pars)}
 
+    return arg_dict
+
+def apply_sigmoid(
+    arg_dict: dict, sigmoid_cfg: dict, 
+    independent_par_names: list, ratio_par_name: str
+) -> dict:
+    
+    s1 = sigmoid(arg_dict[ratio_par_name], **sigmoid_cfg)
+    s2 = sigmoid(arg_dict[ratio_par_name], scale=sigmoid_cfg['scale'], shift=1-sigmoid_cfg['shift'])
+
+    for independent_par in independent_par_names:
+        
+        name1 = independent_par + "_1"
+        name2 = independent_par + "_2"
+        p1 = arg_dict[name1]
+        p2 = arg_dict[name2]
+        arg_dict[name1] = s2 * p1 + (1-s2) * p2
+        arg_dict[name2] = s1 * p1 + (1-s1) * p2
+    
     return arg_dict
 
 @nb.njit

@@ -575,6 +575,12 @@ def generate_log_prob(
         )
         if np.isinf(log_prior):
             return log_prior
+        
+        arg_dict = utils.apply_sigmoid(
+            arg_dict=arg_dict, sigmoid_cfg=model_cfg['sigmoid_cfg'],
+            independent_par_names=model_cfg["independent_par_names"],
+            ratio_par_name=model_cfg["ratio_par_name"]
+        )
 
         log_likelihood = _log_likelihood(**arg_dict)
 
