@@ -187,8 +187,8 @@ Ebv_integral_ptr = Ebv_integral.address
 def _fast_dbl_prior_convolution(
     cov_1: np.ndarray, res_1: np.ndarray,
     cov_2: np.ndarray, res_2: np.ndarray,
-    tau_1_Rb: float, alpha_g_1_Rb: float, tau_1_Ebv: float, alpha_g_1_Ebv: float,
-    tau_2_Rb: float, alpha_g_2_Rb: float, tau_2_Ebv: float, alpha_g_2_Ebv: float,
+    tau_Rb_1: float, alpha_g_Rb_1: float, tau_Ebv_1: float, alpha_g_Ebv_1: float,
+    tau_Rb_2: float, alpha_g_Rb_2: float, tau_Ebv_2: float, alpha_g_Ebv_2: float,
     lower_bound_Rb: float = 0., upper_bound_Rb: float = 10.,
     lower_bound_Ebv: float = 0., upper_bound_Ebv: float = 10.
 ):
@@ -197,13 +197,13 @@ def _fast_dbl_prior_convolution(
     probs = np.zeros((n_sn, 2))
     status = np.ones((n_sn, 2), dtype='bool')
     params_1 = np.array([
-        tau_1_Rb, alpha_g_1_Rb,
-        tau_1_Ebv, alpha_g_1_Ebv,
+        tau_Rb_1, alpha_g_Rb_1,
+        tau_Ebv_1, alpha_g_Ebv_1,
         lower_bound_Rb, upper_bound_Rb
     ])
     params_2 = np.array([
-        tau_2_Rb, alpha_g_2_Rb,
-        tau_2_Ebv, alpha_g_2_Ebv,
+        tau_Rb_2, alpha_g_Rb_2,
+        tau_Ebv_2, alpha_g_Ebv_2,
         lower_bound_Rb, upper_bound_Rb
     ])
 
@@ -229,6 +229,48 @@ def _fast_dbl_prior_convolution(
         status[i, 1] = s2
 
     return probs, status
+
+def _wrapper_dbl_prior_conv(
+    covs_1: np.ndarray, r_1: np.ndarray,
+    tau_Rb_1: float, alpha_g_Rb_1: float, tau_Ebv_1: float, alpha_g_Ebv_1: float,
+    covs_2: np.ndarray, r_2: np.ndarray,
+    tau_Rb_2: float, alpha_g_Rb_2: float, tau_Ebv_2: float, alpha_g_Ebv_2: float,
+    lower_bound_Rb: float = 0., upper_bound_Rb: float = 10.,
+    lower_bound_Ebv: float = 0., upper_bound_Ebv: float = 10.
+):
+    norm_1 = (
+        sp_special.gammainc(alpha_g_Rb_1, upper_bound_Rb) * sp_special.gamma(alpha_g_Rb_1) *
+        sp_special.gammainc(alpha_g_Ebv_1, upper_bound_Ebv) * sp_special.gamma(alpha_g_Ebv_1)
+    )
+    norm_2 = (
+        sp_special.gammainc(alpha_g_Rb_2, upper_bound_Rb) * sp_special.gamma(alpha_g_Rb_2) *
+        sp_special.gammainc(alpha_g_Ebv_2, upper_bound_Ebv) * sp_special.gamma(alpha_g_Ebv_2)
+    )
+
+    probs, status = _fast_dbl_prior_convolution(
+        covs_1, r_1, covs_2, r_2,
+        tau_Rb_1=tau_Rb_1, alpha_g_Rb_1=alpha_g_Rb_1,
+        tau_Ebv_1=tau_Ebv_1, alpha_g_Ebv_1=alpha_g_Ebv_1,
+        tau_Rb_2=tau_Rb_2, alpha_g_Rb_2=alpha_g_Rb_2,
+        tau_Ebv_2=tau_Ebv_2, alpha_g_Ebv_2=alpha_g_Ebv_2,
+        lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb,
+        lower_bound_Ebv=lower_bound_Ebv, upper_bound_Ebv=upper_bound_Ebv
+    )
+    p_1 = probs[:, 0] / norm_1
+    p_2 = probs[:, 1] / norm_2
+
+    p1_nans = np.isnan(p_1)
+    p2_nans = np.isnan(p_2)
+
+    if np.any(p1_nans):
+        print("Pop 1 contains nan probabilities:", np.count_nonzero(p1_nans)/len(p1_nans)*100, "%")
+        print("Pop 1 pars:", [tau_Rb_1, alpha_g_Rb_1, tau_Ebv_1, alpha_g_Ebv_1])
+    if np.any(p2_nans):
+        print("Pop 2 contains nan probabilities:", np.count_nonzero(p2_nans)/len(p2_nans)*100, "%")
+        print("Pop 1 pars:", [tau_Rb_2, alpha_g_Rb_2, tau_Ebv_2, alpha_g_Ebv_2])
+        print("Pop 2 norm:", norm_2, "\n")
+
+    return p_1, p_2, status
 
 # ---------- END DOUBLE INTEGRAL EXPERIMENT ------------
 
