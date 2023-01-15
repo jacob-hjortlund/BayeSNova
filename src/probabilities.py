@@ -146,7 +146,7 @@ def dbl_integral_body(
 @nb.cfunc(quadpack_sig)
 def Rb_integral(x, data):
 
-    _data = nb.carray(data, (16,))
+    _data = nb.carray(data, (19,))
     i1 = _data[0]
     i2 = _data[1]
     i3 = _data[2]
