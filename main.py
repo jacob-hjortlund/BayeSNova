@@ -42,8 +42,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
     log_prob = prob.generate_log_prob(
         cfg['model_cfg'], sn_covs=sn_covs,
         sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c,
-        sn_z=sn_z, lower_bound=cfg['model_cfg']['prior_lower_bound'],
-        upper_bound=cfg['model_cfg']['prior_upper_bound']
+        sn_z=sn_z, lower_bound_Ebv=cfg['model_cfg']['lower_bound_Ebv'],
+        upper_bound_Ebv=cfg['model_cfg']['upper_bound_Ebv'],
+        lower_bound_Rb=cfg['model_cfg']['lower_bound_Rb'],
+        upper_bound_Rb=cfg['model_cfg']['upper_bound_Rb']
     )
 
     t0 = time()
@@ -97,8 +99,15 @@ def main(cfg: omegaconf.DictConfig) -> None:
     print(f"\nTotal MCMC time:", total_time)
     print(f"Avg. time pr. step: {avg_eval_time} s\n")
 
+    # If using sigmoid, transform samples
+    if cfg['model_cfg']['use_sigmoid']:
+        backend = utils.transformed_backend(
+            backend, filename, name=cfg['emcee_cfg']['run_name']+"_transformed",
+            sigmoid_cfg=cfg['model_cfg']['sigmoid_cfg'], shared_par_names=cfg['model_cfg']['shared_par_names']
+        )
+
     try:
-        taus = sampler.get_autocorr_time(
+        taus = backend.get_autocorr_time(
             tol=cfg['emcee_cfg']['tau_tol']
         )
         tau = np.max(taus)
@@ -112,15 +121,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     print("\n----------------- MAX LOG(P) ---------------------\n")
     # TODO: Redo without interpolation
-    sample_thetas = sampler.get_chain(discard=int(5*tau), thin=int(0.5*tau), flat=True)
-    transposed_sample_thetas = sample_thetas.copy().T
-    sample_log_probs = sampler.get_log_prob(discard=int(5*tau), thin=int(0.5*tau), flat=True)
+    sample_thetas = backend.get_chain(discard=int(5*tau), thin=int(0.5*tau), flat=True)
+    sample_log_probs = backend.get_log_prob(discard=int(5*tau), thin=int(0.5*tau), flat=True)
     idx_max = np.argmax(sample_log_probs)
     max_sample_log_prob = sample_log_probs[idx_max]
     max_thetas = sample_thetas[idx_max]
-
-    kde = sp_stats.gaussian_kde(transposed_sample_thetas)
-    nlp = lambda *args: -kde(*args)[0]
+    nlp = lambda *args: -log_prob(*args)
     sol = sp_opt.minimize(nlp, max_thetas, method='Nelder-Mead', options={'adaptive': True})
     
     opt_pars = sol.x
