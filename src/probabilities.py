@@ -462,11 +462,10 @@ def _log_likelihood(
     )
 
     use_gaussian_Rb = (
-        tau_Rb_1 == None & gamma_Rb_1 == None &
-        tau_Rb_2 == None & gamma_Rb_2 == None &
-        Rb_1 != None & sig_Rb_1 != None &
-        Rb_2 != None & sig_Rb_2 != None
-
+        not tau_Rb_1 and not gamma_Rb_1 and
+        not tau_Rb_2 and not gamma_Rb_2 and
+        Rb_1 and sig_Rb_1 and
+        Rb_2 and sig_Rb_2
     )
 
     if use_gaussian_Rb:
@@ -516,7 +515,8 @@ def generate_log_prob(
     model_cfg: dict, sn_covs: np.ndarray, 
     sn_mb: np.ndarray, sn_s: np.ndarray,
     sn_c: np.ndarray, sn_z: np.ndarray,
-    lower_bound: float, upper_bound: float
+    lower_bound_Ebv: float, upper_bound_Ebv: float,
+    lower_bound_Rb: float, upper_bound_Rb: float
 ):
 
     init_arg_dict = {key: value for key, value in model_cfg['preset_values'].items()}
@@ -525,8 +525,10 @@ def generate_log_prob(
     init_arg_dict['sn_c'] = sn_c
     init_arg_dict['sn_z'] = sn_z
     init_arg_dict['sn_cov'] = sn_covs
-    init_arg_dict['lower_bound'] = lower_bound
-    init_arg_dict['upper_bound'] = upper_bound
+    init_arg_dict['lower_bound_Ebv'] = lower_bound_Ebv
+    init_arg_dict['upper_bound_Ebv'] = upper_bound_Ebv
+    init_arg_dict['lower_bound_Rb'] = lower_bound_Rb
+    init_arg_dict['upper_bound_Rb'] = upper_bound_Rb
 
     global log_prob_f
 
