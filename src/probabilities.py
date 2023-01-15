@@ -440,10 +440,13 @@ def _population_cov_and_residual(
 def _log_likelihood(
     sn_cov, sn_mb, sn_z, sn_s, sn_c,
     Mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
-    sig_c_1, sig_int_1, Rb_1, sig_Rb_1, tau_1, alpha_g_1,
+    sig_c_1, sig_int_1, Rb_1, sig_Rb_1, 
+    tau_Rb_1, alpha_g_Rb_1, tau_Ebv_1, alpha_g_Ebv_1,
     Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
-    sig_c_2, sig_int_2, Rb_2, sig_Rb_2, tau_2, alpha_g_2,
-    w, H0, lower_bound, upper_bound
+    sig_c_2, sig_int_2, Rb_2, sig_Rb_2,
+    tau_Rb_2, alpha_g_Rb_2, tau_Ebv_2, alpha_g_Ebv_2,
+    w, H0, lower_bound_Ebv, upper_bound_Ebv,
+    lower_bound_Rb, upper_bound_Rb
 ):
 
     covs_1, r_1 = _population_cov_and_residual(
@@ -458,30 +461,32 @@ def _log_likelihood(
         sig_s=sig_s_2, c=c_2, sig_c=sig_c_2, sig_int=sig_int_2, H0=H0
     )
 
-    probs_1, probs_2, status = _wrapper_prior_conv(
-        covs_1=covs_1, r_1=r_1, rb_1=Rb_1, sig_rb_1=sig_Rb_1,
-        tau_1=tau_1, alpha_g_1=alpha_g_1,
-        covs_2=covs_2, r_2=r_2, rb_2=Rb_2, sig_rb_2=sig_Rb_2,
-        tau_2=tau_2, alpha_g_2=alpha_g_2,
-        lower_bound=lower_bound, upper_bound=upper_bound
+    use_gaussian_Rb = (
+        tau_Rb_1 == None & alpha_g_Rb_1 == None &
+        tau_Rb_2 == None & alpha_g_Rb_2 == None &
+        Rb_1 != None & sig_Rb_1 != None &
+        Rb_2 != None & sig_Rb_2 != None
+
     )
 
-    if np.any(np.isnan(probs_1)):
-        print(
-            "\nPop 1 contains nans. Parameters are:",
-            [
-                Mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
-                sig_c_1, sig_int_1, Rb_1, sig_Rb_1, tau_1, alpha_g_1
-            ], "\n"
+    if use_gaussian_Rb:
+        probs_1, probs_2, status = _wrapper_prior_conv(
+            covs_1=covs_1, r_1=r_1, rb_1=Rb_1, sig_rb_1=sig_Rb_1,
+            tau_1=tau_Ebv_1, alpha_g_1=alpha_g_Ebv_1,
+            covs_2=covs_2, r_2=r_2, rb_2=Rb_2, sig_rb_2=sig_Rb_2,
+            tau_2=tau_Ebv_2, alpha_g_2=alpha_g_Ebv_2,
+            lower_bound=lower_bound_Ebv, upper_bound=upper_bound_Ebv
         )
-        
-    if np.any(np.isnan(probs_2)):
-        print(
-            "\nPop 2 contains nans. Parameters are:",
-            [
-                Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
-                sig_c_2, sig_int_2, Rb_2, sig_Rb_2, tau_2, alpha_g_2
-            ], "\n"
+    else:
+        probs_1, probs_2, status = _wrapper_dbl_prior_conv(
+            covs_1=covs_1, r_1=r_1,
+            tau_Rb_1=tau_Rb_1, alpha_g_Rb_1=alpha_g_Rb_1,
+            tau_Ebv_1=tau_Ebv_1, alpha_g_Ebv_1=alpha_g_Ebv_1,
+            covs_2=covs_2, r_2=r_2,
+            tau_Rb_2=tau_Rb_2, alpha_g_Rb_2=alpha_g_Rb_2,
+            tau_Ebv_2=tau_Ebv_2, alpha_g_Ebv_2=alpha_g_Ebv_2,
+            lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb,
+            lower_bound_Ebv=lower_bound_Ebv, upper_bound_Ebv=upper_bound_Ebv
         )
 
     # Check if any probs had non-posdef cov
@@ -504,16 +509,6 @@ def _log_likelihood(
         print("\nPop 1 mean and std, percentage failed:", mean1, "+-", std1, ",", f1*100, "%")
         print("Pop 2 mean and std, percentage failed:", mean2, "+-", std2, ",", f2*100, "%")
         print("Log prob:", log_prob, "\n")
-        # s1_pars = [
-        #     Mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
-        #     sig_c_1, sig_int_1, Rb_1, sig_Rb_1, tau_1, alpha_g_1
-        # ]
-        # s2_pars = [
-        #     Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
-        #     sig_c_2, sig_int_2, Rb_2, sig_Rb_2, tau_2, alpha_g_2
-        # ]
-        # print("S1 pars:", s1_pars)
-        # print("S2 pars:", s2_pars, "\n")
 
     return log_prob
 
