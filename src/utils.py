@@ -1,6 +1,8 @@
 import sys
+import tqdm
 import numpy as np
 import numba as nb
+import emcee as em
 import schwimmbad as swbd
 
 from mpi4py import MPI
@@ -60,9 +62,13 @@ class PoolWrapper():
             self.pool.wait()
             sys.exit(0)
 
-def sigmoid(value: float, shift: float = 0., scale: float = 1.):
+def sigmoid(
+    value: float, shift: float = 0.,
+    scale: float = 1., divisor: int = 1
+):
 
-    denom = 1. + np.exp(- scale * ( value - shift ))
+    exponent = (- scale * (value - shift)) / divisor
+    denom = 1. + divisor * np.exp(exponent)
 
     return 1. / denom
 
@@ -132,12 +138,19 @@ def gen_pop_par_names(par_names):
 
 def theta_to_dict(
     theta: np.ndarray, shared_par_names: list, independent_par_names: list,
-    ratio_par_name: str 
+    ratio_par_name: str
 ) -> dict:
 
     extended_shared_par_names = gen_pop_par_names(shared_par_names)
     extended_independent_par_names = gen_pop_par_names(independent_par_names)
-    par_names = extended_shared_par_names + extended_independent_par_names + [ratio_par_name]
+    missing_par_names = list(
+        set(['tau_Ebv', 'gamma_Ebv', 'tau_Rb', 'gamma_Rb']) - set(shared_par_names + independent_par_names)
+    )
+    extended_missing_par_names = gen_pop_par_names(missing_par_names)
+    par_names = (
+        extended_shared_par_names + extended_independent_par_names +
+        extended_missing_par_names + [ratio_par_name]
+    )
 
     n_shared_pars = len(shared_par_names)
     n_independent_pars = len(independent_par_names)
@@ -148,7 +161,8 @@ def theta_to_dict(
         )
 
     shared_pars, independent_pars = extend_theta(theta, n_shared_pars)
-    pars = np.concatenate([shared_pars, independent_pars, [theta[-1]]])
+    missing_pars = [None] * len(extended_missing_par_names)
+    pars = np.concatenate([shared_pars, independent_pars, missing_pars, [theta[-1]]])
     arg_dict = {name: par for name, par in zip(par_names, pars)}
 
     return arg_dict
@@ -202,6 +216,36 @@ def vectorized_apply_sigmoid(
     transformed_chains[:, :, n_shared+1:-1:2] = s1 * p1 + (1-s1) * p2
 
     return transformed_chains
+
+def transformed_backend(
+    current_backend, filename: str, name: str,
+    sigmoid_cfg: dict, shared_par_names: list
+):
+
+    backend = em.backends.HDFBackend(filename, name=name)
+
+    chains = vectorized_apply_sigmoid(
+        current_backend.get_chain(), sigmoid_cfg,
+        shared_par_names
+    )
+    log_prob = current_backend.get_log_prob()
+    random_state = current_backend.random_state
+    accepted = current_backend.accepted
+
+    n, nwalkers, ndim = chains.shape
+    backend.reset(nwalkers, ndim)
+    backend.grow(n, None)
+
+    for i in tqdm.tqdm(range(n)):
+        if not i==0.:
+            accepted = np.zeros_like(accepted)
+        state = em.State(
+            coords=chains[i], log_prob=log_prob[i],
+            random_state=random_state
+        )
+        backend.save_step(state, accepted)
+
+    return backend
 
 @nb.njit
 def nearestPD(A):
