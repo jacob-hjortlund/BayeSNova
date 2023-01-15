@@ -5,6 +5,7 @@ import src.utils as utils
 import multiprocessing as mp
 import scipy.special as sp_special
 import scipy.integrate as sp_integrate
+from functools import partial
 
 from NumbaQuadpack import quadpack_sig, dqags
 from astropy.cosmology import Planck18 as cosmo
@@ -112,100 +113,101 @@ def _population_r(
 
     return r
 
-def prior_integral(
-    cov_res, rb, sig_rb, tau, alpha_g, lower_bound=1., upper_bound=10.
-):
+# ---------- DOUBLE INTEGRAL EXPERIMENT ------------
 
-    cov = cov_res[:-1]
-    res = cov_res[-1]
-    exponent = alpha_g - 1.
+@nb.jit
+def dbl_integral_body(
+    x, y, i1, i2, i3, i5,
+    i6, i9, r1, r2, r3,
+    tau_Rb, alpha_g_Rb,
+    tau_Ebv, alpha_g_Ebv
+):  
+    # update res and cov
+    r1 -= x * tau_Rb * y * tau_Ebv
+    r3 -= y * tau_Ebv
 
-    def f(x):
-        cov_tmp = cov.copy()
-        r_tmp = res.copy()
+    # precalcs
+    A1 = i5 * i9 - i6 * i6
+    A2 = i6 * i3 - i2 * i9
+    A3 = i2 * i6 - i5 * i3
+    A5 = i1 * i9 - i3 * i3
+    A6 = i2 * i3 - i1 * i6
+    A9 = i1 * i5 - i2 * i2
+    det_m1 = 1. / (i1 * A1 + i2 * A2 + i3 * A3)
 
-        # Update residual
-        r_tmp[0] -= rb * tau * x
-        r_tmp[2] -= tau * x
+    # # calculate prob
+    r_inv_cov_r = det_m1 * (r1 * r1 * A1 + r2 * r2 * A5 + r3 * r3 * A9 + 2 * (r1 * r2 * A2 + r1 * r3 * A3 + r2 * r3 * A6))
+    exponent_Rb = alpha_g_Rb - 1.
+    exponent_Ebv = alpha_g_Ebv - 1.
+    value = np.exp(-0.5 * r_inv_cov_r - x - y) * x**exponent_Rb * y**exponent_Ebv * det_m1**0.5
 
-        # Update covariances
-        cov_tmp[0,0] += sig_rb**2 * tau**2 * x**2
-        
-        # Setup expression
-        dets = np.linalg.det(cov_tmp)
-        inv_covs = np.linalg.inv(cov_tmp)
-        inv_det_r = np.dot(inv_covs, r_tmp)
-        r_inv_det_r = np.dot(r_tmp, inv_det_r)
-        values = np.exp(-0.5 * r_inv_det_r - x) * x**exponent / dets**0.5
+    return value
 
-        return values
-    
-    log_p = sp_integrate.quad(f, lower_bound, upper_bound)[0]
+@nb.cfunc(quadpack_sig)
+def Rb_integral(x, data):
 
-    return log_p
+    _data = nb.carray(data, (16,))
+    i1 = _data[0]
+    i2 = _data[1]
+    i3 = _data[2]
+    i5 = _data[4]
+    i6 = _data[5]
+    i9 = _data[8]
+    r1 = _data[9]
+    r2 = _data[10]
+    r3 = _data[11]
+    tau_Rb = _data[12]
+    alpha_g_Rb = _data[13]
+    tau_Ebv = _data[14]
+    alpha_g_Ebv = _data[15]
+    y = _data[-1]
 
-def dual_pop_integration(
-    cov_res: np.ndarray, pop1_prior_integral, pop2_prior_integral 
-):
+    return dbl_integral_body(
+        x, y, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
+        tau_Rb, alpha_g_Rb,
+        tau_Ebv, alpha_g_Ebv
+    )
+Rb_integral_ptr = Rb_integral.address
 
-    cov_res_1, cov_res_2 = np.split(cov_res, 2, axis=-1)
-    prob_1 = pop1_prior_integral(cov_res_1)
-    prob_2 = pop2_prior_integral(cov_res_2)
-    probs = np.array([[prob_1, prob_2]])
+@nb.cfunc(quadpack_sig)
+def Ebv_integral(y, data):
+    _data = nb.carray(data, (16,))
+    _new_data = np.concatenate(
+        (_data, np.array([y]))
+    )
 
-    return probs
+    inner_value, _, _, _ = dqags(
+        Rb_integral_ptr, _data[-1], _data[-2], _new_data
+    )
 
-# ---------- SciPy / NUMBA EXPERIMENT ------------
-#TODO: Finish
-def jit_integrand_function(integrand_function):
-    jitted_function = nb.jit(integrand_function, nopython=True)
-    @nb.cfunc(nb.types.float64(nb.types.intc, nb.types.CPointer(nb.types.float64)))
-    def wrapped(n, xx):
-        values = nb.carray(xx,n)
-        return jitted_function(values)
-    return sp.LowLevelCallable(wrapped.ctypes)
+    return inner_value
+Ebv_integral_ptr = Ebv_integral.address
 
-@jit_integrand_function
-def integrand(args):
-    x = args[0]
-    cov_tmp = args[1:10].copy().reshape(3,3)
-    r_tmp = args[10:13].copy()
-    rb, sig_rb, tau, alpha_g = args[13:].copy()
-    exponent = alpha_g - 1.
-
-    # Update residual
-    r_tmp[0] -= rb * tau * x
-    r_tmp[2] -= tau * x
-
-    # Update covariances
-    cov_tmp[0,0] += sig_rb**2 * tau**2 * x**2
-    
-    # Setup expression
-    dets = np.linalg.det(cov_tmp)
-    inv_covs = np.linalg.inv(cov_tmp)
-    inv_det_r = np.dot(inv_covs, r_tmp)
-    r_inv_det_r = np.dot(r_tmp, inv_det_r)
-    values = np.exp(-0.5 * r_inv_det_r - x) * x**exponent / dets**0.5
-
-    print("values:", values)
-
-    return values
-
-def _sp_fast_prior_convolution(
+@nb.njit
+def _fast_dbl_prior_convolution(
     cov_1: np.ndarray, res_1: np.ndarray,
     cov_2: np.ndarray, res_2: np.ndarray,
-    rb_1: float, sig_rb_1: float, tau_1: float, alpha_g_1: float,
-    rb_2: float, sig_rb_2: float, tau_2: float, alpha_g_2: float,
-    lower_bound: float = 0., upper_bound: float = 10.,
+    tau_1_Rb: float, alpha_g_1_Rb: float, tau_1_Ebv: float, alpha_g_1_Ebv: float,
+    tau_2_Rb: float, alpha_g_2_Rb: float, tau_2_Ebv: float, alpha_g_2_Ebv: float,
+    lower_bound_Rb: float = 0., upper_bound_Rb: float = 10.,
+    lower_bound_Ebv: float = 0., upper_bound_Ebv: float = 10.
 ):
 
     n_sn = len(cov_1)
     probs = np.zeros((n_sn, 2))
-    params_1 = np.array([rb_1, sig_rb_1, tau_1, alpha_g_1])
-    params_2 = np.array([rb_2, sig_rb_2, tau_2, alpha_g_2])
+    status = np.ones((n_sn, 2), dtype='bool')
+    params_1 = np.array([
+        tau_1_Rb, alpha_g_1_Rb,
+        tau_1_Ebv, alpha_g_1_Ebv,
+        lower_bound_Rb, upper_bound_Rb
+    ])
+    params_2 = np.array([
+        tau_2_Rb, alpha_g_2_Rb,
+        tau_2_Ebv, alpha_g_2_Ebv,
+        lower_bound_Rb, upper_bound_Rb
+    ])
 
     for i in range(n_sn):
-
         tmp_params_1 = np.concatenate((
             cov_1[i].ravel(), res_1[i].ravel(), params_1
         )).copy()
@@ -214,47 +216,26 @@ def _sp_fast_prior_convolution(
             cov_2[i].ravel(), res_2[i].ravel(), params_2
         )).copy()
         tmp_params_2.astype(np.float64)
-
-        prob_1 = sp_integrate.quad(
-            integrand, lower_bound, upper_bound, tmp_params_1
-        )[0]
-        prob_2 = sp_integrate.quad(
-            integrand, lower_bound, upper_bound, tmp_params_2
-        )[0]
+        prob_1, _, s1, ierr1 = dqags(
+            integrate_ptr, lower_bound_Ebv, upper_bound_Ebv, tmp_params_1
+        )
+        prob_2, _, s2, ierr2 = dqags(
+            integrate_ptr, lower_bound_Ebv, upper_bound_Ebv, tmp_params_2
+        )
 
         probs[i, 0] = prob_1
         probs[i, 1] = prob_2
+        status[i, 0] = s1
+        status[i, 1] = s2
 
-    return probs
+    return probs, status
 
-def _sp_wrapper_prior_conv(
-    covs_1: np.ndarray, r_1: np.ndarray, rb_1: float,
-    sig_rb_1: float, tau_1: float, alpha_g_1: float,
-    covs_2: np.ndarray, r_2: np.ndarray, rb_2: float,
-    sig_rb_2: float, tau_2: float, alpha_g_2: float,
-    lower_bound: float = 0., upper_bound: float = 10.
-):
-    norm_1 = sp_special.gammainc(alpha_g_1, upper_bound) * sp_special.gamma(alpha_g_1)
-    norm_2 = sp_special.gammainc(alpha_g_2, upper_bound) * sp_special.gamma(alpha_g_2)
-
-    probs = _sp_fast_prior_convolution(
-        covs_1, r_1, covs_2, r_2,
-        rb_1=rb_1, sig_rb_1=sig_rb_1, tau_1=tau_1, alpha_g_1=alpha_g_1,
-        rb_2=rb_2, sig_rb_2=sig_rb_2, tau_2=tau_2, alpha_g_2=alpha_g_2,
-        lower_bound=lower_bound, upper_bound=upper_bound
-    )
-
-    p_1 = probs[:, 0] / norm_1
-    p_2 = probs[:, 1] / norm_2
-
-    return p_1, p_2
-
-# ---------- END SciPy / NUMBA EXPERIMENT ------------
+# ---------- END DOUBLE INTEGRAL EXPERIMENT ------------
 
 # ---------- NUMBA EXPERIMENT ------------
 
 @nb.jit
-def old_integral_body(
+def integral_body(
     x, i1, i2, i3, i5,
     i6, i9, r1, r2, r3,
     rb, sig_rb, tau, alpha_g
@@ -281,8 +262,8 @@ def old_integral_body(
     return value
 
 @nb.cfunc(quadpack_sig)
-def old_integral(x, data):
-    _data = nb.carray(data, (13,))
+def integral(x, data):
+    _data = nb.carray(data, (16,))
     i1 = _data[0]
     i2 = _data[1]
     i3 = _data[2]
@@ -296,52 +277,8 @@ def old_integral(x, data):
     sig_rb = _data[13]
     tau = _data[14]
     alpha_g = _data[15]
-    return old_integral_body(
-        x, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
-        rb, sig_rb, tau, alpha_g
-    )
-old_integrate_ptr = old_integral.address
-
-@nb.jit
-def integral_body(
-    x, cov, res, rb, sig_rb, tau, alpha_g
-):  
-
-    # copy params
-    cov_tmp = cov.copy()
-    res_tmp = res.copy()
-
-    # update res and cov
-    res_tmp[0] -= rb * tau * x
-    res_tmp[2] -= tau * x
-    cov_tmp[0,0] += sig_rb * sig_rb * tau * tau * x * x
-
-    if not utils.isPD(cov_tmp):
-        cov_tmp = utils.nearestPD(cov_tmp)
-
-    # calculate prob
-    exponent = alpha_g - 1
-    dets = np.linalg.det(cov_tmp)
-    inv_covs = np.linalg.inv(cov_tmp)
-    inv_det_r = np.dot(inv_covs, res_tmp)
-    r_inv_det_r = np.dot(res_tmp, inv_det_r)
-    value = np.exp(-0.5 * r_inv_det_r - x) * x**exponent / dets**0.5
-
-    return value
-
-@nb.cfunc(quadpack_sig)
-def integral(x, data):
-
-    _data = nb.carray(data, (13,))
-    cov = _data[:9].reshape(3,3)
-    res = _data[9:12]
-    rb = data[12]
-    sig_rb = data[13]
-    tau = data[14]
-    alpha_g = data[15]
-
     return integral_body(
-        x, cov, res, 
+        x, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
         rb, sig_rb, tau, alpha_g
     )
 integrate_ptr = integral.address
@@ -371,10 +308,10 @@ def _fast_prior_convolution(
         )).copy()
         tmp_params_2.astype(np.float64)
         prob_1, _, s1, ierr1 = dqags(
-            old_integrate_ptr, lower_bound, upper_bound, tmp_params_1
+            integrate_ptr, lower_bound, upper_bound, tmp_params_1
         )
         prob_2, _, s2, ierr2 = dqags(
-            old_integrate_ptr, lower_bound, upper_bound, tmp_params_2
+            integrate_ptr, lower_bound, upper_bound, tmp_params_2
         )
 
         probs[i, 0] = prob_1
