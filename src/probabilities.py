@@ -280,8 +280,11 @@ def _wrapper_dbl_prior_conv(
 def integral_body(
     x, i1, i2, i3, i5,
     i6, i9, r1, r2, r3,
-    rb, sig_rb, tau_Ebv, gamma_Ebv
+    rb, sig_rb, Ebv, gamma_Ebv
 ):  
+
+    tau_Ebv = Ebv / gamma_Ebv
+
     # update res and cov
     r1 -= rb * tau_Ebv * x
     r3 -= tau_Ebv * x
@@ -317,11 +320,11 @@ def integral(x, data):
     r3 = _data[11]
     rb = _data[12]
     sig_rb = _data[13]
-    tau_Ebv = _data[14]
+    Ebv = _data[14]
     gamma_Ebv = _data[15]
     return integral_body(
         x, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
-        rb, sig_rb, tau_Ebv, gamma_Ebv
+        rb, sig_rb, Ebv, gamma_Ebv
     )
 integrate_ptr = integral.address
 
@@ -329,16 +332,16 @@ integrate_ptr = integral.address
 def _fast_prior_convolution(
     cov_1: np.ndarray, res_1: np.ndarray,
     cov_2: np.ndarray, res_2: np.ndarray,
-    rb_1: float, sig_rb_1: float, tau_Ebv_1: float, gamma_Ebv_1: float,
-    rb_2: float, sig_rb_2: float, tau_Ebv_2: float, gamma_Ebv_2: float,
+    rb_1: float, sig_rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
+    rb_2: float, sig_rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
     lower_bound: float = 0., upper_bound: float = 10.,
 ):
 
     n_sn = len(cov_1)
     probs = np.zeros((n_sn, 2))
     status = np.ones((n_sn, 2), dtype='bool')
-    params_1 = np.array([rb_1, sig_rb_1, tau_Ebv_1, gamma_Ebv_1])
-    params_2 = np.array([rb_2, sig_rb_2, tau_Ebv_2, gamma_Ebv_2])
+    params_1 = np.array([rb_1, sig_rb_1, Ebv_1, gamma_Ebv_1])
+    params_2 = np.array([rb_2, sig_rb_2, Ebv_2, gamma_Ebv_2])
 
     for i in range(n_sn):
         tmp_params_1 = np.concatenate((
@@ -365,9 +368,9 @@ def _fast_prior_convolution(
 
 def _wrapper_prior_conv(
     covs_1: np.ndarray, r_1: np.ndarray, rb_1: float,
-    sig_rb_1: float, tau_Ebv_1: float, gamma_Ebv_1: float,
+    sig_rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
     covs_2: np.ndarray, r_2: np.ndarray, rb_2: float,
-    sig_rb_2: float, tau_Ebv_2: float, gamma_Ebv_2: float,
+    sig_rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
     lower_bound: float = 0., upper_bound: float = 10.
 ):
     norm_1 = sp_special.gammainc(gamma_Ebv_1, upper_bound) * sp_special.gamma(gamma_Ebv_1)
@@ -375,8 +378,8 @@ def _wrapper_prior_conv(
 
     probs, status = _fast_prior_convolution(
         covs_1, r_1, covs_2, r_2,
-        rb_1=rb_1, sig_rb_1=sig_rb_1, tau_Ebv_1=tau_Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
-        rb_2=rb_2, sig_rb_2=sig_rb_2, tau_Ebv_2=tau_Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
+        rb_1=rb_1, sig_rb_1=sig_rb_1, Ebv_1=Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
+        rb_2=rb_2, sig_rb_2=sig_rb_2, Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
         lower_bound=lower_bound, upper_bound=upper_bound
     )
     p_1 = probs[:, 0] / norm_1
@@ -387,11 +390,11 @@ def _wrapper_prior_conv(
 
     if np.any(p1_nans):
         print("Pop 1 contains nan probabilities:", np.count_nonzero(p1_nans)/len(p1_nans)*100, "%")
-        print("Pop 1 pars:", [rb_1, sig_rb_1, tau_Ebv_1, gamma_Ebv_1])
+        print("Pop 1 pars:", [rb_1, sig_rb_1, Ebv_1, gamma_Ebv_1])
         print("Pop 1 norm:", norm_1, "\n")
     if np.any(p2_nans):
         print("Pop 2 contains nan probabilities:", np.count_nonzero(p2_nans)/len(p2_nans)*100, "%")
-        print("Pop 1 pars:", [rb_2, sig_rb_2, tau_Ebv_2, gamma_Ebv_2])
+        print("Pop 1 pars:", [rb_2, sig_rb_2, Ebv_2, gamma_Ebv_2])
         print("Pop 2 norm:", norm_2, "\n")
 
     return p_1, p_2, status
