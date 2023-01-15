@@ -8,7 +8,7 @@ model_cfg:
     beta,
     Rb,
     sig_Rb,
-    alpha_g
+    gamma_Ebv
   ]
   independent_par_names: [
     Mb,
@@ -16,7 +16,7 @@ model_cfg:
     sig_c,
     s,
     sig_s,
-    tau
+    tau_Ebv
   ]
   preset_values:
     H0: 73.0
@@ -73,8 +73,8 @@ model_cfg:
     #w: 0.4
   use_sigmoid: False
   sigmoid_cfg:
-    scale: 100.
-    shift: 0.9
+    scale: 750.
+    shift: 0.99
   prior_lower_bound: 0.
   prior_upper_bound: 10.
 emcee_cfg:
