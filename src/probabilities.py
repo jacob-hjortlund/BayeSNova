@@ -119,9 +119,13 @@ def _population_r(
 def dbl_integral_body(
     x, y, i1, i2, i3, i5,
     i6, i9, r1, r2, r3,
-    tau_Rb, gamma_Rb,
-    tau_Ebv, gamma_Ebv
+    Rb, gamma_Rb,
+    Ebv, gamma_Ebv
 ):  
+
+    tau_Rb = Rb / gamma_Rb
+    tau_Ebv = Ebv / gamma_Ebv
+
     # update res and cov
     r1 -= x * tau_Rb * y * tau_Ebv
     r3 -= y * tau_Ebv
@@ -156,16 +160,16 @@ def Rb_integral(x, data):
     r1 = _data[9]
     r2 = _data[10]
     r3 = _data[11]
-    tau_Rb = _data[12]
+    Rb = _data[12]
     gamma_Rb = _data[13]
-    tau_Ebv = _data[14]
+    Ebv = _data[14]
     gamma_Ebv = _data[15]
     y = _data[-1]
 
     return dbl_integral_body(
         x, y, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
-        tau_Rb, gamma_Rb,
-        tau_Ebv, gamma_Ebv
+        Rb, gamma_Rb,
+        Ebv, gamma_Ebv
     )
 Rb_integral_ptr = Rb_integral.address
 
@@ -187,8 +191,8 @@ Ebv_integral_ptr = Ebv_integral.address
 def _fast_dbl_prior_convolution(
     cov_1: np.ndarray, res_1: np.ndarray,
     cov_2: np.ndarray, res_2: np.ndarray,
-    tau_Rb_1: float, gamma_Rb_1: float, tau_Ebv_1: float, gamma_Ebv_1: float,
-    tau_Rb_2: float, gamma_Rb_2: float, tau_Ebv_2: float, gamma_Ebv_2: float,
+    Rb_1: float, gamma_Rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
+    Rb_2: float, gamma_Rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
     lower_bound_Rb: float = 0., upper_bound_Rb: float = 10.,
     lower_bound_Ebv: float = 0., upper_bound_Ebv: float = 10.
 ):
@@ -197,13 +201,13 @@ def _fast_dbl_prior_convolution(
     probs = np.zeros((n_sn, 2))
     status = np.ones((n_sn, 2), dtype='bool')
     params_1 = np.array([
-        tau_Rb_1, gamma_Rb_1,
-        tau_Ebv_1, gamma_Ebv_1,
+        Rb_1, gamma_Rb_1,
+        Ebv_1, gamma_Ebv_1,
         lower_bound_Rb, upper_bound_Rb
     ])
     params_2 = np.array([
-        tau_Rb_2, gamma_Rb_2,
-        tau_Ebv_2, gamma_Ebv_2,
+        Rb_2, gamma_Rb_2,
+        Ebv_2, gamma_Ebv_2,
         lower_bound_Rb, upper_bound_Rb
     ])
 
@@ -232,9 +236,9 @@ def _fast_dbl_prior_convolution(
 
 def _wrapper_dbl_prior_conv(
     covs_1: np.ndarray, r_1: np.ndarray,
-    tau_Rb_1: float, gamma_Rb_1: float, tau_Ebv_1: float, gamma_Ebv_1: float,
+    Rb_1: float, gamma_Rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
     covs_2: np.ndarray, r_2: np.ndarray,
-    tau_Rb_2: float, gamma_Rb_2: float, tau_Ebv_2: float, gamma_Ebv_2: float,
+    Rb_2: float, gamma_Rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
     lower_bound_Rb: float = 0., upper_bound_Rb: float = 10.,
     lower_bound_Ebv: float = 0., upper_bound_Ebv: float = 10.
 ):
@@ -249,10 +253,10 @@ def _wrapper_dbl_prior_conv(
 
     probs, status = _fast_dbl_prior_convolution(
         covs_1, r_1, covs_2, r_2,
-        tau_Rb_1=tau_Rb_1, gamma_Rb_1=gamma_Rb_1,
-        tau_Ebv_1=tau_Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
-        tau_Rb_2=tau_Rb_2, gamma_Rb_2=gamma_Rb_2,
-        tau_Ebv_2=tau_Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
+        Rb_1=Rb_1, gamma_Rb_1=gamma_Rb_1,
+        Ebv_1=Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
+        Rb_2=Rb_2, gamma_Rb_2=gamma_Rb_2,
+        Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
         lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb,
         lower_bound_Ebv=lower_bound_Ebv, upper_bound_Ebv=upper_bound_Ebv
     )
@@ -264,10 +268,10 @@ def _wrapper_dbl_prior_conv(
 
     if np.any(p1_nans):
         print("Pop 1 contains nan probabilities:", np.count_nonzero(p1_nans)/len(p1_nans)*100, "%")
-        print("Pop 1 pars:", [tau_Rb_1, gamma_Rb_1, tau_Ebv_1, gamma_Ebv_1])
+        print("Pop 1 pars:", [Rb_1, gamma_Rb_1, Ebv_1, gamma_Ebv_1])
     if np.any(p2_nans):
         print("Pop 2 contains nan probabilities:", np.count_nonzero(p2_nans)/len(p2_nans)*100, "%")
-        print("Pop 1 pars:", [tau_Rb_2, gamma_Rb_2, tau_Ebv_2, gamma_Ebv_2])
+        print("Pop 1 pars:", [Rb_2, gamma_Rb_2, Ebv_2, gamma_Ebv_2])
         print("Pop 2 norm:", norm_2, "\n")
 
     return p_1, p_2, status
