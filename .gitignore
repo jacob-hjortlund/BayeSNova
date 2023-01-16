@@ -7,3 +7,6 @@ NumbaQuadpack
 .vscode/
 __pycache__/
 outputs/
+SLURM_Outputs/
+radek.py
+results/

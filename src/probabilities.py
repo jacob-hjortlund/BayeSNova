@@ -448,10 +448,10 @@ def _log_likelihood(
     sn_cov, sn_mb, sn_z, sn_s, sn_c,
     Mb_1, alpha_1, beta_1, s_1, sig_s_1, c_1,
     sig_c_1, sig_int_1, Rb_1, sig_Rb_1, 
-    tau_Rb_1, gamma_Rb_1, tau_Ebv_1, gamma_Ebv_1,
+    gamma_Rb_1, Ebv_1, gamma_Ebv_1,
     Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
     sig_c_2, sig_int_2, Rb_2, sig_Rb_2,
-    tau_Rb_2, gamma_Rb_2, tau_Ebv_2, gamma_Ebv_2,
+    gamma_Rb_2, Ebv_2, gamma_Ebv_2,
     w, H0, lower_bound_Ebv, upper_bound_Ebv,
     lower_bound_Rb, upper_bound_Rb
 ):
@@ -469,8 +469,8 @@ def _log_likelihood(
     )
 
     use_gaussian_Rb = (
-        not tau_Rb_1 and not gamma_Rb_1 and
-        not tau_Rb_2 and not gamma_Rb_2 and
+        not gamma_Rb_1 and
+        not gamma_Rb_2 and
         Rb_1 and sig_Rb_1 and
         Rb_2 and sig_Rb_2
     )
@@ -478,19 +478,19 @@ def _log_likelihood(
     if use_gaussian_Rb:
         probs_1, probs_2, status = _wrapper_prior_conv(
             covs_1=covs_1, r_1=r_1, rb_1=Rb_1, sig_rb_1=sig_Rb_1,
-            tau_Ebv_1=tau_Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
+            Ebv_1=Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
             covs_2=covs_2, r_2=r_2, rb_2=Rb_2, sig_rb_2=sig_Rb_2,
-            tau_Ebv_2=tau_Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
+            Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
             lower_bound=lower_bound_Ebv, upper_bound=upper_bound_Ebv
         )
     else:
         probs_1, probs_2, status = _wrapper_dbl_prior_conv(
             covs_1=covs_1, r_1=r_1,
-            tau_Rb_1=tau_Rb_1, gamma_Rb_1=gamma_Rb_1,
-            tau_Ebv_1=tau_Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
+            Rb_1=Rb_1, gamma_Rb_1=gamma_Rb_1,
+            Ebv_1=Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
             covs_2=covs_2, r_2=r_2,
-            tau_Rb_2=tau_Rb_2, gamma_Rb_2=gamma_Rb_2,
-            tau_Ebv_2=tau_Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
+            Rb_2=Rb_2, gamma_Rb_2=gamma_Rb_2,
+            Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
             lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb,
             lower_bound_Ebv=lower_bound_Ebv, upper_bound_Ebv=upper_bound_Ebv
         )

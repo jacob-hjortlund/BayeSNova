@@ -16,7 +16,7 @@ model_cfg:
     sig_c,
     s,
     sig_s,
-    tau_Ebv
+    Ebv
   ]
   preset_values:
     H0: 73.0
@@ -34,13 +34,11 @@ model_cfg:
       upper: 100.
     sig_s:
       lower: 0.
-      #upper: 15.
     c:
       lower: -100.
       upper: 100.
     sig_c: 
       lower: 0.
-      #upper: 15.
     sig_int:
       lower: 0.
     Rb:
@@ -54,9 +52,8 @@ model_cfg:
     gamma_Rb:
       lower: 1.
       upper: 10.
-    tau_Ebv:
+    Ebv:
       lower: 0.
-      #upper: 100.
     gamma_Ebv:
       lower: 1.
       upper: 7.
@@ -66,16 +63,15 @@ model_cfg:
   init_values:
     #alpha: -0.14
     #beta: 3.1
-    #Rb: 3.7
-    #sig_Rb: 0.6
-    #alpha_g: 2.9
     Mb: -19.3
     #c: -0.09
     sig_c: 0.05
     #s: 0.1
     sig_s: 1.
-    tau_Ebv: 0.04
-    tau_Rb: 0.05
+    Ebv: 0.12
+    #gamma_Ebv: 2.9
+    Rb: 3.7
+    #sig_Rb: 0.6
     #w: 0.4
   use_sigmoid: False
   sigmoid_cfg:
