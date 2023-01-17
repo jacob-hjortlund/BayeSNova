@@ -51,7 +51,7 @@ model_cfg:
       lower: 0.
     gamma_Rb:
       lower: 1.
-      upper: 10.
+      upper: 7.
     Ebv:
       lower: 0.
     gamma_Ebv:
@@ -61,18 +61,13 @@ model_cfg:
       lower: 0.12
       upper: 0.88
   init_values:
-    #alpha: -0.14
-    #beta: 3.1
     Mb: -19.3
-    #c: -0.09
     sig_c: 0.05
-    #s: 0.1
     sig_s: 1.
     Ebv: 0.12
-    #gamma_Ebv: 2.9
+    gamma_Ebv: 2.9
     Rb: 3.7
-    #sig_Rb: 0.6
-    #w: 0.4
+    gamma_Rb: 2.9
   use_sigmoid: False
   sigmoid_cfg:
     scale: 750.
