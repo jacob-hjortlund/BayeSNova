@@ -127,7 +127,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     max_sample_log_prob = sample_log_probs[idx_max]
     max_thetas = sample_thetas[idx_max]
     nlp = lambda *args: -log_prob(*args)
-    sol = sp_opt.minimize(nlp, max_thetas, method='Nelder-Mead', options={'adaptive': True})
+    sol = sp_opt.minimize(nlp, max_thetas)
     
     opt_pars = sol.x
     opt_log_prob = -nlp(opt_pars)
