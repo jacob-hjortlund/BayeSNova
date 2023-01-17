@@ -119,15 +119,20 @@ def _population_r(
 def dbl_integral_body(
     x, y, i1, i2, i3, i5,
     i6, i9, r1, r2, r3,
-    Rb, gamma_Rb,
+    Rb, gamma_Rb, Rb_shift,
     Ebv, gamma_Ebv
 ):  
 
     tau_Rb = Rb / gamma_Rb
     tau_Ebv = Ebv / gamma_Ebv
+    transformed_Rb_shift = Rb_shift / tau_Rb
+    x_shift = x - transformed_Rb_shift
+
+    if x_shift < 0.:
+        return 0.
 
     # update res and cov
-    r1 -= x * tau_Rb * y * tau_Ebv
+    r1 -= x_shift * tau_Rb * y * tau_Ebv
     r3 -= y * tau_Ebv
 
     # precalcs
@@ -143,7 +148,7 @@ def dbl_integral_body(
     r_inv_cov_r = det_m1 * (r1 * r1 * A1 + r2 * r2 * A5 + r3 * r3 * A9 + 2 * (r1 * r2 * A2 + r1 * r3 * A3 + r2 * r3 * A6))
     exponent_Rb = gamma_Rb - 1.
     exponent_Ebv = gamma_Ebv - 1.
-    value = np.exp(-0.5 * r_inv_cov_r - x - y) * x**exponent_Rb * y**exponent_Ebv * det_m1**0.5
+    value = np.exp(-0.5 * r_inv_cov_r - x_shift - y) * x_shift**exponent_Rb * y**exponent_Ebv * det_m1**0.5
 
     return value
 
@@ -162,26 +167,27 @@ def Rb_integral(x, data):
     r3 = _data[11]
     Rb = _data[12]
     gamma_Rb = _data[13]
+    Rb_shift = _data[-3]
     Ebv = _data[14]
     gamma_Ebv = _data[15]
     y = _data[-1]
 
     return dbl_integral_body(
         x, y, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
-        Rb, gamma_Rb,
+        Rb, gamma_Rb, Rb_shift,
         Ebv, gamma_Ebv
     )
 Rb_integral_ptr = Rb_integral.address
 
 @nb.cfunc(quadpack_sig)
 def Ebv_integral(y, data):
-    _data = nb.carray(data, (16,))
+    _data = nb.carray(data, (18,))
     _new_data = np.concatenate(
         (_data, np.array([y]))
     )
 
     inner_value, _, _, _ = dqags(
-        Rb_integral_ptr, _data[-1], _data[-2], _new_data
+        Rb_integral_ptr, _data[-2], _data[-1], _new_data
     )
 
     return inner_value
@@ -471,8 +477,8 @@ def _log_likelihood(
     use_gaussian_Rb = (
         not gamma_Rb_1 and
         not gamma_Rb_2 and
-        Rb_1 and sig_Rb_1 and
-        Rb_2 and sig_Rb_2
+        sig_Rb_1 and
+        sig_Rb_2
     )
 
     if use_gaussian_Rb:
