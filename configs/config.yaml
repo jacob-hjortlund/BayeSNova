@@ -34,11 +34,13 @@ model_cfg:
       upper: 100.
     sig_s:
       lower: 0.
+      upper: 10.
     c:
       lower: -100.
       upper: 100.
     sig_c: 
       lower: 0.
+      upper: 10.
     sig_int:
       lower: 0.
     Rb:
@@ -47,13 +49,12 @@ model_cfg:
     sig_Rb:
       lower: 0.
       upper: 1.5
-    tau_Rb:
-      lower: 0.
     gamma_Rb:
       lower: 1.
       upper: 7.
     Ebv:
       lower: 0.
+      upper: 10.
     gamma_Ebv:
       lower: 1.
       upper: 7.
@@ -86,6 +87,7 @@ emcee_cfg:
   n_steps: 100
   tau_tol: 25
   default_tau: 2000
+  default_burnin: 20000
 plot_cfg:
   smooth: 1.
   smooth1d: 1.

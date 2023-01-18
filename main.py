@@ -106,23 +106,31 @@ def main(cfg: omegaconf.DictConfig) -> None:
             sigmoid_cfg=cfg['model_cfg']['sigmoid_cfg'], shared_par_names=cfg['model_cfg']['shared_par_names']
         )
 
+    print("\nMean accepance fraction:", np.mean(sampler.acceptance_fraction), "\n")
+
     try:
         taus = backend.get_autocorr_time(
             tol=cfg['emcee_cfg']['tau_tol']
         )
         tau = np.max(taus)
-        print("Atuocorr lengths:\n", taus)
+        print("\nAtuocorr lengths:\n", taus)
         print("Max autocorr length:", tau, "\n")
     except Exception as e:
-        print("Got exception:\n")
+        print("\nGot exception:\n")
         print(e, "\n")
         tau = cfg['emcee_cfg']['default_tau']
         print("\nUsing default tau:", tau, "\n")
 
+    burnin = np.max(
+        [int(5 * tau), int(cfg['emcee_cfg']['default_burnin'])]
+    )
+
+    print(f"\nThinning by {burnin} steps\n")
+
     print("\n----------------- MAX LOG(P) ---------------------\n")
     # TODO: Redo without interpolation
-    sample_thetas = backend.get_chain(discard=int(5*tau), thin=int(0.5*tau), flat=True)
-    sample_log_probs = backend.get_log_prob(discard=int(5*tau), thin=int(0.5*tau), flat=True)
+    sample_thetas = backend.get_chain(discard=burnin, thin=int(0.5*tau), flat=True)
+    sample_log_probs = backend.get_log_prob(discard=burnin, thin=int(0.5*tau), flat=True)
     idx_max = np.argmax(sample_log_probs)
     max_sample_log_prob = sample_log_probs[idx_max]
     max_thetas = sample_thetas[idx_max]
