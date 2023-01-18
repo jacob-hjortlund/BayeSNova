@@ -10,6 +10,8 @@ from functools import partial
 from NumbaQuadpack import quadpack_sig, dqags
 from astropy.cosmology import Planck18 as cosmo
 
+# ------------- PRIOR AND POP COV/RES --------------
+
 def _log_prior(
     prior_bounds: dict, ratio_par_name: str,
     stretch_independent: bool = True, **kwargs
@@ -113,7 +115,7 @@ def _population_r(
 
     return r
 
-# ---------- DOUBLE INTEGRAL EXPERIMENT ------------
+# ---------- RB/E(B-V) PRIOR DOUBLE INTEGRAL ------------
 
 @nb.jit
 def dbl_integral_body(
@@ -282,9 +284,7 @@ def _wrapper_dbl_prior_conv(
 
     return p_1, p_2, status
 
-# ---------- END DOUBLE INTEGRAL EXPERIMENT ------------
-
-# ---------- NUMBA EXPERIMENT ------------
+# ---------- E(B-V) PRIOR INTEGRAL ------------
 
 @nb.jit
 def integral_body(
@@ -409,7 +409,7 @@ def _wrapper_prior_conv(
 
     return p_1, p_2, status
 
-# -------- END NUMBA EXPERIMENT ----------
+# ----------------- LOG PROB -------------------
 
 def _population_cov_and_residual(
     sn_cov: np.ndarray, sn_mb: np.ndarray, sn_z: np.ndarray, sn_s: np.ndarray, sn_c: np.ndarray,
@@ -512,6 +512,9 @@ def _log_likelihood(
             w * probs_1 + (1-w) * probs_2
         )
     )
+
+    if np.isnan(log_prob):
+        log_prob = -np.inf
 
     s1, s2 = np.all(status[:, 0]), np.all(status[:, 1])
     if not s1 or not s2:
