@@ -343,8 +343,9 @@ def _fast_prior_convolution(
     cov_1: np.ndarray, res_1: np.ndarray,
     cov_2: np.ndarray, res_2: np.ndarray,
     rb_1: float, sig_rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
+    lower_bound_1: float, upper_bound_1: float,
     rb_2: float, sig_rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
-    lower_bound: float = 0., upper_bound: float = 10.,
+    lower_bound_2: float, upper_bound_2: float,
 ):
 
     n_sn = len(cov_1)
@@ -362,11 +363,11 @@ def _fast_prior_convolution(
             cov_2[i].ravel(), res_2[i].ravel(), params_2
         )).copy()
         tmp_params_2.astype(np.float64)
-        prob_1, _, s1, ierr1 = dqags(
-            integrate_ptr, lower_bound, upper_bound, tmp_params_1
+        prob_1, _, s1 = dqags(
+            integrate_ptr, lower_bound_1, upper_bound_1, tmp_params_1
         )
-        prob_2, _, s2, ierr2 = dqags(
-            integrate_ptr, lower_bound, upper_bound, tmp_params_2
+        prob_2, _, s2 = dqags(
+            integrate_ptr, lower_bound_2, upper_bound_2, tmp_params_2
         )
 
         probs[i, 0] = prob_1
@@ -383,15 +384,20 @@ def _wrapper_prior_conv(
     sig_rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
     lower_bound: float = 0., upper_bound: float = 10.
 ):
-    norm_1 = sp_special.gammainc(gamma_Ebv_1, upper_bound) * sp_special.gamma(gamma_Ebv_1)
-    norm_2 = sp_special.gammainc(gamma_Ebv_2, upper_bound) * sp_special.gamma(gamma_Ebv_2)
+
+    lower_bound_1, upper_bound_1 = np.array([lower_bound, upper_bound]) * Ebv_1 / gamma_Ebv_1
+    lower_bound_2, upper_bound_2 = np.array([lower_bound, upper_bound]) * Ebv_2 / gamma_Ebv_2
+    norm_1 = sp_special.gammainc(gamma_Ebv_1, upper_bound_1) * sp_special.gamma(gamma_Ebv_1)
+    norm_2 = sp_special.gammainc(gamma_Ebv_2, upper_bound_2) * sp_special.gamma(gamma_Ebv_2)
 
     probs, status = _fast_prior_convolution(
         covs_1, r_1, covs_2, r_2,
         rb_1=rb_1, sig_rb_1=sig_rb_1, Ebv_1=Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
+        lower_bound_1=lower_bound_1, upper_bound_1=upper_bound_1,
         rb_2=rb_2, sig_rb_2=sig_rb_2, Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
-        lower_bound=lower_bound, upper_bound=upper_bound
+        lower_bound_2=lower_bound_2, upper_bound_2=upper_bound_2
     )
+
     p_1 = probs[:, 0] / norm_1
     p_2 = probs[:, 1] / norm_2
 
