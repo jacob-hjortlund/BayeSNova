@@ -397,8 +397,8 @@ def _wrapper_prior_conv(
 
     tau_1 = Ebv_1 / gamma_Ebv_1
     tau_2 = Ebv_2 / gamma_Ebv_2
-    lower_bound_1, upper_bound_1 = np.array([lower_bound, upper_bound]) * tau_1
-    lower_bound_2, upper_bound_2 = np.array([lower_bound, upper_bound]) * tau_2
+    lower_bound_1, upper_bound_1 = np.array([lower_bound, upper_bound]) / tau_1
+    lower_bound_2, upper_bound_2 = np.array([lower_bound, upper_bound]) / tau_2
     norm_1 = sp_special.gammainc(gamma_Ebv_1, upper_bound_1) * sp_special.gamma(gamma_Ebv_1) * tau_1
     norm_2 = sp_special.gammainc(gamma_Ebv_2, upper_bound_2) * sp_special.gamma(gamma_Ebv_2) * tau_2
 
