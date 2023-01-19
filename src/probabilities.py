@@ -177,10 +177,10 @@ def Rb_integral(x, data):
     y = _data[-1]
 
     return dbl_integral_body(
-        x=x, y=y, i1=i1, i2=i2, i3=i3, i5=i5, 
-        i6=i6, i9=i9, r1=r1, r2=r2, r3=r3, 
-        Rb=Rb, gamma_Rb=gamma_Rb, lower_Rb=lower_Rb, upper_Rb=upper_Rb,
-        Ebv=Ebv, gamma_Ebv=gamma_Ebv
+        x, y, i1, i2, i3, i5, 
+        i6, i9, r1, r2, r3, 
+        Rb, gamma_Rb, lower_Rb, upper_Rb,
+        Ebv, gamma_Ebv
     )
 Rb_integral_ptr = Rb_integral.address
 
