@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as sp_stats
 import scipy.optimize as sp_opt
+import matplotlib.pyplot as plt
 import schwimmbad as swbd
 import src.utils as utils
 import src.preprocessing as prep
@@ -190,6 +191,32 @@ def main(cfg: omegaconf.DictConfig) -> None:
     fig_pop_1.tight_layout()
     fig_pop_1.savefig(
         os.path.join(path, cfg['emcee_cfg']['run_name']+".pdf")
+    )
+
+    full_chain = backend.get_chain()
+    par_names = (
+        cfg['model_cfg']['shared_par_names'] +
+        utils.gen_pop_par_names(
+            cfg['model_cfg']['independent_par_names']
+        ) +
+        [cfg['model_cfg']['ratio_par_name']]
+    )
+    fig, axes = plt.subplots(
+        ndim, figsize=(10, int(np.ceil(7*ndim/3))), sharex=True
+    )
+    for i in range(ndim):
+        ax = axes[i]
+        ax.plot(full_chain[:, :, i], "k", alpha=0.3)
+        ax.set_xlim(0, len(full_chain))
+        ax.set_ylabel(par_names[i])
+    axes[-1].set_xlabel("step number");
+    fig.tight_layout()
+    if cfg['model_cfg']['use_sigmoid']:
+        suffix = "_transformed"
+    else:
+        suffix = ""
+    fig.savefig(
+        os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_walkers.pdf")
     )
 
 if __name__ == "__main__":
