@@ -121,14 +121,14 @@ def _population_r(
 def dbl_integral_body(
     x, y, i1, i2, i3, i5,
     i6, i9, r1, r2, r3,
-    Rb, gamma_Rb, Rb_shift,
+    Rb, gamma_Rb, shift_Rb,
     Ebv, gamma_Ebv
 ):  
 
     tau_Rb = Rb / gamma_Rb
     tau_Ebv = Ebv / gamma_Ebv
-    transformed_Rb_shift = Rb_shift / tau_Rb
-    x_shift = x - transformed_Rb_shift
+    transformed_shift_Rb = shift_Rb / tau_Rb
+    x_shift = x - transformed_shift_Rb
 
     if x_shift < 0.:
         return 0.
@@ -169,14 +169,14 @@ def Rb_integral(x, data):
     r3 = _data[11]
     Rb = _data[12]
     gamma_Rb = _data[13]
-    Rb_shift = _data[-4]
+    shift_Rb = _data[-4]
     Ebv = _data[14]
     gamma_Ebv = _data[15]
     y = _data[-1]
 
     return dbl_integral_body(
         x, y, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
-        Rb, gamma_Rb, Rb_shift,
+        Rb, gamma_Rb, shift_Rb,
         Ebv, gamma_Ebv
     )
 Rb_integral_ptr = Rb_integral.address
@@ -201,7 +201,7 @@ def _fast_dbl_prior_convolution(
     cov_2: np.ndarray, res_2: np.ndarray,
     Rb_1: float, gamma_Rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
     Rb_2: float, gamma_Rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
-    Rb_shift: float = 0., lower_bound_Rb: float = 0., upper_bound_Rb: float = 10.,
+    shift_Rb: float = 0., lower_bound_Rb: float = 0., upper_bound_Rb: float = 10.,
     lower_bound_Ebv: float = 0., upper_bound_Ebv: float = 10.
 ):
 
@@ -211,12 +211,12 @@ def _fast_dbl_prior_convolution(
     params_1 = np.array([
         Rb_1, gamma_Rb_1,
         Ebv_1, gamma_Ebv_1,
-        Rb_shift, lower_bound_Rb, upper_bound_Rb
+        shift_Rb, lower_bound_Rb, upper_bound_Rb
     ])
     params_2 = np.array([
         Rb_2, gamma_Rb_2,
         Ebv_2, gamma_Ebv_2,
-        Rb_shift, lower_bound_Rb, upper_bound_Rb
+        shift_Rb, lower_bound_Rb, upper_bound_Rb
     ])
 
     for i in range(n_sn):
@@ -247,7 +247,7 @@ def _wrapper_dbl_prior_conv(
     Rb_1: float, gamma_Rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
     covs_2: np.ndarray, r_2: np.ndarray,
     Rb_2: float, gamma_Rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
-    Rb_shift: float = 0., lower_bound_Rb: float = 0., upper_bound_Rb: float = 10.,
+    shift_Rb: float = 0., lower_bound_Rb: float = 0., upper_bound_Rb: float = 10.,
     lower_bound_Ebv: float = 0., upper_bound_Ebv: float = 10.
 ):
     norm_1 = (
@@ -265,7 +265,7 @@ def _wrapper_dbl_prior_conv(
         Ebv_1=Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
         Rb_2=Rb_2, gamma_Rb_2=gamma_Rb_2,
         Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
-        Rb_shift=Rb_shift, lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb,
+        shift_Rb=shift_Rb, lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb,
         lower_bound_Ebv=lower_bound_Ebv, upper_bound_Ebv=upper_bound_Ebv
     )
     p_1 = probs[:, 0] / norm_1
@@ -459,7 +459,7 @@ def _log_likelihood(
     sig_c_2, sig_int_2, Rb_2, sig_Rb_2,
     gamma_Rb_2, Ebv_2, gamma_Ebv_2,
     w, H0, lower_bound_Ebv, upper_bound_Ebv,
-    Rb_shift, lower_bound_Rb, upper_bound_Rb
+    shift_Rb, lower_bound_Rb, upper_bound_Rb
 ):
 
     covs_1, r_1 = _population_cov_and_residual(
@@ -497,7 +497,7 @@ def _log_likelihood(
             covs_2=covs_2, r_2=r_2,
             Rb_2=Rb_2, gamma_Rb_2=gamma_Rb_2,
             Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
-            Rb_shift=Rb_shift, lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb,
+            shift_Rb=shift_Rb, lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb,
             lower_bound_Ebv=lower_bound_Ebv, upper_bound_Ebv=upper_bound_Ebv
         )
 
@@ -532,7 +532,7 @@ def generate_log_prob(
     sn_mb: np.ndarray, sn_s: np.ndarray,
     sn_c: np.ndarray, sn_z: np.ndarray,
     lower_bound_Ebv: float, upper_bound_Ebv: float,
-    Rb_shift: float, lower_bound_Rb: float, upper_bound_Rb: float
+    shift_Rb: float, lower_bound_Rb: float, upper_bound_Rb: float
 ):
 
     init_arg_dict = {key: value for key, value in model_cfg['preset_values'].items()}
@@ -545,7 +545,7 @@ def generate_log_prob(
     init_arg_dict['upper_bound_Ebv'] = upper_bound_Ebv
     init_arg_dict['lower_bound_Rb'] = lower_bound_Rb
     init_arg_dict['upper_bound_Rb'] = upper_bound_Rb
-    init_arg_dict['Rb_shift'] = Rb_shift
+    init_arg_dict['shift_Rb'] = shift_Rb
 
     global log_prob_f
 
