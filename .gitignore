@@ -3,7 +3,7 @@ data/
 Documents/
 radeks_code/
 run.sh
-NumbaQuadpack
+NumbaQuadpack/
 .vscode/
 __pycache__/
 outputs/

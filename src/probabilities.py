@@ -188,7 +188,7 @@ def Ebv_integral(y, data):
         (_data, np.array([y]))
     )
 
-    inner_value, _, _, _ = dqags(
+    inner_value, _, _ = dqags(
         Rb_integral_ptr, _data[-2], _data[-1], _new_data
     )
 
@@ -228,10 +228,10 @@ def _fast_dbl_prior_convolution(
             cov_2[i].ravel(), res_2[i].ravel(), params_2
         )).copy()
         tmp_params_2.astype(np.float64)
-        prob_1, _, s1, ierr1 = dqags(
+        prob_1, _, s1 = dqags(
             integrate_ptr, lower_bound_Ebv, upper_bound_Ebv, tmp_params_1
         )
-        prob_2, _, s2, ierr2 = dqags(
+        prob_2, _, s2 = dqags(
             integrate_ptr, lower_bound_Ebv, upper_bound_Ebv, tmp_params_2
         )
 
