@@ -75,6 +75,7 @@ model_cfg:
     shift: 0.99
   lower_bound_Ebv: 0.
   upper_bound_Ebv: 10.
+  Rb_shift: 0.
   lower_bound_Rb: 0.
   upper_bound_Rb: 10.
 emcee_cfg:

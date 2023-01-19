@@ -45,6 +45,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c,
         sn_z=sn_z, lower_bound_Ebv=cfg['model_cfg']['lower_bound_Ebv'],
         upper_bound_Ebv=cfg['model_cfg']['upper_bound_Ebv'],
+        Rb_shift=cfg['model_cfg']['Rb_shift'],
         lower_bound_Rb=cfg['model_cfg']['lower_bound_Rb'],
         upper_bound_Rb=cfg['model_cfg']['upper_bound_Rb']
     )
