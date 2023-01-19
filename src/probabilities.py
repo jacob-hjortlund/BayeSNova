@@ -122,10 +122,12 @@ def _population_r(
 def dbl_integral_body(
     x, y, i1, i2, i3, i5,
     i6, i9, r1, r2, r3,
-    Rb, gamma_Rb, #shift_Rb,
+    Rb, gamma_Rb, lower_Rb, upper_Rb,#shift_Rb,
     Ebv, gamma_Ebv
 ):  
 
+    if x < lower_Rb or x > upper_Rb:
+        return 0.
     #tau_Rb = Rb / gamma_Rb
     tau_Ebv = Ebv / gamma_Ebv
     #transformed_shift_Rb = shift_Rb / tau_Rb
@@ -162,7 +164,7 @@ def dbl_integral_body(
 @nb.cfunc(quadpack_sig)
 def Rb_integral(x, data):
 
-    _data = nb.carray(data, (22,))
+    _data = nb.carray(data, (20,))
     i1 = _data[0]
     i2 = _data[1]
     i3 = _data[2]
@@ -175,26 +177,25 @@ def Rb_integral(x, data):
     Rb = _data[12]
     gamma_Rb = _data[13]
     shift_Rb = _data[-4]
+    lower_Rb = _data[-3]
+    upper_Rb = _data[-2]
     Ebv = _data[14]
     gamma_Ebv = _data[15]
     y = _data[-1]
 
     return dbl_integral_body(
         x, y, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
-        Rb, gamma_Rb, shift_Rb,
+        Rb, gamma_Rb, lower_Rb, upper_Rb,#shift_Rb,
         Ebv, gamma_Ebv
     )
 Rb_integral_ptr = Rb_integral.address
 
 @nb.cfunc(quadpack_sig)
 def Ebv_integral(y, data):
-    _data = nb.carray(data, (21,))
+    _data = nb.carray(data, (19,))
     _new_data = np.concatenate(
         (_data, np.array([y]))
     )
-
-    if y < _data[-5] or y > _data[-4]:
-        return 0.
 
     inner_value, _, _ = dqags(
         Rb_integral_ptr, _data[-2], _data[-1], _new_data
@@ -220,13 +221,11 @@ def _fast_dbl_prior_convolution(
     params_1 = np.array([
         Rb_1, gamma_Rb_1,
         Ebv_1, gamma_Ebv_1,
-        lower_bound_Ebv_1, upper_bound_Ebv_1,
         shift_Rb, lower_bound_Rb, upper_bound_Rb
     ])
     params_2 = np.array([
         Rb_2, gamma_Rb_2,
         Ebv_2, gamma_Ebv_2,
-        lower_bound_Ebv_2, upper_bound_Ebv_2,
         shift_Rb, lower_bound_Rb, upper_bound_Rb
     ])
 
@@ -264,12 +263,12 @@ def _wrapper_dbl_prior_conv(
     lower_bound_Ebv_1, upper_bound_Ebv_1 = np.array([lower_bound_Ebv, upper_bound_Ebv]) * Ebv_1 / gamma_Ebv_1
     lower_bound_Ebv_2, upper_bound_Ebv_2 = np.array([lower_bound_Ebv, upper_bound_Ebv]) * Ebv_2 / gamma_Ebv_2
     norm_1 = (
-        (stats.norm.cdf(upper_bound_Rb, loc=Rb_1, scale=gamma_Rb_1) - stats.norm.cdf(upper_bound_Rb, loc=Rb_1, scale=gamma_Rb_1)) *
+        (stats.norm.cdf(upper_bound_Rb, loc=Rb_1, scale=gamma_Rb_1) - stats.norm.cdf(lower_bound_Rb, loc=Rb_1, scale=gamma_Rb_1)) *
         #sp_special.gammainc(gamma_Rb_1, upper_bound_Rb) * sp_special.gamma(gamma_Rb_1) *
         sp_special.gammainc(gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(gamma_Ebv_1)
     )
     norm_2 = (
-        (stats.norm.cdf(upper_bound_Rb, loc=Rb_2, scale=gamma_Rb_2) - stats.norm.cdf(upper_bound_Rb, loc=Rb_2, scale=gamma_Rb_2)) *
+        (stats.norm.cdf(upper_bound_Rb, loc=Rb_2, scale=gamma_Rb_2) - stats.norm.cdf(lower_bound_Rb, loc=Rb_2, scale=gamma_Rb_2)) *
         #sp_special.gammainc(gamma_Rb_2, upper_bound_Rb) * sp_special.gamma(gamma_Rb_2) *
         sp_special.gammainc(gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(gamma_Ebv_2)
     )
@@ -277,7 +276,7 @@ def _wrapper_dbl_prior_conv(
     probs, status = _fast_dbl_prior_convolution(
         covs_1, r_1, covs_2, r_2,
         Rb_1=Rb_1, gamma_Rb_1=gamma_Rb_1, Ebv_1=Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
-        lower_bound_Ebv_1=lower_bound_Ebv_1, lower_bound_Ebv_2=lower_bound_Ebv_1,
+        lower_bound_Ebv_1=lower_bound_Ebv_1, upper_bound_Ebv_1=lower_bound_Ebv_1,
         Rb_2=Rb_2, gamma_Rb_2=gamma_Rb_2, Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
         lower_bound_Ebv_2=lower_bound_Ebv_2, upper_bound_Ebv_2=upper_bound_Ebv_2,
         shift_Rb=shift_Rb, lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb
