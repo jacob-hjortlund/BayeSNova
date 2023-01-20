@@ -262,12 +262,12 @@ def _wrapper_dbl_prior_conv(
     norm_1 = (
         (stats.norm.cdf(upper_bound_Rb, loc=Rb_1, scale=gamma_Rb_1) - stats.norm.cdf(lower_bound_Rb, loc=Rb_1, scale=gamma_Rb_1)) *
         #sp_special.gammainc(gamma_Rb_1, upper_bound_Rb) * sp_special.gamma(gamma_Rb_1) *
-        sp_special.gammainc(gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(gamma_Ebv_1) * tau_1
+        sp_special.gammainc(gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(gamma_Ebv_1)
     )
     norm_2 = (
         (stats.norm.cdf(upper_bound_Rb, loc=Rb_2, scale=gamma_Rb_2) - stats.norm.cdf(lower_bound_Rb, loc=Rb_2, scale=gamma_Rb_2)) *
         #sp_special.gammainc(gamma_Rb_2, upper_bound_Rb) * sp_special.gamma(gamma_Rb_2) *
-        sp_special.gammainc(gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(gamma_Ebv_2) * tau_2
+        sp_special.gammainc(gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(gamma_Ebv_2)
     )
 
     probs, status = _fast_dbl_prior_convolution(
@@ -399,8 +399,8 @@ def _wrapper_prior_conv(
     tau_2 = Ebv_2 / gamma_Ebv_2
     lower_bound_1, upper_bound_1 = np.array([lower_bound, upper_bound]) / tau_1
     lower_bound_2, upper_bound_2 = np.array([lower_bound, upper_bound]) / tau_2
-    norm_1 = sp_special.gammainc(gamma_Ebv_1, upper_bound_1) * sp_special.gamma(gamma_Ebv_1) * tau_1
-    norm_2 = sp_special.gammainc(gamma_Ebv_2, upper_bound_2) * sp_special.gamma(gamma_Ebv_2) * tau_2
+    norm_1 = sp_special.gammainc(gamma_Ebv_1, upper_bound_1) * sp_special.gamma(gamma_Ebv_1)
+    norm_2 = sp_special.gammainc(gamma_Ebv_2, upper_bound_2) * sp_special.gamma(gamma_Ebv_2)
 
     probs, status = _fast_prior_convolution(
         covs_1, r_1, covs_2, r_2,
