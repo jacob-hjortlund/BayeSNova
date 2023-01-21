@@ -270,7 +270,7 @@ def _wrapper_dbl_prior_conv(
         Rb_1=Rb_1, gamma_Rb_1=gamma_Rb_1, Ebv_1=Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
         Rb_2=Rb_2, gamma_Rb_2=gamma_Rb_2, Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
         shift_Rb=shift_Rb, lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb,
-        lower_bound_Ebv=lower_bound_Ebv, upper_bound_Ebv_2=upper_bound_Ebv,
+        lower_bound_Ebv=lower_bound_Ebv, upper_bound_Ebv=upper_bound_Ebv,
     )
     p_1 = probs[:, 0] / norm_1
     p_2 = probs[:, 1] / norm_2
@@ -493,7 +493,7 @@ def _log_likelihood(
             Ebv_1=Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
             covs_2=covs_2, r_2=r_2, rb_2=Rb_2, sig_rb_2=sig_Rb_2,
             Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
-            lower_bound=lower_bound_Ebv, upper_bound=upper_bound_Ebv
+            lower_bound_Ebv=lower_bound_Ebv, upper_bound_Ebv=upper_bound_Ebv
         )
     else:
         probs_1, probs_2, status = _wrapper_dbl_prior_conv(
