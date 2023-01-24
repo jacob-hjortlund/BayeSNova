@@ -537,8 +537,6 @@ def generate_log_prob(
     model_cfg: dict, sn_covs: np.ndarray, 
     sn_mb: np.ndarray, sn_s: np.ndarray,
     sn_c: np.ndarray, sn_z: np.ndarray,
-    lower_bound_Ebv: float, upper_bound_Ebv: float,
-    shift_Rb: float, lower_bound_Rb: float, upper_bound_Rb: float
 ):
 
     init_arg_dict = {key: value for key, value in model_cfg['preset_values'].items()}
@@ -547,11 +545,23 @@ def generate_log_prob(
     init_arg_dict['sn_c'] = sn_c
     init_arg_dict['sn_z'] = sn_z
     init_arg_dict['sn_cov'] = sn_covs
-    init_arg_dict['lower_bound_Ebv'] = lower_bound_Ebv
-    init_arg_dict['upper_bound_Ebv'] = upper_bound_Ebv
-    init_arg_dict['lower_bound_Rb'] = lower_bound_Rb
-    init_arg_dict['upper_bound_Rb'] = upper_bound_Rb
-    init_arg_dict['shift_Rb'] = shift_Rb
+    init_arg_dict['lower_bound_Ebv'] = model_cfg['lower_bound_Ebv']
+    init_arg_dict['upper_bound_Ebv'] = model_cfg['upper_bound_Ebv']
+    init_arg_dict['lower_bound_Rb'] = model_cfg['lower_bound_Rb']
+    init_arg_dict['upper_bound_Rb'] = model_cfg['upper_bound_Rb']
+    init_arg_dict['shift_Rb'] = model_cfg['shift_Rb']
+
+    gEbv_vals = np.arange(
+        model_cfg['prior_bounds']['gamma_Ebv']['lower'], 
+        model_cfg['prior_bounds']['gamma_Ebv']['upper'],
+        model_cfg['resolution_gEbv']
+    )
+    gEbv_quantiles = np.stack((
+        gEbv_vals, sp_special.gammaincinv(
+            a=gEbv_vals, y=model_cfg['cdf_limit_gEbv']
+        )
+    ))
+    init_arg_dict['gEbv_quantiles'] = gEbv_quantiles
 
     global log_prob_f
 
