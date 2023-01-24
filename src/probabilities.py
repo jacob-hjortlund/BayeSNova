@@ -200,9 +200,10 @@ def _fast_dbl_prior_convolution(
     cov_2: np.ndarray, res_2: np.ndarray,
     Rb_1: float, gamma_Rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
     lower_bound_Ebv_1: float, upper_bound_Ebv_1: float,
+    lower_bound_Rb_1: float, upper_bound_Rb_1: float,
     Rb_2: float, gamma_Rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
     lower_bound_Ebv_2: float, upper_bound_Ebv_2: float,
-    shift_Rb: float, lower_bound_Rb: float, upper_bound_Rb: float
+    lower_bound_Rb_2: float, upper_bound_Rb_2: float, shift_Rb: float,
 ):
 
     n_sn = len(cov_1)
@@ -211,12 +212,12 @@ def _fast_dbl_prior_convolution(
     params_1 = np.array([
         Rb_1, gamma_Rb_1,
         Ebv_1, gamma_Ebv_1,
-        shift_Rb, lower_bound_Rb, upper_bound_Rb
+        shift_Rb, lower_bound_Rb_1, upper_bound_Rb_1
     ])
     params_2 = np.array([
         Rb_2, gamma_Rb_2,
         Ebv_2, gamma_Ebv_2,
-        shift_Rb, lower_bound_Rb, upper_bound_Rb
+        shift_Rb, lower_bound_Rb_2, upper_bound_Rb_2
     ])
 
     for i in range(n_sn):
