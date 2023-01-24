@@ -385,17 +385,23 @@ def _wrapper_prior_conv(
     sig_rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
     covs_2: np.ndarray, r_2: np.ndarray, rb_2: float,
     sig_rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
-    lower_bound_Ebv: float = 0., upper_bound_Ebv: float = 10.
+    gEbv_quantiles: np.ndarray
 ):
 
-    norm_1 = sp_special.gammainc(gamma_Ebv_1, upper_bound_Ebv) * sp_special.gamma(gamma_Ebv_1)
-    norm_2 = sp_special.gammainc(gamma_Ebv_2, upper_bound_Ebv) * sp_special.gamma(gamma_Ebv_2)
+    lower_bound_Ebv = 0
+    idx_upper_bound_Ebv_1 = utils.find_nearest_idx(gEbv_quantiles[0], gamma_Ebv_1)
+    idx_upper_bound_Ebv_2 = utils.find_nearest_idx(gEbv_quantiles[0], gamma_Ebv_2)
+    upper_bound_Ebv_1 = gEbv_quantiles[1, idx_upper_bound_Ebv_1]
+    upper_bound_Ebv_2 = gEbv_quantiles[1, idx_upper_bound_Ebv_2]
+    norm_1 = sp_special.gammainc(gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(gamma_Ebv_1)
+    norm_2 = sp_special.gammainc(gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(gamma_Ebv_2)
 
     probs, status = _fast_prior_convolution(
         covs_1, r_1, covs_2, r_2,
         rb_1=rb_1, sig_rb_1=sig_rb_1, Ebv_1=Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
+        lower_bound_Ebv_1=lower_bound_Ebv, upper_bound_Ebv_1=upper_bound_Ebv_1,
         rb_2=rb_2, sig_rb_2=sig_rb_2, Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
-        lower_bound_Ebv=lower_bound_Ebv, upper_bound_Ebv=upper_bound_Ebv
+        lower_bound_Ebv_2=lower_bound_Ebv, upper_bound_Ebv_2=upper_bound_Ebv_2
     )
 
     p_1 = probs[:, 0] / norm_1
@@ -464,7 +470,8 @@ def _log_likelihood(
     Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
     sig_c_2, sig_int_2, Rb_2, sig_Rb_2,
     gamma_Rb_2, Ebv_2, gamma_Ebv_2,
-    w, H0, lower_bound_Ebv, upper_bound_Ebv,
+    w, H0, 
+    lower_bound_Ebv, upper_bound_Ebv, gEbv_quantiles,
     shift_Rb, lower_bound_Rb, upper_bound_Rb
 ):
 
@@ -493,7 +500,7 @@ def _log_likelihood(
             Ebv_1=Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
             covs_2=covs_2, r_2=r_2, rb_2=Rb_2, sig_rb_2=sig_Rb_2,
             Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
-            lower_bound_Ebv=lower_bound_Ebv, upper_bound_Ebv=upper_bound_Ebv
+            gEbv_quantiles=gEbv_quantiles
         )
     else:
         probs_1, probs_2, status = _wrapper_dbl_prior_conv(
