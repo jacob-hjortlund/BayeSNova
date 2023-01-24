@@ -566,7 +566,7 @@ def generate_log_prob(
     )
     gEbv_quantiles = np.stack((
         gEbv_vals, sp_special.gammaincinv(
-            a=gEbv_vals, y=model_cfg['cdf_limit_gEbv']
+            gEbv_vals, model_cfg['cdf_limit_gEbv']
         )
     ))
     init_arg_dict['gEbv_quantiles'] = gEbv_quantiles

@@ -42,12 +42,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     # Gen log_prob function
     log_prob = prob.generate_log_prob(
         cfg['model_cfg'], sn_covs=sn_covs,
-        sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c,
-        sn_z=sn_z, lower_bound_Ebv=cfg['model_cfg']['lower_bound_Ebv'],
-        upper_bound_Ebv=cfg['model_cfg']['upper_bound_Ebv'],
-        shift_Rb=cfg['model_cfg']['shift_Rb'],
-        lower_bound_Rb=cfg['model_cfg']['lower_bound_Rb'],
-        upper_bound_Rb=cfg['model_cfg']['upper_bound_Rb']
+        sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c, sn_z=sn_z
     )
 
     t0 = time()
