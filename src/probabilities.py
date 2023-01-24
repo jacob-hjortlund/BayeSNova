@@ -247,24 +247,27 @@ def _wrapper_dbl_prior_conv(
     Rb_1: float, gamma_Rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
     covs_2: np.ndarray, r_2: np.ndarray,
     Rb_2: float, gamma_Rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
-    gEbv_quantiles: np.ndarray,
-    shift_Rb: float = 0., lower_bound_Rb: float = 0., upper_bound_Rb: float = 10.,
+    gEbv_quantiles: np.ndarray, shift_Rb: float, gRb_quantiles: float
 ):
 
-    lower_bound_Ebv = 0
+    lower_bound_Ebv = 0.
     idx_upper_bound_Ebv_1 = utils.find_nearest_idx(gEbv_quantiles[0], gamma_Ebv_1)
     idx_upper_bound_Ebv_2 = utils.find_nearest_idx(gEbv_quantiles[0], gamma_Ebv_2)
     upper_bound_Ebv_1 = gEbv_quantiles[1, idx_upper_bound_Ebv_1]
     upper_bound_Ebv_2 = gEbv_quantiles[1, idx_upper_bound_Ebv_2]
 
+    lower_bound_Rb = 0.
+    idx_upper_bound_Rb_1 = utils.find_nearest_idx(gRb_quantiles[0], gamma_Rb_1)
+    idx_upper_bound_Rb_2 = utils.find_nearest_idx(gRb_quantiles[0], gamma_Rb_2)
+    upper_bound_Rb_1 = gRb_quantiles[1, idx_upper_bound_Rb_1] + shift_Rb
+    upper_bound_Rb_2 = gRb_quantiles[1, idx_upper_bound_Rb_2] + shift_Rb
+
     norm_1 = (
-        (stats.norm.cdf(upper_bound_Rb, loc=Rb_1, scale=gamma_Rb_1) - stats.norm.cdf(lower_bound_Rb, loc=Rb_1, scale=gamma_Rb_1)) *
-        #sp_special.gammainc(gamma_Rb_1, upper_bound_Rb) * sp_special.gamma(gamma_Rb_1) *
+        sp_special.gammainc(gamma_Rb_1, upper_bound_Rb_1) * sp_special.gamma(gamma_Rb_1) *
         sp_special.gammainc(gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(gamma_Ebv_1)
     )
     norm_2 = (
-        (stats.norm.cdf(upper_bound_Rb, loc=Rb_2, scale=gamma_Rb_2) - stats.norm.cdf(lower_bound_Rb, loc=Rb_2, scale=gamma_Rb_2)) *
-        #sp_special.gammainc(gamma_Rb_2, upper_bound_Rb) * sp_special.gamma(gamma_Rb_2) *
+        sp_special.gammainc(gamma_Rb_2, upper_bound_Rb_2) * sp_special.gamma(gamma_Rb_2) *
         sp_special.gammainc(gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(gamma_Ebv_2)
     )
 
@@ -272,9 +275,10 @@ def _wrapper_dbl_prior_conv(
         cov_1=covs_1, res_1=r_1, cov_2=covs_2, res_2=r_2,
         Rb_1=Rb_1, gamma_Rb_1=gamma_Rb_1, Ebv_1=Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
         lower_bound_Ebv_1=lower_bound_Ebv, upper_bound_Ebv_1=upper_bound_Ebv_1,
+        lower_bound_Rb_1=lower_bound_Rb, upper_bound_Rb_1=upper_bound_Rb_1,
         Rb_2=Rb_2, gamma_Rb_2=gamma_Rb_2, Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
         lower_bound_Ebv_2=lower_bound_Ebv, upper_bound_Ebv_2=upper_bound_Ebv_2,
-        shift_Rb=shift_Rb, lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb
+        lower_bound_Rb_2=lower_bound_Rb, upper_bound_Rb_2=upper_bound_Rb_2, shift_Rb=shift_Rb
     )
     p_1 = probs[:, 0] / norm_1
     p_2 = probs[:, 1] / norm_2
