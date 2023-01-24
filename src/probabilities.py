@@ -347,8 +347,9 @@ def _fast_prior_convolution(
     cov_1: np.ndarray, res_1: np.ndarray,
     cov_2: np.ndarray, res_2: np.ndarray,
     rb_1: float, sig_rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
+    lower_bound_Ebv_1: float, upper_bound_Ebv_1: float,
     rb_2: float, sig_rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
-    lower_bound_Ebv: float, upper_bound_Ebv: float,
+    lower_bound_Ebv_2: float, upper_bound_Ebv_2: float,
 ):
 
     n_sn = len(cov_1)
@@ -367,10 +368,10 @@ def _fast_prior_convolution(
         )).copy()
         tmp_params_2.astype(np.float64)
         prob_1, _, s1 = dqags(
-            integrate_ptr, lower_bound_Ebv, upper_bound_Ebv, tmp_params_1
+            integrate_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
         )
         prob_2, _, s2 = dqags(
-            integrate_ptr, lower_bound_Ebv, upper_bound_Ebv, tmp_params_2
+            integrate_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
         )
 
         probs[i, 0] = prob_1
