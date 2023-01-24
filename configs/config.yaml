@@ -75,6 +75,8 @@ model_cfg:
     shift: 0.99
   lower_bound_Ebv: 0.
   upper_bound_Ebv: 10.
+  resolution_gEbv: 0.01
+  cdf_limit_gEbv: 0.99
   shift_Rb: 0.
   lower_bound_Rb: 0.
   upper_bound_Rb: 10.

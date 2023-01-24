@@ -251,6 +251,11 @@ def transformed_backend(
     return backend
 
 @nb.njit
+def find_nearest_idx(array, value):
+    idx = (np.abs(array - value)).argmin()
+    return idx
+
+@nb.njit
 def nearestPD(A):
     """Find the nearest positive-definite matrix to input
 
