@@ -1,12 +1,8 @@
 import numpy as np
 import numba as nb
-import scipy as sp
 import src.utils as utils
-import multiprocessing as mp
 import scipy.stats as stats
 import scipy.special as sp_special
-import scipy.integrate as sp_integrate
-from functools import partial
 
 from NumbaQuadpack import quadpack_sig, dqags
 from astropy.cosmology import Planck18 as cosmo
@@ -560,21 +556,17 @@ def generate_log_prob(
     init_arg_dict['sn_c'] = sn_c
     init_arg_dict['sn_z'] = sn_z
     init_arg_dict['sn_cov'] = sn_covs
-    init_arg_dict['lower_bound_Rb'] = model_cfg['lower_bound_Rb']
-    init_arg_dict['upper_bound_Rb'] = model_cfg['upper_bound_Rb']
     init_arg_dict['shift_Rb'] = model_cfg['shift_Rb']
-
-    gEbv_vals = np.arange(
+    init_arg_dict['gEbv_quantiles'] = utils.create_gamma_quantiles(
         model_cfg['prior_bounds']['gamma_Ebv']['lower'], 
         model_cfg['prior_bounds']['gamma_Ebv']['upper'],
-        model_cfg['resolution_gEbv']
+        model_cfg['resolution_gEbv'], model_cfg['cdf_limit_gEbv']
     )
-    gEbv_quantiles = np.stack((
-        gEbv_vals, sp_special.gammaincinv(
-            gEbv_vals, model_cfg['cdf_limit_gEbv']
-        )
-    ))
-    init_arg_dict['gEbv_quantiles'] = gEbv_quantiles
+    init_arg_dict['gRb_quantiles'] = utils.create_gamma_quantiles(
+        model_cfg['prior_bounds']['gamma_Rb']['lower'], 
+        model_cfg['prior_bounds']['gamma_Rb']['upper'],
+        model_cfg['resolution_gRb'], model_cfg['cdf_limit_gRb']
+    )
 
     global log_prob_f
 

@@ -4,6 +4,7 @@ import numpy as np
 import numba as nb
 import emcee as em
 import schwimmbad as swbd
+import scipy.special as sp_special
 
 from mpi4py import MPI
 
@@ -249,6 +250,18 @@ def transformed_backend(
         backend.save_step(state, accepted)
 
     return backend
+
+def create_gamma_quantiles(
+    lower: float, upper: float, resolution: float, cdf_limit: float
+):
+    vals = np.arange(lower, upper, resolution)
+    quantiles = np.stack((
+        vals, sp_special.gammaincinv(
+            vals, cdf_limit
+        )
+    ))
+
+    return quantiles
 
 @nb.njit
 def find_nearest_idx(array, value):
