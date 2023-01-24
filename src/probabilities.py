@@ -1,12 +1,8 @@
 import numpy as np
 import numba as nb
-import scipy as sp
 import src.utils as utils
-import multiprocessing as mp
 import scipy.stats as stats
 import scipy.special as sp_special
-import scipy.integrate as sp_integrate
-from functools import partial
 
 from NumbaQuadpack import quadpack_sig, dqags
 from astropy.cosmology import Planck18 as cosmo
@@ -122,17 +118,19 @@ def _population_r(
 def dbl_integral_body(
     x, y, i1, i2, i3, i5,
     i6, i9, r1, r2, r3,
-    Rb, gamma_Rb, lower_Rb, upper_Rb,
+    Rb, gamma_Rb, shift_Rb,
     Ebv, gamma_Ebv
-):  
-
-    if x < lower_Rb or x > upper_Rb:
-        return 0.
+):
 
     tau_Ebv = Ebv / gamma_Ebv
+    tau_Rb = Rb / gamma_Rb
+
+    x_shift = x - shift_Rb / tau_Rb
+    if x_shift < 0.:
+        return 0.
 
     # update res and cov
-    r1 -= x * y * tau_Ebv
+    r1 -= x * tau_Rb * y * tau_Ebv
     r3 -= y * tau_Ebv
 
     # precalcs
@@ -147,9 +145,9 @@ def dbl_integral_body(
     # # calculate prob
     r_inv_cov_r = det_m1 * (r1 * r1 * A1 + r2 * r2 * A5 + r3 * r3 * A9 + 2 * (r1 * r2 * A2 + r1 * r3 * A3 + r2 * r3 * A6))
     exponent_Ebv = gamma_Ebv - 1.
+    exponent_Rb = gamma_Rb - 1.
     value = (
-        np.exp(-0.5 * r_inv_cov_r - x - y) * y**exponent_Ebv * det_m1**0.5 *
-        1. / (gamma_Rb * (2*np.pi)**0.5) * np.exp(-0.5 * ((x - Rb) / gamma_Rb)**2)
+        np.exp(-0.5 * r_inv_cov_r - x - y) * x**exponent_Rb * y**exponent_Ebv * det_m1**0.5 
     )
 
     return value
@@ -170,8 +168,6 @@ def Rb_integral(x, data):
     Rb = _data[12]
     gamma_Rb = _data[13]
     shift_Rb = _data[-4]
-    lower_Rb = _data[-3]
-    upper_Rb = _data[-2]
     Ebv = _data[14]
     gamma_Ebv = _data[15]
     y = _data[-1]
@@ -179,7 +175,7 @@ def Rb_integral(x, data):
     return dbl_integral_body(
         x, y, i1, i2, i3, i5, 
         i6, i9, r1, r2, r3, 
-        Rb, gamma_Rb, lower_Rb, upper_Rb,
+        Rb, gamma_Rb, shift_Rb,
         Ebv, gamma_Ebv
     )
 Rb_integral_ptr = Rb_integral.address
@@ -204,9 +200,10 @@ def _fast_dbl_prior_convolution(
     cov_2: np.ndarray, res_2: np.ndarray,
     Rb_1: float, gamma_Rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
     lower_bound_Ebv_1: float, upper_bound_Ebv_1: float,
+    lower_bound_Rb_1: float, upper_bound_Rb_1: float,
     Rb_2: float, gamma_Rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
     lower_bound_Ebv_2: float, upper_bound_Ebv_2: float,
-    shift_Rb: float, lower_bound_Rb: float, upper_bound_Rb: float
+    lower_bound_Rb_2: float, upper_bound_Rb_2: float, shift_Rb: float,
 ):
 
     n_sn = len(cov_1)
@@ -215,12 +212,12 @@ def _fast_dbl_prior_convolution(
     params_1 = np.array([
         Rb_1, gamma_Rb_1,
         Ebv_1, gamma_Ebv_1,
-        shift_Rb, lower_bound_Rb, upper_bound_Rb
+        shift_Rb, lower_bound_Rb_1, upper_bound_Rb_1
     ])
     params_2 = np.array([
         Rb_2, gamma_Rb_2,
         Ebv_2, gamma_Ebv_2,
-        shift_Rb, lower_bound_Rb, upper_bound_Rb
+        shift_Rb, lower_bound_Rb_2, upper_bound_Rb_2
     ])
 
     for i in range(n_sn):
@@ -251,24 +248,29 @@ def _wrapper_dbl_prior_conv(
     Rb_1: float, gamma_Rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
     covs_2: np.ndarray, r_2: np.ndarray,
     Rb_2: float, gamma_Rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
-    gEbv_quantiles: np.ndarray,
-    shift_Rb: float = 0., lower_bound_Rb: float = 0., upper_bound_Rb: float = 10.,
+    gEbv_quantiles: np.ndarray, shift_Rb: float, gRb_quantiles: float
 ):
 
-    lower_bound_Ebv = 0
+    lower_bound_Ebv = 0.
     idx_upper_bound_Ebv_1 = utils.find_nearest_idx(gEbv_quantiles[0], gamma_Ebv_1)
     idx_upper_bound_Ebv_2 = utils.find_nearest_idx(gEbv_quantiles[0], gamma_Ebv_2)
     upper_bound_Ebv_1 = gEbv_quantiles[1, idx_upper_bound_Ebv_1]
     upper_bound_Ebv_2 = gEbv_quantiles[1, idx_upper_bound_Ebv_2]
 
+    tau_Rb_1 = Rb_1 / gamma_Rb_1
+    tau_Rb_2 = Rb_2 / gamma_Rb_2
+    lower_bound_Rb = 0.
+    idx_upper_bound_Rb_1 = utils.find_nearest_idx(gRb_quantiles[0], gamma_Rb_1)
+    idx_upper_bound_Rb_2 = utils.find_nearest_idx(gRb_quantiles[0], gamma_Rb_2)
+    upper_bound_Rb_1 = gRb_quantiles[1, idx_upper_bound_Rb_1] + shift_Rb / tau_Rb_1
+    upper_bound_Rb_2 = gRb_quantiles[1, idx_upper_bound_Rb_2] + shift_Rb / tau_Rb_2
+
     norm_1 = (
-        (stats.norm.cdf(upper_bound_Rb, loc=Rb_1, scale=gamma_Rb_1) - stats.norm.cdf(lower_bound_Rb, loc=Rb_1, scale=gamma_Rb_1)) *
-        #sp_special.gammainc(gamma_Rb_1, upper_bound_Rb) * sp_special.gamma(gamma_Rb_1) *
+        sp_special.gammainc(gamma_Rb_1, upper_bound_Rb_1) * sp_special.gamma(gamma_Rb_1) *
         sp_special.gammainc(gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(gamma_Ebv_1)
     )
     norm_2 = (
-        (stats.norm.cdf(upper_bound_Rb, loc=Rb_2, scale=gamma_Rb_2) - stats.norm.cdf(lower_bound_Rb, loc=Rb_2, scale=gamma_Rb_2)) *
-        #sp_special.gammainc(gamma_Rb_2, upper_bound_Rb) * sp_special.gamma(gamma_Rb_2) *
+        sp_special.gammainc(gamma_Rb_2, upper_bound_Rb_2) * sp_special.gamma(gamma_Rb_2) *
         sp_special.gammainc(gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(gamma_Ebv_2)
     )
 
@@ -276,9 +278,10 @@ def _wrapper_dbl_prior_conv(
         cov_1=covs_1, res_1=r_1, cov_2=covs_2, res_2=r_2,
         Rb_1=Rb_1, gamma_Rb_1=gamma_Rb_1, Ebv_1=Ebv_1, gamma_Ebv_1=gamma_Ebv_1,
         lower_bound_Ebv_1=lower_bound_Ebv, upper_bound_Ebv_1=upper_bound_Ebv_1,
+        lower_bound_Rb_1=lower_bound_Rb, upper_bound_Rb_1=upper_bound_Rb_1,
         Rb_2=Rb_2, gamma_Rb_2=gamma_Rb_2, Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
         lower_bound_Ebv_2=lower_bound_Ebv, upper_bound_Ebv_2=upper_bound_Ebv_2,
-        shift_Rb=shift_Rb, lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb
+        lower_bound_Rb_2=lower_bound_Rb, upper_bound_Rb_2=upper_bound_Rb_2, shift_Rb=shift_Rb
     )
     p_1 = probs[:, 0] / norm_1
     p_2 = probs[:, 1] / norm_2
@@ -479,8 +482,7 @@ def _log_likelihood(
     Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
     sig_c_2, sig_int_2, Rb_2, sig_Rb_2,
     gamma_Rb_2, Ebv_2, gamma_Ebv_2,
-    w, H0, gEbv_quantiles,
-    shift_Rb, lower_bound_Rb, upper_bound_Rb
+    w, H0, gEbv_quantiles, gRb_quantiles, shift_Rb
 ):
 
     covs_1, r_1 = _population_cov_and_residual(
@@ -519,7 +521,7 @@ def _log_likelihood(
             Rb_2=Rb_2, gamma_Rb_2=gamma_Rb_2,
             Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
             gEbv_quantiles=gEbv_quantiles,
-            shift_Rb=shift_Rb, lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb
+            gRb_quantiles=gRb_quantiles, shift_Rb=shift_Rb
         )
 
     # Check if any probs had non-posdef cov
@@ -560,21 +562,17 @@ def generate_log_prob(
     init_arg_dict['sn_c'] = sn_c
     init_arg_dict['sn_z'] = sn_z
     init_arg_dict['sn_cov'] = sn_covs
-    init_arg_dict['lower_bound_Rb'] = model_cfg['lower_bound_Rb']
-    init_arg_dict['upper_bound_Rb'] = model_cfg['upper_bound_Rb']
     init_arg_dict['shift_Rb'] = model_cfg['shift_Rb']
-
-    gEbv_vals = np.arange(
+    init_arg_dict['gEbv_quantiles'] = utils.create_gamma_quantiles(
         model_cfg['prior_bounds']['gamma_Ebv']['lower'], 
         model_cfg['prior_bounds']['gamma_Ebv']['upper'],
-        model_cfg['resolution_gEbv']
+        model_cfg['resolution_gEbv'], model_cfg['cdf_limit_gEbv']
     )
-    gEbv_quantiles = np.stack((
-        gEbv_vals, sp_special.gammaincinv(
-            gEbv_vals, model_cfg['cdf_limit_gEbv']
-        )
-    ))
-    init_arg_dict['gEbv_quantiles'] = gEbv_quantiles
+    init_arg_dict['gRb_quantiles'] = utils.create_gamma_quantiles(
+        model_cfg['prior_bounds']['gamma_Rb']['lower'], 
+        model_cfg['prior_bounds']['gamma_Rb']['upper'],
+        model_cfg['resolution_gRb'], model_cfg['cdf_limit_gRb']
+    )
 
     global log_prob_f
 
