@@ -118,17 +118,19 @@ def _population_r(
 def dbl_integral_body(
     x, y, i1, i2, i3, i5,
     i6, i9, r1, r2, r3,
-    Rb, gamma_Rb, lower_Rb, upper_Rb,
+    Rb, gamma_Rb, shift_Rb,
     Ebv, gamma_Ebv
-):  
-
-    if x < lower_Rb or x > upper_Rb:
-        return 0.
+):
 
     tau_Ebv = Ebv / gamma_Ebv
+    tau_Rb = Rb / gamma_Rb
+
+    x_shift = x - shift_Rb / tau_Rb
+    if x_shift < 0.:
+        return 0.
 
     # update res and cov
-    r1 -= x * y * tau_Ebv
+    r1 -= x * tau_Rb * y * tau_Ebv
     r3 -= y * tau_Ebv
 
     # precalcs
@@ -143,9 +145,9 @@ def dbl_integral_body(
     # # calculate prob
     r_inv_cov_r = det_m1 * (r1 * r1 * A1 + r2 * r2 * A5 + r3 * r3 * A9 + 2 * (r1 * r2 * A2 + r1 * r3 * A3 + r2 * r3 * A6))
     exponent_Ebv = gamma_Ebv - 1.
+    exponent_Rb = gamma_Rb - 1.
     value = (
-        np.exp(-0.5 * r_inv_cov_r - x - y) * y**exponent_Ebv * det_m1**0.5 *
-        1. / (gamma_Rb * (2*np.pi)**0.5) * np.exp(-0.5 * ((x - Rb) / gamma_Rb)**2)
+        np.exp(-0.5 * r_inv_cov_r - x - y) * x**exponent_Rb * y**exponent_Ebv * det_m1**0.5 
     )
 
     return value
@@ -166,8 +168,6 @@ def Rb_integral(x, data):
     Rb = _data[12]
     gamma_Rb = _data[13]
     shift_Rb = _data[-4]
-    lower_Rb = _data[-3]
-    upper_Rb = _data[-2]
     Ebv = _data[14]
     gamma_Ebv = _data[15]
     y = _data[-1]
@@ -175,7 +175,7 @@ def Rb_integral(x, data):
     return dbl_integral_body(
         x, y, i1, i2, i3, i5, 
         i6, i9, r1, r2, r3, 
-        Rb, gamma_Rb, lower_Rb, upper_Rb,
+        Rb, gamma_Rb, shift_Rb,
         Ebv, gamma_Ebv
     )
 Rb_integral_ptr = Rb_integral.address
@@ -257,11 +257,13 @@ def _wrapper_dbl_prior_conv(
     upper_bound_Ebv_1 = gEbv_quantiles[1, idx_upper_bound_Ebv_1]
     upper_bound_Ebv_2 = gEbv_quantiles[1, idx_upper_bound_Ebv_2]
 
+    tau_Rb_1 = Rb_1 / gamma_Rb_1
+    tau_Rb_2 = Rb_2 / gamma_Rb_2
     lower_bound_Rb = 0.
     idx_upper_bound_Rb_1 = utils.find_nearest_idx(gRb_quantiles[0], gamma_Rb_1)
     idx_upper_bound_Rb_2 = utils.find_nearest_idx(gRb_quantiles[0], gamma_Rb_2)
-    upper_bound_Rb_1 = gRb_quantiles[1, idx_upper_bound_Rb_1] + shift_Rb
-    upper_bound_Rb_2 = gRb_quantiles[1, idx_upper_bound_Rb_2] + shift_Rb
+    upper_bound_Rb_1 = gRb_quantiles[1, idx_upper_bound_Rb_1] + shift_Rb / tau_Rb_1
+    upper_bound_Rb_2 = gRb_quantiles[1, idx_upper_bound_Rb_2] + shift_Rb / tau_Rb_2
 
     norm_1 = (
         sp_special.gammainc(gamma_Rb_1, upper_bound_Rb_1) * sp_special.gamma(gamma_Rb_1) *
@@ -480,8 +482,7 @@ def _log_likelihood(
     Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
     sig_c_2, sig_int_2, Rb_2, sig_Rb_2,
     gamma_Rb_2, Ebv_2, gamma_Ebv_2,
-    w, H0, gEbv_quantiles,
-    shift_Rb, lower_bound_Rb, upper_bound_Rb
+    w, H0, gEbv_quantiles, gRb_quantiles, shift_Rb
 ):
 
     covs_1, r_1 = _population_cov_and_residual(
@@ -520,7 +521,7 @@ def _log_likelihood(
             Rb_2=Rb_2, gamma_Rb_2=gamma_Rb_2,
             Ebv_2=Ebv_2, gamma_Ebv_2=gamma_Ebv_2,
             gEbv_quantiles=gEbv_quantiles,
-            shift_Rb=shift_Rb, lower_bound_Rb=lower_bound_Rb, upper_bound_Rb=upper_bound_Rb
+            gRb_quantiles=gRb_quantiles, shift_Rb=shift_Rb
         )
 
     # Check if any probs had non-posdef cov
