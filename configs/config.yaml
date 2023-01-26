@@ -22,6 +22,7 @@ model_cfg:
     H0: 73.0
     sig_int_1: 0.
     sig_int_2: 0.
+    shift_Rb: 0.
   prior_bounds:
     Mb:
       lower: -100.
@@ -52,6 +53,8 @@ model_cfg:
     gamma_Rb:
       lower: 1.
       upper: 7.
+    shift_Rb:
+      lower: 0.
     Ebv:
       lower: 0.
       upper: 10.
@@ -69,13 +72,13 @@ model_cfg:
     gamma_Ebv: 2.9
     Rb: 3.7
     gamma_Rb: 2.9
+    shift_Rb: 1.5
   use_sigmoid: False
   sigmoid_cfg:
     scale: 750.
     shift: 0.99
   resolution_gEbv: 0.01
   cdf_limit_gEbv: 0.99
-  shift_Rb: 0.
   resolution_gRb: 0.01
   cdf_limit_gRb: 0.99
 emcee_cfg:
