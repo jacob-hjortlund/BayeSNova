@@ -561,7 +561,6 @@ def generate_log_prob(
     init_arg_dict['sn_c'] = sn_c
     init_arg_dict['sn_z'] = sn_z
     init_arg_dict['sn_cov'] = sn_covs
-    init_arg_dict['shift_Rb'] = model_cfg['shift_Rb']
     init_arg_dict['gEbv_quantiles'] = utils.create_gamma_quantiles(
         model_cfg['prior_bounds']['gamma_Ebv']['lower'], 
         model_cfg['prior_bounds']['gamma_Ebv']['upper'],
