@@ -118,7 +118,7 @@ def _population_r(
 def dbl_integral_body(
     x, y, i1, i2, i3, i5,
     i6, i9, r1, r2, r3,
-    Rb, gamma_Rb,
+    Rb, gamma_Rb, shift_Rb,
     Ebv, gamma_Ebv
 ):
 
@@ -129,7 +129,7 @@ def dbl_integral_body(
         return 0.
 
     # update res and cov
-    r1 -= x * tau_Rb * y * tau_Ebv
+    r1 -= (x * tau_Rb + shift_Rb) * y * tau_Ebv
     r3 -= y * tau_Ebv
 
     # precalcs
@@ -154,7 +154,7 @@ def dbl_integral_body(
 @nb.cfunc(quadpack_sig)
 def Rb_integral(x, data):
 
-    _data = nb.carray(data, (19,))
+    _data = nb.carray(data, (20,))
     i1 = _data[0]
     i2 = _data[1]
     i3 = _data[2]
@@ -168,19 +168,20 @@ def Rb_integral(x, data):
     gamma_Rb = _data[13]
     Ebv = _data[14]
     gamma_Ebv = _data[15]
+    shift_Rb = _data[-4]
     y = _data[-1]
 
     return dbl_integral_body(
         x, y, i1, i2, i3, i5, 
         i6, i9, r1, r2, r3, 
-        Rb, gamma_Rb,
+        Rb, gamma_Rb, shift_Rb,
         Ebv, gamma_Ebv
     )
 Rb_integral_ptr = Rb_integral.address
 
 @nb.cfunc(quadpack_sig)
 def Ebv_integral(y, data):
-    _data = nb.carray(data, (18,))
+    _data = nb.carray(data, (19,))
     _new_data = np.concatenate(
         (_data, np.array([y]))
     )
@@ -210,12 +211,12 @@ def _fast_dbl_prior_convolution(
     params_1 = np.array([
         Rb_1, gamma_Rb_1,
         Ebv_1, gamma_Ebv_1,
-        lower_bound_Rb_1, upper_bound_Rb_1
+        shift_Rb, lower_bound_Rb_1, upper_bound_Rb_1
     ])
     params_2 = np.array([
         Rb_2, gamma_Rb_2,
         Ebv_2, gamma_Ebv_2,
-        lower_bound_Rb_2, upper_bound_Rb_2
+        shift_Rb, lower_bound_Rb_2, upper_bound_Rb_2
     ])
 
     for i in range(n_sn):
@@ -258,8 +259,8 @@ def _wrapper_dbl_prior_conv(
     lower_bound_Rb = 0.
     idx_upper_bound_Rb_1 = utils.find_nearest_idx(gRb_quantiles[0], gamma_Rb_1)
     idx_upper_bound_Rb_2 = utils.find_nearest_idx(gRb_quantiles[0], gamma_Rb_2)
-    upper_bound_Rb_1 = gRb_quantiles[1, idx_upper_bound_Rb_1] - shift_Rb
-    upper_bound_Rb_2 = gRb_quantiles[1, idx_upper_bound_Rb_2] - shift_Rb
+    upper_bound_Rb_1 = gRb_quantiles[1, idx_upper_bound_Rb_1]
+    upper_bound_Rb_2 = gRb_quantiles[1, idx_upper_bound_Rb_2]
     Rb_1_shifted = Rb_1 - shift_Rb
     Rb_2_shifted = Rb_2 - shift_Rb
 
