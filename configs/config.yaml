@@ -92,6 +92,11 @@ emcee_cfg:
   tau_tol: 25
   default_tau: 2000
   default_burnin: 20000
+clearml_cfg:
+  project_name: SN_2Pop
+  offline_mode: True
+  tags: []
+  task_type: 'training'
 plot_cfg:
   smooth: 1.
   smooth1d: 1.

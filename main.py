@@ -22,8 +22,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     # Setup clearml
     cl.Task.set_offline(offline_mode=cfg['clearml_cfg']['offline_mode'])
-    task_name = utils.create_task_name(omegaconf.to_container(cfg))
-    tags = ["_".join(cfg['model_cfg']['independend_par_names'])] + cfg['clearml_cfg']['tags']
+    task_name = utils.create_task_name(cfg)
+    tags = ["-".join(cfg['model_cfg']['independent_par_names'])] + cfg['clearml_cfg']['tags']
     task = cl.Task.init(
         project_name=cfg['clearml_cfg']['project_name'],
         task_name=task_name, tags=tags, task_type=cfg['clearml_cfg']['task_type']
