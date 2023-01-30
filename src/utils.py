@@ -1,9 +1,11 @@
 import sys
 import tqdm
+import yaml
 import numpy as np
 import numba as nb
 import emcee as em
 import schwimmbad as swbd
+import deepdiff.diff as diff
 import scipy.special as sp_special
 
 from mpi4py import MPI
@@ -62,6 +64,25 @@ class PoolWrapper():
         if not self.pool.is_master():
             self.pool.wait()
             sys.exit(0)
+
+def create_task_name(
+    cfg: dict, default_path: str ='./configs/config.yaml'
+) -> str:
+
+    with open(default_path, "r") as f:
+        default_cfg = yaml.safe_load(f)
+
+    diff_dict = diff.DeepDiff(default_cfg, cfg)
+    changes = []
+    for setting in diff['values_changed'].keys():
+        setting_str = '['+"[".join(setting.split('[')[2:])
+        new_value = str(diff['values_changed'][setting]['new_value'])
+        changes.append(
+            setting_str + '-' + new_value
+        )
+    run_name = '_'.join(changes)
+
+    return run_name
 
 def sigmoid(
     value: float, shift: float = 0.,

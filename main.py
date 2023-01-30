@@ -1,27 +1,33 @@
 import hydra
 import omegaconf
-import sys
 import os
 import corner
 
 import emcee as em
 import numpy as np
 import pandas as pd
-import scipy.stats as sp_stats
+import clearml as cl
 import scipy.optimize as sp_opt
 import matplotlib.pyplot as plt
-import schwimmbad as swbd
 import src.utils as utils
 import src.preprocessing as prep
 import src.probabilities as prob
 
 from time import time
-from tqdm import tqdm
 
 @hydra.main(
     version_base=None, config_path="configs", config_name="config"
 )
 def main(cfg: omegaconf.DictConfig) -> None:   
+
+    # Setup clearml
+    cl.Task.set_offline(offline_mode=cfg['clearml_cfg']['offline_mode'])
+    task_name = utils.create_task_name(omegaconf.to_container(cfg))
+    tags = ["_".join(cfg['model_cfg']['independend_par_names'])] + cfg['clearml_cfg']['tags']
+    task = cl.Task.init(
+        project_name=cfg['clearml_cfg']['project_name'],
+        task_name=task_name, tags=tags, task_type=cfg['clearml_cfg']['task_type']
+    )
 
     # Setup results dir
     path = cfg['emcee_cfg']['save_path']
