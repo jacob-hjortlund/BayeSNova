@@ -77,6 +77,9 @@ def create_task_name(
         default_cfg = yaml.safe_load(f)
 
     diff_dict = diff.DeepDiff(default_cfg, cfg)
+    if not 'values_changed' in diff_dict.keys():
+        return 'default_cfg'
+
     changes = []
     for setting in diff_dict['values_changed'].keys():
         setting_str = '['+"[".join(setting.split('[')[2:])
