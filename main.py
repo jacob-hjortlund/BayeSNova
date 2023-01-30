@@ -154,6 +154,22 @@ def main(cfg: omegaconf.DictConfig) -> None:
     print("Max sample log(P):", max_sample_log_prob)
     print("Optimized log(P):", opt_log_prob, "\n")
 
+    # Log chain settings and log(P) values
+    data = np.array([[
+        tau, burnin, max_sample_log_prob, opt_log_prob
+    ]])
+    emcee_df = pd.DataFrame(
+        data,
+        index=[cfg['emcee_cfg']['run_name']],
+        columns=['tau', 'burnin', 'max_sample_log_prob', 'opt_log_prob']
+    )
+    clearml_logger.report_table(
+        title="Emcee results",
+        series="Emcee results",
+        iteration=0,
+        table_plot=emcee_df
+    )
+
     print("\n----------------- PLOTS ---------------------\n")
     n_shared = len(cfg['model_cfg']['shared_par_names'])
     n_independent = len(cfg['model_cfg']['independent_par_names'])
