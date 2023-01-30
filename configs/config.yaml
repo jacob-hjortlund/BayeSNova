@@ -82,7 +82,7 @@ model_cfg:
   resolution_gRb: 0.01
   cdf_limit_gRb: 0.99
 emcee_cfg:
-  save_path: './results/baseline'
+  save_path: './results'
   file_name: "chains.hdf5"
   run_name: "base"
   pool_type: "MPI"

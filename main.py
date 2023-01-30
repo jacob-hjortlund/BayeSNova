@@ -28,9 +28,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
         project_name=cfg['clearml_cfg']['project_name'],
         task_name=task_name, tags=tags, task_type=cfg['clearml_cfg']['task_type']
     )
+    clearml_logger = task.get_logger()
 
     # Setup results dir
-    path = cfg['emcee_cfg']['save_path']
+    path = os.path.join(
+        cfg['emcee_cfg']['save_path'], tags[0], task_name
+    )
     os.makedirs(path, exist_ok=True)
 
     # Import data
@@ -192,7 +195,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, labels=labels, **cfg['plot_cfg'])
     fig_pop_1.tight_layout()
     fig_pop_1.savefig(
-        os.path.join(path, cfg['emcee_cfg']['run_name']+".pdf")
+        os.path.join(path, cfg['emcee_cfg']['run_name']+"_corner.pdf")
     )
 
     full_chain = backend.get_chain()
