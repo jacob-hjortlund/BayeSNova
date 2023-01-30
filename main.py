@@ -111,8 +111,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
             backend, filename, name=cfg['emcee_cfg']['run_name']+"_transformed",
             sigmoid_cfg=cfg['model_cfg']['sigmoid_cfg'], shared_par_names=cfg['model_cfg']['shared_par_names']
         )
-
-    print("\nMean accepance fraction:", np.mean(sampler.acceptance_fraction), "\n")
+    accept_frac = np.mean(sampler.acceptance_fraction)
+    print("\nMean accepance fraction:", accept_frac, "\n")
 
     try:
         taus = backend.get_autocorr_time(
@@ -155,21 +155,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
     print("Optimized log(P):", opt_log_prob, "\n")
 
     # Log chain settings and log(P) values
-    data = np.array([[
-        tau, burnin, max_sample_log_prob, opt_log_prob
-    ]])
-    emcee_df = pd.DataFrame(
-        data,
-        index=[cfg['emcee_cfg']['run_name']],
-        columns=['tau', 'burnin', 'max_sample_log_prob', 'opt_log_prob']
-    )
-    clearml_logger.report_table(
-        title="Emcee results",
-        series="Emcee results",
-        iteration=0,
-        table_plot=emcee_df
-    )
-
+    clearml_logger.report_single_value(name='acceptance_fraction', value=accept_frac)
+    clearml_logger.report_single_value(name='tau', value=tau)
+    clearml_logger.report_single_value(name='burnin', value=burnin)
     clearml_logger.report_single_value(name="max_sample_log_prob", value=max_sample_log_prob)
     clearml_logger.report_single_value(name="opt_log_prob", value=opt_log_prob)
 
@@ -213,14 +201,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, labels=labels, **cfg['plot_cfg'])
     fig_pop_1.tight_layout()
+    fig_pop_1.suptitle('Corner plot', fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
     fig_pop_1.savefig(
         os.path.join(path, cfg['emcee_cfg']['run_name']+"_corner.pdf")
-    )
-    clearml_logger.report_matplotlib_figure(
-        title="Corner plot",
-        series="Corner plot",
-        iteration=0,
-        figure=fig_pop_1
     )
 
     full_chain = backend.get_chain()
@@ -238,21 +221,18 @@ def main(cfg: omegaconf.DictConfig) -> None:
         ax = axes[i]
         ax.plot(full_chain[:, :, i], "k", alpha=0.3)
         ax.set_xlim(0, len(full_chain))
-        ax.set_ylabel(par_names[i])
-    axes[-1].set_xlabel("step number");
+        ax.set_ylabel(par_names[i], fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+        ax.axvline(burnin, color='r', alpha=0.5)
+    axes[-1].set_xlabel("step number", fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
     fig.tight_layout()
     if cfg['model_cfg']['use_sigmoid']:
         suffix = "_transformed"
     else:
         suffix = ""
+    fig.subplots_adjust(top=0.1)
+    fig.suptitle("Walkers" + suffix, fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
     fig.savefig(
         os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_walkers.pdf")
-    )
-    clearml_logger.report_matplotlib_figure(
-        title="Walkers",
-        series="Walkers",
-        iteration=0,
-        figure=fig
     )
 
 if __name__ == "__main__":
