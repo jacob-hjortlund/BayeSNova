@@ -1,9 +1,12 @@
 import sys
 import tqdm
+import yaml
+import omegaconf
 import numpy as np
 import numba as nb
 import emcee as em
 import schwimmbad as swbd
+import deepdiff.diff as diff
 import scipy.special as sp_special
 
 from mpi4py import MPI
@@ -62,6 +65,31 @@ class PoolWrapper():
         if not self.pool.is_master():
             self.pool.wait()
             sys.exit(0)
+
+def create_task_name(
+    cfg: omegaconf.DictConfig, default_path: str ='./configs/config.yaml'
+) -> str:
+
+    cfg = yaml.safe_load(
+        omegaconf.OmegaConf.to_yaml(cfg)
+    )
+    with open(default_path, "r") as f:
+        default_cfg = yaml.safe_load(f)
+
+    diff_dict = diff.DeepDiff(default_cfg, cfg)
+    if not 'values_changed' in diff_dict.keys():
+        return 'default_cfg'
+
+    changes = []
+    for setting in diff_dict['values_changed'].keys():
+        setting_str = '['+"[".join(setting.split('[')[2:])
+        new_value = str(diff_dict['values_changed'][setting]['new_value'])
+        changes.append(
+            setting_str + '-' + new_value
+        )
+    run_name = '_'.join(changes)
+
+    return run_name
 
 def sigmoid(
     value: float, shift: float = 0.,

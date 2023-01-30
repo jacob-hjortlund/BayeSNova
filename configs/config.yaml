@@ -82,7 +82,7 @@ model_cfg:
   resolution_gRb: 0.01
   cdf_limit_gRb: 0.99
 emcee_cfg:
-  save_path: './results/baseline'
+  save_path: './results'
   file_name: "chains.hdf5"
   run_name: "base"
   pool_type: "MPI"
@@ -92,6 +92,11 @@ emcee_cfg:
   tau_tol: 25
   default_tau: 2000
   default_burnin: 20000
+clearml_cfg:
+  project_name: SN_2Pop
+  offline_mode: True
+  tags: []
+  task_type: 'training'
 plot_cfg:
   smooth: 1.
   smooth1d: 1.

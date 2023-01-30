@@ -1,30 +1,39 @@
 import hydra
 import omegaconf
-import sys
 import os
 import corner
 
 import emcee as em
 import numpy as np
 import pandas as pd
-import scipy.stats as sp_stats
+import clearml as cl
 import scipy.optimize as sp_opt
 import matplotlib.pyplot as plt
-import schwimmbad as swbd
 import src.utils as utils
 import src.preprocessing as prep
 import src.probabilities as prob
 
 from time import time
-from tqdm import tqdm
 
 @hydra.main(
     version_base=None, config_path="configs", config_name="config"
 )
 def main(cfg: omegaconf.DictConfig) -> None:   
 
+    # Setup clearml
+    cl.Task.set_offline(offline_mode=cfg['clearml_cfg']['offline_mode'])
+    task_name = utils.create_task_name(cfg)
+    tags = ["-".join(cfg['model_cfg']['independent_par_names'])] + cfg['clearml_cfg']['tags']
+    task = cl.Task.init(
+        project_name=cfg['clearml_cfg']['project_name'],
+        task_name=task_name, tags=tags, task_type=cfg['clearml_cfg']['task_type']
+    )
+    clearml_logger = task.get_logger()
+
     # Setup results dir
-    path = cfg['emcee_cfg']['save_path']
+    path = os.path.join(
+        cfg['emcee_cfg']['save_path'], tags[0], task_name
+    )
     os.makedirs(path, exist_ok=True)
 
     # Import data
@@ -102,8 +111,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
             backend, filename, name=cfg['emcee_cfg']['run_name']+"_transformed",
             sigmoid_cfg=cfg['model_cfg']['sigmoid_cfg'], shared_par_names=cfg['model_cfg']['shared_par_names']
         )
-
-    print("\nMean accepance fraction:", np.mean(sampler.acceptance_fraction), "\n")
+    accept_frac = np.mean(sampler.acceptance_fraction)
+    print("\nMean accepance fraction:", accept_frac, "\n")
 
     try:
         taus = backend.get_autocorr_time(
@@ -145,6 +154,13 @@ def main(cfg: omegaconf.DictConfig) -> None:
     print("Max sample log(P):", max_sample_log_prob)
     print("Optimized log(P):", opt_log_prob, "\n")
 
+    # Log chain settings and log(P) values
+    clearml_logger.report_single_value(name='acceptance_fraction', value=accept_frac)
+    clearml_logger.report_single_value(name='tau', value=tau)
+    clearml_logger.report_single_value(name='burnin', value=burnin)
+    clearml_logger.report_single_value(name="max_sample_log_prob", value=max_sample_log_prob)
+    clearml_logger.report_single_value(name="opt_log_prob", value=opt_log_prob)
+
     print("\n----------------- PLOTS ---------------------\n")
     n_shared = len(cfg['model_cfg']['shared_par_names'])
     n_independent = len(cfg['model_cfg']['independent_par_names'])
@@ -185,8 +201,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, labels=labels, **cfg['plot_cfg'])
     fig_pop_1.tight_layout()
+    fig_pop_1.suptitle('Corner plot', fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
     fig_pop_1.savefig(
-        os.path.join(path, cfg['emcee_cfg']['run_name']+".pdf")
+        os.path.join(path, cfg['emcee_cfg']['run_name']+"_corner.pdf")
     )
 
     full_chain = backend.get_chain()
@@ -204,13 +221,16 @@ def main(cfg: omegaconf.DictConfig) -> None:
         ax = axes[i]
         ax.plot(full_chain[:, :, i], "k", alpha=0.3)
         ax.set_xlim(0, len(full_chain))
-        ax.set_ylabel(par_names[i])
-    axes[-1].set_xlabel("step number");
+        ax.set_ylabel(par_names[i], fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+        ax.axvline(burnin, color='r', alpha=0.5)
+    axes[-1].set_xlabel("step number", fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
     fig.tight_layout()
     if cfg['model_cfg']['use_sigmoid']:
         suffix = "_transformed"
     else:
         suffix = ""
+    fig.subplots_adjust(top=0.1)
+    fig.suptitle("Walkers" + suffix, fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
     fig.savefig(
         os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_walkers.pdf")
     )
