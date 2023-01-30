@@ -170,6 +170,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
         table_plot=emcee_df
     )
 
+    clearml_logger.report_single_value(name="max_sample_log_prob", value=max_sample_log_prob)
+    clearml_logger.report_single_value(name="opt_log_prob", value=opt_log_prob)
+
     print("\n----------------- PLOTS ---------------------\n")
     n_shared = len(cfg['model_cfg']['shared_par_names'])
     n_independent = len(cfg['model_cfg']['independent_par_names'])
@@ -213,6 +216,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
     fig_pop_1.savefig(
         os.path.join(path, cfg['emcee_cfg']['run_name']+"_corner.pdf")
     )
+    clearml_logger.report_matplotlib_figure(
+        title="Corner plot",
+        series="Corner plot",
+        iteration=0,
+        figure=fig_pop_1
+    )
 
     full_chain = backend.get_chain()
     par_names = (
@@ -238,6 +247,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
         suffix = ""
     fig.savefig(
         os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_walkers.pdf")
+    )
+    clearml_logger.report_matplotlib_figure(
+        title="Walkers",
+        series="Walkers",
+        iteration=0,
+        figure=fig
     )
 
 if __name__ == "__main__":
