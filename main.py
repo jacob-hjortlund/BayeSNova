@@ -7,6 +7,7 @@ import emcee as em
 import numpy as np
 import pandas as pd
 import clearml as cl
+import scipy.stats as sp_stats
 import scipy.optimize as sp_opt
 import matplotlib.pyplot as plt
 import src.utils as utils
@@ -161,6 +162,46 @@ def main(cfg: omegaconf.DictConfig) -> None:
     clearml_logger.report_single_value(name="max_sample_log_prob", value=max_sample_log_prob)
     clearml_logger.report_single_value(name="opt_log_prob", value=opt_log_prob)
 
+    print("\n-------- POSTERIOR / MARGINALIZED DIST COMPARISON -----------\n")
+
+    par_names = (
+        cfg['model_cfg']['shared_par_names'] +
+        utils.gen_pop_par_names(
+            cfg['model_cfg']['independent_par_names']
+        ) +
+        [cfg['model_cfg']['ratio_par_name']]
+    )
+
+    quantiles = np.quantile(
+        sample_thetas, [0.16, 0.84], axis=0
+    )
+    symmetrized_stds = 0.5 * (quantiles[1] - quantiles[0])
+    post_marg_values = np.zeros((5, len(par_names)))
+    
+    for i in range(len(par_names)):
+        samples = sample_thetas[:, i]
+        par_range = np.arange(
+            np.min(samples), np.max(samples), np.abs(np.min(samples))/10
+        )
+        kde = sp_stats.gaussian_kde(samples)(par_range)
+        post_marg_values[0, i] = max_thetas[i]
+        post_marg_values[1, i] = par_range[np.argmax(kde)]
+        post_marg_values[2, i] = np.std(samples)
+        post_marg_values[3, i] = symmetrized_stds[i]
+        post_marg_values[4, i] = np.abs(
+            post_marg_values[0, i] - post_marg_values[1, i]
+        ) / post_marg_values[3, i]
+    
+    post_marg_df = pd.DataFrame(
+        post_marg_values, index=['MAP', 'MMAP', 'sigma', 'sym_sigma', 'Z'], columns=par_names
+    )
+    clearml_logger.report_table(
+        title='MAP_MMAP_Distance',
+        series='MAP_MMAP_Distance',
+        iteration=0,
+        table_plot=post_marg_df
+    )
+
     print("\n----------------- PLOTS ---------------------\n")
     n_shared = len(cfg['model_cfg']['shared_par_names'])
     n_independent = len(cfg['model_cfg']['independent_par_names'])
@@ -207,13 +248,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
     )
 
     full_chain = backend.get_chain()
-    par_names = (
-        cfg['model_cfg']['shared_par_names'] +
-        utils.gen_pop_par_names(
-            cfg['model_cfg']['independent_par_names']
-        ) +
-        [cfg['model_cfg']['ratio_par_name']]
-    )
     fig, axes = plt.subplots(
         ndim, figsize=(10, int(np.ceil(7*ndim/3))), sharex=True
     )
