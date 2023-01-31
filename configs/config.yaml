@@ -79,9 +79,9 @@ model_cfg:
     scale: 750.
     shift: 0.99
   Ebv_integral_lower_bound: 0.
-  Ebv_integral_upper_bound: null
+  Ebv_integral_upper_bound: -9999.
   Rb_integral_lower_bound: 0.
-  Rb_integral_upper_bound: null
+  Rb_integral_upper_bound: -9999.
   resolution_gEbv: 0.01
   cdf_limit_gEbv: 0.99
   resolution_gRb: 0.01

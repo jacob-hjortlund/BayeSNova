@@ -11,6 +11,7 @@ import scipy.special as sp_special
 
 from mpi4py import MPI
 
+NULL_VALUE = -9999.
 
 class _FunctionWrapper:
     """
@@ -195,7 +196,7 @@ def theta_to_dict(
         )
 
     shared_pars, independent_pars = extend_theta(theta, n_shared_pars)
-    missing_pars = [None] * len(extended_missing_par_names)
+    missing_pars = [NULL_VALUE] * len(extended_missing_par_names)
     pars = np.concatenate([shared_pars, independent_pars, missing_pars, [theta[-1]]])
     arg_dict = {name: par for name, par in zip(par_names, pars)}
 

@@ -274,9 +274,9 @@ class Model():
         self.sigmoid_cfg = cfg['sigmoid_cfg']
         self.prior_bounds = cfg['prior_bounds']
         self.Ebv_integral_lower_bound = cfg.get('Ebv_integral_lower_bound', 0)
-        self.Ebv_integral_upper_bound = cfg.get('Ebv_integral_upper_bound', None)
+        self.Ebv_integral_upper_bound = cfg.get('Ebv_integral_upper_bound', -9999.)
         self.Rb_integral_lower_bound = cfg.get('Rb_integral_lower_bound', 0)
-        self.Rb_integral_upper_bound = cfg.get('Rb_integral_upper_bound', None)
+        self.Rb_integral_upper_bound = cfg.get('Rb_integral_upper_bound', -9999.)
 
         if self.stretch_par_name in self.independent_par_names:
             self.stretch_independent = True
@@ -293,7 +293,7 @@ class Model():
     
     def set_gamma_quantiles(self, cfg: dict, par: str) -> np.ndarray:
 
-        if self.__dict__[par + "_integral_upper_bound"] is None:
+        if self.__dict__[par + "_integral_upper_bound"] == NULL_VALUE:
             quantiles = utils.create_gamma_quantiles(
                 cfg['prior_bounds']['gamma_' + par]['lower'],
                 cfg['prior_bounds']['gamma_' + par]['upper'],
@@ -312,6 +312,9 @@ class Model():
 
         for value_key in par_dict.keys():
             
+            if par_dict[value_key] == NULL_VALUE:
+                continue
+
             # TODO: Remove 3-deep conditionals bleeeeh
             bounds_key = ""
             is_independent_stretch = (
