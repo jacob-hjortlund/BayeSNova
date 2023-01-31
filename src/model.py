@@ -479,6 +479,30 @@ class Model():
             residuals_1=residuals_1, residuals_2=residuals_2
         )
 
+        if np.any(probs_1 < 0.) | np.any(probs_2 < 0.):
+            print("\nOh no, someones below 0\n")
+            return -np.inf
+
+        # TODO: Fix numerical stability by using logsumexp somehow
+        log_prob = np.sum(
+            np.log(
+                self.w * probs_1 + (1-self.w) * probs_2
+            )
+        )
+
+        if np.isnan(log_prob):
+            log_prob = -np.inf
+
+        s1, s2 = np.all(status[:, 0]), np.all(status[:, 1])
+        if not s1 or not s2:
+            mean1, mean2 = np.mean(probs_1), np.mean(probs_2)
+            std1, std2 = np.std(probs_1), np.std(probs_2)
+            f1, f2 = np.count_nonzero(~status[:, 0])/len(status), np.count_nonzero(~status[:, 1])/len(status)
+            print("\nPop 1 mean and std, percentage failed:", mean1, "+-", std1, ",", f1*100, "%")
+            print("Pop 2 mean and std, percentage failed:", mean2, "+-", std2, ",", f2*100, "%")
+            print("Log prob:", log_prob, "\n")
+
+        return log_prob
 
     def __call__(self, theta: np.ndarray) -> float:
 
@@ -506,7 +530,4 @@ class Model():
         log_likelihood = self.log_likelihood()
 
         return log_likelihood
-
-        pass
-
     
