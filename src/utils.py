@@ -176,7 +176,7 @@ def theta_to_dict(
     extended_independent_par_names = gen_pop_par_names(independent_par_names)
     missing_par_names = list(
         set([
-            'gamma_Rb', 'Rb', 'sig_Rb', 'tau_Rb','tau_Ebv'
+            'gamma_Rb', 'Rb', 'sig_Rb', 'tau_Rb', 'Ebv', 'tau_Ebv'
         ]) -
         set(shared_par_names + independent_par_names)
     )
