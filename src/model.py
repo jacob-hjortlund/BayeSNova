@@ -88,7 +88,38 @@ class Model():
         return value
     
     def population_covariances(self) -> np.ndarray:
-        pass
+
+        cov = np.tile(self.covs, (2, 1, 1, 1))
+        disp_v_pec = 200. # km / s
+        c = 300000. # km / s
+        
+        cov[:,:,0,0] += np.array([
+            [self.sig_int_1**2 + self.alpha_1**2 * self.sig_s_1**2 + self.beta_1**2 * self.sig_c_1**2],
+            [self.sig_int_2**2 + self.alpha_2**2 * self.sig_s_2**2 + self.beta_2**2 * self.sig_c_2**2]
+        ])
+        cov[:,:,0,0] += np.tile(
+            self.z**(-2) * (
+                (5. / np.log(10.))**2
+                * (disp_v_pec / c)**2
+            ), (2, 1)
+        )
+
+        cov[:,:,1,1] = np.array([
+            [self.sig_s_1**2], [self.sig_s_2**2]
+        ])
+        cov[:,:,2,2] = np.array([
+            [self.sig_c_1**2], [self.sig_c_2**2]
+        ])
+        cov[:,:,0,1] = np.array([
+            [self.alpha_1 * self.sig_s_1**2], [self.alpha_2 * self.sig_s_2**2]
+        ])
+        cov[:,:,0,2] = np.array([
+            [self.beta_1 * self.sig_c_1**2], [self.beta_2 * self.sig_c_2**2]
+        ])
+        cov[:,:,1,0] = cov[:,:,0,1]
+        cov[:,:,2,0] = cov[:,:,0,2]
+
+        return cov[0], cov[1]
 
     def population_residuals(self) -> np.ndarray:
         pass
