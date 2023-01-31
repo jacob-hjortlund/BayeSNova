@@ -269,6 +269,7 @@ class Model():
         self.stretch_par_name = cfg['stretch_par_name']
         self.ratio_par_name = cfg['ratio_par_name']
         self.use_sigmoid = cfg['use_sigmoid']
+        self.sigmoid_cfg = cfg['sigmoid_cfg']
         self.prior_bounds = cfg['prior_bounds']
         self.Ebv_integral_lower_bound = cfg.get('Ebv_integral_lower_bound', 0)
         self.Ebv_integral_upper_bound = cfg.get('Ebv_integral_upper_bound', None)
