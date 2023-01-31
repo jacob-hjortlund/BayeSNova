@@ -21,13 +21,21 @@ class Model():
 
         self.shared_par_names = cfg['shared_par_names']
         self.independent_par_names = cfg['independent_par_names']
+        self.stretch_par_name = cfg['stretch_par_name']
         self.ratio_par_name = cfg['ratio_par_name']
         self.use_sigmoid = cfg['use_sigmoid']
         self.prior_bounds = cfg['prior_bounds']
         self.Ebv_integral_bounds = cfg.get('Ebv_bounds', None)
         self.Rb_bounds = cfg.get('Rb_bounds', None)
+
+        if self.stretch_par_name in self.independent_par_names:
+            self.stretch_independent = True
+        else:
+            self.stretch_independent = False
+
         if self.Ebv_integral_bounds is None:
             self.Ebv_quantiles = self.create_gamma_quantiles(cfg, 'Ebv')
+        
         if self.Rb_bounds is None:
             self.Rb_quantiles = self.create_gamma_quantiles(cfg, 'Rb')
 
@@ -41,8 +49,43 @@ class Model():
         )
         return quantiles
 
-    def log_prior() -> float:
-        pass
+    def log_prior(self, par_dict: dict) -> float:
+        
+        value = 0.
+        stretch_1_par = self.stretch_par_name + "_1"
+        stretch_2_par = self.stretch_par_name + "_2"
+
+        for value_key in self.par_dict.keys():
+            
+            # TODO: Remove 3-deep conditionals bleeeeh
+            bounds_key = ""
+            is_independent_stretch = (
+                (
+                    value_key == stretch_1_par or value_key == stretch_2_par
+                ) and self.stretch_independent
+            )
+            is_not_ratio_par_name = value_key != self.ratio_par_name
+
+            if is_independent_stretch:
+                if not self.__dict__[stretch_1_par] < self.__dict__[stretch_2_par]:
+                    value += -np.inf
+                    break
+            
+            if is_not_ratio_par_name:
+                bounds_key = "_".join(value_key.split("_")[:-1])
+            else:
+                bounds_key = value_key
+            
+            is_in_priors = bounds_key in self.prior_bounds.keys()
+            if is_in_priors:
+                value += utils.uniform(
+                    par_dict[value_key], **self.prior_bounds[bounds_key]
+                )
+
+            if np.isinf(value):
+                break
+
+        return value
     
     def population_covariances(self) -> np.ndarray:
         pass
@@ -66,11 +109,12 @@ class Model():
             independent_par_names=self.independent_par_names,
             ratio_par_name=self.ratio_par_name
         )
-        self.__dict__.update(param_dict)
 
         log_prior = self.log_prior()
         if np.isinf(log_prior):
             return log_prior
+
+        self.__dict__.update(param_dict)
         
         if self.use_sigmoid:
             self.__dict__.update(
