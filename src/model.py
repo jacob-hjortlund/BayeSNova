@@ -122,7 +122,24 @@ class Model():
         return cov[0], cov[1]
 
     def population_residuals(self) -> np.ndarray:
-        pass
+        
+        residuals = np.zeros((2, len(self.mb), 3))
+        distance_moduli = np.tile(
+            cosmo.distmod(self.z).value, (2, 1)
+        ) + np.log10(cosmo.H0.value / self.H0)
+
+        residuals[:, :, 0] = np.tile(self.mb, (2, 1)) - np.array([
+            [self.Mb_1 + self.alpha_1 * self.s_1 + self.beta_1 * self.c_1],
+            [self.Mb_2 + self.alpha_2 * self.s_2 + self.beta_2 * self.c_2]
+        ]) - distance_moduli
+        residuals[:, :, 1] = np.tile(self.s, (2, 1)) - np.array([
+            [self.s_1], [self.s_2]
+        ])
+        residuals[:, :, 2] = np.tile(self.c, (2, 1)) - np.array([
+            [self.c_1], [self.c_2]
+        ])
+
+        return residuals[0], residuals[1]
     
     def Ebv_prior_convolutions(self) -> float:
         pass
@@ -131,7 +148,9 @@ class Model():
         pass
 
     def log_likelihood(self) -> float:
-        pass
+        
+        cov1, cov2 = self.population_covariances()
+        residuals1, residuals2 = self.population_residuals()
 
     def __call__(self, theta: np.ndarray) -> float:
 
