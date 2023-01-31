@@ -11,6 +11,7 @@ import scipy.stats as sp_stats
 import scipy.optimize as sp_opt
 import matplotlib.pyplot as plt
 import src.utils as utils
+import src.model as model
 import src.preprocessing as prep
 import src.probabilities as prob
 
@@ -44,16 +45,22 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     # Preprocess
     sn_covs = prep.build_covariance_matrix(data.to_numpy())
-    sn_mb = data['mB'].to_numpy()
-    sn_s = data['x1'].to_numpy()
-    sn_c = data['c'].to_numpy()
-    sn_z = data['z'].to_numpy()
+    sn_observables = data[['mB', 'x1', 'c', 'z']].to_numpy()
 
     # Gen log_prob function
-    log_prob = prob.generate_log_prob(
-        cfg['model_cfg'], sn_covs=sn_covs,
-        sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c, sn_z=sn_z
+    log_prob = model.Model(
+        cfg=cfg['model_cfg'], covariances=sn_covs, observables=sn_observables
     )
+    # sn_mb = data['mB'].to_numpy()
+    # sn_s = data['x1'].to_numpy()
+    # sn_c = data['c'].to_numpy()
+    # sn_z = data['z'].to_numpy()
+
+    # # Gen log_prob function
+    # log_prob = prob.generate_log_prob(
+    #     cfg['model_cfg'], sn_covs=sn_covs,
+    #     sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c, sn_z=sn_z
+    # )
 
     t0 = time()
     with utils.PoolWrapper(cfg['emcee_cfg']['pool_type']) as wrapped_pool:

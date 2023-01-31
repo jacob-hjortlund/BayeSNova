@@ -293,7 +293,7 @@ def create_gamma_quantiles(
 
     return quantiles
 
-@nb.njit
+#@nb.njit
 def find_nearest_idx(array, value):
     idx = (np.abs(array - value)).argmin()
     return idx

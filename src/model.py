@@ -7,6 +7,8 @@ import scipy.special as sp_special
 from NumbaQuadpack import quadpack_sig, dqags
 from astropy.cosmology import Planck18 as cosmo
 
+NULL_VALUE = -9999.0
+
 # ---------- E(B-V) PRIOR INTEGRAL ------------
 
 @nb.jit
@@ -16,7 +18,7 @@ def Ebv_integral_body(
     rb, sig_rb, Ebv, tau_Ebv, gamma_Ebv
 ):  
 
-    if not tau_Ebv:
+    if tau_Ebv == -np.inf:
         tau_Ebv = Ebv / gamma_Ebv
 
     # update res and cov
@@ -308,7 +310,7 @@ class Model():
         stretch_1_par = self.stretch_par_name + "_1"
         stretch_2_par = self.stretch_par_name + "_2"
 
-        for value_key in self.par_dict.keys():
+        for value_key in par_dict.keys():
             
             # TODO: Remove 3-deep conditionals bleeeeh
             bounds_key = ""
@@ -320,7 +322,7 @@ class Model():
             is_not_ratio_par_name = value_key != self.ratio_par_name
 
             if is_independent_stretch:
-                if not self.__dict__[stretch_1_par] < self.__dict__[stretch_2_par]:
+                if not par_dict[stretch_1_par] < par_dict[stretch_2_par]:
                     value += -np.inf
                     break
             
@@ -398,7 +400,11 @@ class Model():
 
         var_dict = self.__dict__
         
-        if var_dict["g" + par + "_quantiles"] is not None:
+        if (
+            var_dict["g" + par + "_quantiles"] is not None and
+            var_dict['gamma_' + par + '_1'] is not None and
+            var_dict['gamma_' + par + '_2'] is not None
+        ):
             quantiles = var_dict["g" + par + "_quantiles"]
             idx_upper_bound_1 = utils.find_nearest_idx(quantiles[0], var_dict['gamma_' + par + '_1'])
             idx_upper_bound_2 = utils.find_nearest_idx(quantiles[0], var_dict['gamma_' + par + '_2'])
@@ -513,7 +519,7 @@ class Model():
             ratio_par_name=self.ratio_par_name
         )
 
-        log_prior = self.log_prior()
+        log_prior = self.log_prior(param_dict)
         if np.isinf(log_prior):
             return log_prior
 
