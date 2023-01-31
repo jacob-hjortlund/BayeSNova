@@ -7,6 +7,101 @@ import scipy.special as sp_special
 from NumbaQuadpack import quadpack_sig, dqags
 from astropy.cosmology import Planck18 as cosmo
 
+# ---------- E(B-V) PRIOR INTEGRAL ------------
+
+@nb.jit
+def Ebv_integral_body(
+    x, i1, i2, i3, i5,
+    i6, i9, r1, r2, r3,
+    rb, sig_rb, Ebv, gamma_Ebv
+):  
+
+    tau_Ebv = Ebv / gamma_Ebv
+
+    # update res and cov
+    r1 -= rb * tau_Ebv * x
+    r3 -= tau_Ebv * x
+    i1 += sig_rb * sig_rb * tau_Ebv * tau_Ebv * x * x
+
+    # precalcs
+    exponent = gamma_Ebv - 1
+    A1 = i5 * i9 - i6 * i6
+    A2 = i6 * i3 - i2 * i9
+    A3 = i2 * i6 - i5 * i3
+    A5 = i1 * i9 - i3 * i3
+    A6 = i2 * i3 - i1 * i6
+    A9 = i1 * i5 - i2 * i2
+    det_m1 = 1. / (i1 * A1 + i2 * A2 + i3 * A3)
+
+    # # calculate prob
+    r_inv_cov_r = det_m1 * (r1 * r1 * A1 + r2 * r2 * A5 + r3 * r3 * A9 + 2 * (r1 * r2 * A2 + r1 * r3 * A3 + r2 * r3 * A6))
+    value = np.exp(-0.5 * r_inv_cov_r - x) * x**exponent * det_m1**0.5
+
+    return value
+
+@nb.cfunc(quadpack_sig)
+def Ebv_integral(x, data):
+    _data = nb.carray(data, (16,))
+    i1 = _data[0]
+    i2 = _data[1]
+    i3 = _data[2]
+    i5 = _data[4]
+    i6 = _data[5]
+    i9 = _data[8]
+    r1 = _data[9]
+    r2 = _data[10]
+    r3 = _data[11]
+    rb = _data[12]
+    sig_rb = _data[13]
+    Ebv = _data[14]
+    gamma_Ebv = _data[15]
+    return Ebv_integral_body(
+        x, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
+        rb, sig_rb, Ebv, gamma_Ebv
+    )
+Ebv_integral_ptr = Ebv_integral.address
+
+@nb.njit
+def _Ebv_prior_convolution(
+    cov_1: np.ndarray, res_1: np.ndarray,
+    cov_2: np.ndarray, res_2: np.ndarray,
+    rb_1: float, sig_rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
+    lower_bound_Ebv_1: float, upper_bound_Ebv_1: float,
+    rb_2: float, sig_rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
+    lower_bound_Ebv_2: float, upper_bound_Ebv_2: float,
+):
+
+    n_sn = len(cov_1)
+    probs = np.zeros((n_sn, 2))
+    status = np.ones((n_sn, 2), dtype='bool')
+    params_1 = np.array([rb_1, sig_rb_1, Ebv_1, gamma_Ebv_1])
+    params_2 = np.array([rb_2, sig_rb_2, Ebv_2, gamma_Ebv_2])
+
+    for i in range(n_sn):
+        tmp_params_1 = np.concatenate((
+            cov_1[i].ravel(), res_1[i].ravel(), params_1
+        )).copy()
+        tmp_params_1.astype(np.float64)
+        tmp_params_2 = np.concatenate((
+            cov_2[i].ravel(), res_2[i].ravel(), params_2
+        )).copy()
+        tmp_params_2.astype(np.float64)
+        prob_1, _, s1 = dqags(
+            Ebv_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
+        )
+        prob_2, _, s2 = dqags(
+            Ebv_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
+        )
+
+        probs[i, 0] = prob_1
+        probs[i, 1] = prob_2
+        status[i, 0] = s1
+        status[i, 1] = s2
+
+    return probs, status
+
+# ---------- MODEL CLASS ------------
+
 class Model():
 
     def __init__(
@@ -25,28 +120,32 @@ class Model():
         self.ratio_par_name = cfg['ratio_par_name']
         self.use_sigmoid = cfg['use_sigmoid']
         self.prior_bounds = cfg['prior_bounds']
-        self.Ebv_integral_bounds = cfg.get('Ebv_bounds', None)
-        self.Rb_bounds = cfg.get('Rb_bounds', None)
+        self.Ebv_integral_lower_bound = cfg.get('Ebv_integral_lower_bound', 0)
+        self.Ebv_integral_upper_bound = cfg.get('Ebv_integral_upper_bound', None)
+        self.Rb_integral_lower_bound = cfg.get('Rb_integral_lower_bound', 0)
+        self.Rb_integral_upper_bound = cfg.get('Rb_integral_upper_bound', None)
 
         if self.stretch_par_name in self.independent_par_names:
             self.stretch_independent = True
         else:
             self.stretch_independent = False
 
-        if self.Ebv_integral_bounds is None:
-            self.Ebv_quantiles = self.create_gamma_quantiles(cfg, 'Ebv')
-        
-        if self.Rb_bounds is None:
-            self.Rb_quantiles = self.create_gamma_quantiles(cfg, 'Rb')
+        self.gEbv_quantiles = self.set_gamma_quantiles(cfg, 'Ebv')
+        self.gRb_quantiles = self.set_gamma_quantiles(cfg, 'Rb')
 
         self.__dict__.update(cfg['preset_values'])
     
-    def create_gamma_quantiles(self, cfg: dict, par: str) -> np.ndarray:
-        quantiles = utils.create_gamma_quantiles(
-            cfg['prior_bounds']['gamma_' + par]['lower'],
-            cfg['prior_bounds']['gamma_' + par]['upper'],
-            cfg['resolution_g' + par], cfg['cdf_limit_g' + par]
-        )
+    def set_gamma_quantiles(self, cfg: dict, par: str) -> np.ndarray:
+
+        if self.__dict__[par + "_integral_upper_bound"] is None:
+            quantiles = utils.create_gamma_quantiles(
+                cfg['prior_bounds']['gamma_' + par]['lower'],
+                cfg['prior_bounds']['gamma_' + par]['upper'],
+                cfg['resolution_g' + par], cfg['cdf_limit_g' + par]
+            )
+        else:
+            quantiles = None
+
         return quantiles
 
     def log_prior(self, par_dict: dict) -> float:
@@ -141,8 +240,56 @@ class Model():
 
         return residuals[0], residuals[1]
     
-    def Ebv_prior_convolutions(self) -> float:
-        pass
+    def get_upper_bounds(self, par: str) -> tuple[float]:
+
+        var_dict = self.__dict__
+        
+        if var_dict["g" + par + "_quantiles"] is not None:
+            quantiles = var_dict["g" + par + "_quantiles"]
+            idx_upper_bound_1 = utils.find_nearest_idx(quantiles[0], var_dict['gamma_' + par + '_1'])
+            idx_upper_bound_2 = utils.find_nearest_idx(quantiles[0], var_dict['gamma_' + par + '_2'])
+            upper_bound_1 = quantiles[1, idx_upper_bound_1]
+            upper_bound_2 = quantiles[1, idx_upper_bound_2]
+        else:
+            upper_bound_1 = upper_bound_2 = var_dict[par + '_integral_upper_bound']
+
+        return upper_bound_1, upper_bound_2
+
+    def Ebv_prior_convolutions(
+        self, covs_1: np.ndarray, covs_2: np.ndarray,
+        residuals_1: np.ndarray, residuals_2: np.ndarray
+    ) -> float:
+        
+        upper_bound_Ebv_1, upper_bound_Ebv_2 = self.get_upper_bounds('Ebv')
+        norm_1 = sp_special.gammainc(self.gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(self.gamma_Ebv_1)
+        norm_2 = sp_special.gammainc(self.gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(self.gamma_Ebv_2)
+
+        probs, status = _Ebv_prior_convolution(
+            cov_1=covs_1, cov_2=covs_2, res_1=residuals_1, res_2=residuals_2,
+            rb_1=self.Rb_1, rb_2=self.Rb_2,
+            sig_rb_1=self.sig_Rb_1, sig_rb_2=self.sig_Rb_2,
+            Ebv_1=self.Ebv_1, Ebv_2=self.Ebv_2, 
+            gamma_1=self.gamma_Ebv_1, gamma_2=self.gamma_Ebv_2,
+            lower_bound_Ebv_1=self.Ebv_integral_lower_bound, lower_bound_Ebv_2=self.Ebv_integral_lower_bound,
+            upper_bound_Ebv_1=upper_bound_Ebv_1, upper_bound_Ebv_2=upper_bound_Ebv_2
+        )
+
+        p_1 = probs[:, 0] / norm_1
+        p_2 = probs[:, 1] / norm_2
+
+        p1_nans = np.isnan(p_1)
+        p2_nans = np.isnan(p_2)
+
+        if np.any(p1_nans):
+            print("Pop 1 contains nan probabilities:", np.count_nonzero(p1_nans)/len(p1_nans)*100, "%")
+            print("Pop 1 pars:", [self.Rb_1, self.sig_Rb_1, self.Ebv_1, self.gamma_Ebv_1])
+            print("Pop 1 norm:", norm_1, "\n")
+        if np.any(p2_nans):
+            print("Pop 2 contains nan probabilities:", np.count_nonzero(p2_nans)/len(p2_nans)*100, "%")
+            print("Pop 1 pars:", [self.Rb_2, self.sig_Rb_2, self.Ebv_2, self.gamma_Ebv_2])
+            print("Pop 2 norm:", norm_2, "\n")
+
+        return p_1, p_2, status
 
     def Rb_Ebv_prior_convolutions(self) -> float:
         pass
