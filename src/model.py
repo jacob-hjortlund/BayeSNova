@@ -67,12 +67,15 @@ Ebv_integral_ptr = Ebv_integral.address
 def _Ebv_prior_convolution(
     cov_1: np.ndarray, res_1: np.ndarray,
     cov_2: np.ndarray, res_2: np.ndarray,
-    rb_1: float, sig_rb_1: float, Ebv_1: float,
-    tau_Ebv_1: float, gamma_Ebv_1: float,
-    lower_bound_Ebv_1: float, upper_bound_Ebv_1: float,
-    rb_2: float, sig_rb_2: float, Ebv_2: float,
-    tau_Ebv_2: float, gamma_Ebv_2: float,
-    lower_bound_Ebv_2: float, upper_bound_Ebv_2: float,
+    rb_1: float, rb_2: float,
+    sig_rb_1: float, sig_rb_2: float,
+    tau_rb_1: float, tau_rb_2: float,
+    gamma_rb_1: float, gamma_rb_2: float,
+    Ebv_1: float, Ebv_2: float,
+    tau_Ebv_1: float, tau_Ebv_2: float,
+    gamma_Ebv_1: float, gamma_Ebv_2: float,
+    lower_bound_Ebv_1: float, lower_bound_Ebv_2: float,
+    upper_bound_Ebv_1: float, upper_bound_Ebv_2: float
 ):
 
     n_sn = len(cov_1)
@@ -136,6 +139,9 @@ class Model():
 
         self.gEbv_quantiles = self.set_gamma_quantiles(cfg, 'Ebv')
         self.gRb_quantiles = self.set_gamma_quantiles(cfg, 'Rb')
+
+        self.Ebv_prior_conv_fn = _Ebv_prior_convolution
+        self.Rb_Ebv_prior_conv_fn = _Rb_Ebv_prior_convolution
 
         self.__dict__.update(cfg['preset_values'])
     
@@ -259,7 +265,7 @@ class Model():
 
         return upper_bound_1, upper_bound_2
 
-    def Ebv_prior_convolutions(
+    def prior_convolutions(
         self, covs_1: np.ndarray, covs_2: np.ndarray,
         residuals_1: np.ndarray, residuals_2: np.ndarray
     ) -> float:
@@ -268,13 +274,15 @@ class Model():
         norm_1 = sp_special.gammainc(self.gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(self.gamma_Ebv_1)
         norm_2 = sp_special.gammainc(self.gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(self.gamma_Ebv_2)
 
-        probs, status = _Ebv_prior_convolution(
+        probs, status = self.convolution_fn(
             cov_1=covs_1, cov_2=covs_2, res_1=residuals_1, res_2=residuals_2,
             rb_1=self.Rb_1, rb_2=self.Rb_2,
             sig_rb_1=self.sig_Rb_1, sig_rb_2=self.sig_Rb_2,
+            tau_rb_1=self.tau_Rb_1, tau_rb_2=self.tau_Rb_2,
+            gamma_rb_1=self.gamma_Rb_1, gamma_rb_2=self.gamma_Rb_2,
             Ebv_1=self.Ebv_1, Ebv_2=self.Ebv_2,
             tau_Ebv_1=self.tau_Ebv_1, tau_Ebv_2=self.tau_Ebv_2,
-            gamma_1=self.gamma_Ebv_1, gamma_2=self.gamma_Ebv_2,
+            gamma_Ebv_1=self.gamma_Ebv_1, gamma_Ebv_2=self.gamma_Ebv_2,
             lower_bound_Ebv_1=self.Ebv_integral_lower_bound, lower_bound_Ebv_2=self.Ebv_integral_lower_bound,
             upper_bound_Ebv_1=upper_bound_Ebv_1, upper_bound_Ebv_2=upper_bound_Ebv_2
         )
@@ -296,13 +304,28 @@ class Model():
 
         return p_1, p_2, status
 
-    def Rb_Ebv_prior_convolutions(self) -> float:
-        pass
-
     def log_likelihood(self) -> float:
         
-        cov1, cov2 = self.population_covariances()
-        residuals1, residuals2 = self.population_residuals()
+        cov_1, cov_2 = self.population_covariances()
+        residuals_1, residuals_2 = self.population_residuals()
+
+        use_gaussian_Rb = (
+            not self.gamma_Rb_1 and
+            not self.gamma_Rb_2 and
+            self.sig_Rb_1 and
+            self.sig_Rb_2
+        )
+
+        if use_gaussian_Rb:
+            self.convolution_fn = self.Ebv_prior_conv_fn
+        else:
+            self.convolution_fn = self.Rb_Ebv_prior_conv_fn
+        
+        probs_1, probs_2, status = self.prior_convolutions(
+            covs_1=cov_1, covs_2=cov_2,
+            residuals_1=residuals_1, residuals_2=residuals_2
+        )
+
 
     def __call__(self, theta: np.ndarray) -> float:
 
