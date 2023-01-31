@@ -18,7 +18,7 @@ def Ebv_integral_body(
     rb, sig_rb, Ebv, tau_Ebv, gamma_Ebv
 ):  
 
-    if tau_Ebv == -np.inf:
+    if tau_Ebv == NULL_VALUE:
         tau_Ebv = Ebv / gamma_Ebv
 
     # update res and cov
@@ -122,9 +122,9 @@ def dbl_integral_body(
     Ebv, tau_Ebv, gamma_Ebv
 ):
 
-    if not tau_Ebv:
+    if tau_Ebv == NULL_VALUE:
         tau_Ebv = Ebv / gamma_Ebv
-    if not tau_Rb:
+    if tau_Rb == NULL_VALUE:
         tau_Rb = Rb / gamma_Rb
 
     if x < 0.:
@@ -362,16 +362,16 @@ class Model():
             ), (2, 1)
         )
 
-        cov[:,:,1,1] = np.array([
+        cov[:,:,1,1] += np.array([
             [self.sig_s_1**2], [self.sig_s_2**2]
         ])
-        cov[:,:,2,2] = np.array([
+        cov[:,:,2,2] += np.array([
             [self.sig_c_1**2], [self.sig_c_2**2]
         ])
-        cov[:,:,0,1] = np.array([
+        cov[:,:,0,1] += np.array([
             [self.alpha_1 * self.sig_s_1**2], [self.alpha_2 * self.sig_s_2**2]
         ])
-        cov[:,:,0,2] = np.array([
+        cov[:,:,0,2] += np.array([
             [self.beta_1 * self.sig_c_1**2], [self.beta_2 * self.sig_c_2**2]
         ])
         cov[:,:,1,0] = cov[:,:,0,1]
@@ -405,8 +405,8 @@ class Model():
         
         if (
             var_dict["g" + par + "_quantiles"] is not None and
-            var_dict['gamma_' + par + '_1'] is not None and
-            var_dict['gamma_' + par + '_2'] is not None
+            var_dict['gamma_' + par + '_1'] != NULL_VALUE and
+            var_dict['gamma_' + par + '_2'] != NULL_VALUE
         ):
             quantiles = var_dict["g" + par + "_quantiles"]
             idx_upper_bound_1 = utils.find_nearest_idx(quantiles[0], var_dict['gamma_' + par + '_1'])
@@ -429,9 +429,9 @@ class Model():
         norm_1 = sp_special.gammainc(self.gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(self.gamma_Ebv_1)
         norm_2 = sp_special.gammainc(self.gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(self.gamma_Ebv_2)
 
-        if self.gamma_Rb_1:
+        if self.gamma_Rb_1 != NULL_VALUE:
             norm_1 *= sp_special.gammainc(self.gamma_Rb_1, upper_bound_Rb_1) * sp_special.gamma(self.gamma_Rb_1)
-        if self.gamma_Rb_2:
+        if self.gamma_Rb_2 != NULL_VALUE:
             norm_2 *= sp_special.gammainc(self.gamma_Rb_2, upper_bound_Rb_2) * sp_special.gamma(self.gamma_Rb_2)
 
         probs, status = self.convolution_fn(
@@ -473,10 +473,10 @@ class Model():
         residuals_1, residuals_2 = self.population_residuals()
 
         use_gaussian_Rb = (
-            not self.gamma_Rb_1 and
-            not self.gamma_Rb_2 and
-            self.sig_Rb_1 and
-            self.sig_Rb_2
+            self.gamma_Rb_1 == NULL_VALUE and
+            self.gamma_Rb_2 == NULL_VALUE and
+            self.sig_Rb_1 != NULL_VALUE and
+            self.sig_Rb_2 != NULL_VALUE
         )
 
         if use_gaussian_Rb:
