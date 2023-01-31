@@ -13,10 +13,11 @@ from astropy.cosmology import Planck18 as cosmo
 def Ebv_integral_body(
     x, i1, i2, i3, i5,
     i6, i9, r1, r2, r3,
-    rb, sig_rb, Ebv, gamma_Ebv
+    rb, sig_rb, Ebv, tau_Ebv, gamma_Ebv
 ):  
 
-    tau_Ebv = Ebv / gamma_Ebv
+    if not tau_Ebv:
+        tau_Ebv = Ebv / gamma_Ebv
 
     # update res and cov
     r1 -= rb * tau_Ebv * x
@@ -41,7 +42,7 @@ def Ebv_integral_body(
 
 @nb.cfunc(quadpack_sig)
 def Ebv_integral(x, data):
-    _data = nb.carray(data, (16,))
+    _data = nb.carray(data, (17,))
     i1 = _data[0]
     i2 = _data[1]
     i3 = _data[2]
@@ -54,10 +55,11 @@ def Ebv_integral(x, data):
     rb = _data[12]
     sig_rb = _data[13]
     Ebv = _data[14]
-    gamma_Ebv = _data[15]
+    tau_Ebv = _data[15]
+    gamma_Ebv = _data[16]
     return Ebv_integral_body(
         x, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
-        rb, sig_rb, Ebv, gamma_Ebv
+        rb, sig_rb, Ebv, tau_Ebv, gamma_Ebv
     )
 Ebv_integral_ptr = Ebv_integral.address
 
@@ -65,17 +67,19 @@ Ebv_integral_ptr = Ebv_integral.address
 def _Ebv_prior_convolution(
     cov_1: np.ndarray, res_1: np.ndarray,
     cov_2: np.ndarray, res_2: np.ndarray,
-    rb_1: float, sig_rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
+    rb_1: float, sig_rb_1: float, Ebv_1: float,
+    tau_Ebv_1: float, gamma_Ebv_1: float,
     lower_bound_Ebv_1: float, upper_bound_Ebv_1: float,
-    rb_2: float, sig_rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
+    rb_2: float, sig_rb_2: float, Ebv_2: float,
+    tau_Ebv_2: float, gamma_Ebv_2: float,
     lower_bound_Ebv_2: float, upper_bound_Ebv_2: float,
 ):
 
     n_sn = len(cov_1)
     probs = np.zeros((n_sn, 2))
     status = np.ones((n_sn, 2), dtype='bool')
-    params_1 = np.array([rb_1, sig_rb_1, Ebv_1, gamma_Ebv_1])
-    params_2 = np.array([rb_2, sig_rb_2, Ebv_2, gamma_Ebv_2])
+    params_1 = np.array([rb_1, sig_rb_1, Ebv_1, tau_Ebv_1, gamma_Ebv_1])
+    params_2 = np.array([rb_2, sig_rb_2, Ebv_2, tau_Ebv_2, gamma_Ebv_2])
 
     for i in range(n_sn):
         tmp_params_1 = np.concatenate((
@@ -268,7 +272,8 @@ class Model():
             cov_1=covs_1, cov_2=covs_2, res_1=residuals_1, res_2=residuals_2,
             rb_1=self.Rb_1, rb_2=self.Rb_2,
             sig_rb_1=self.sig_Rb_1, sig_rb_2=self.sig_Rb_2,
-            Ebv_1=self.Ebv_1, Ebv_2=self.Ebv_2, 
+            Ebv_1=self.Ebv_1, Ebv_2=self.Ebv_2,
+            tau_Ebv_1=self.tau_Ebv_1, tau_Ebv_2=self.tau_Ebv_2,
             gamma_1=self.gamma_Ebv_1, gamma_2=self.gamma_Ebv_2,
             lower_bound_Ebv_1=self.Ebv_integral_lower_bound, lower_bound_Ebv_2=self.Ebv_integral_lower_bound,
             upper_bound_Ebv_1=upper_bound_Ebv_1, upper_bound_Ebv_2=upper_bound_Ebv_2
