@@ -89,6 +89,7 @@ def create_task_name(
             setting_str + '-' + new_value
         )
     run_name = '_'.join(changes)
+    run_name= run_name.replace("'", "")
 
     return run_name
 

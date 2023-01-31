@@ -51,6 +51,8 @@ model_cfg:
     sig_Rb:
       lower: 0.
       upper: 1.5
+    tau_Rb:
+      lower: 0.
     gamma_Rb:
       lower: 1.
       upper: 7.
@@ -59,19 +61,23 @@ model_cfg:
     Ebv:
       lower: 0.
       upper: 10.
+    tau_Ebv:
+      lower: 0.
     gamma_Ebv:
       lower: 1.
       upper: 7.
     w:
-      lower: 0.12
-      upper: 0.88
+      lower: 0.1
+      upper: 0.9
   init_values:
     Mb: -19.3
     sig_c: 0.05
     sig_s: 1.
     Ebv: 0.12
+    tau_Ebv: 0.02
     gamma_Ebv: 2.9
     Rb: 3.7
+    tau_Rb: 0.02
     gamma_Rb: 2.9
     shift_Rb: 1.5
   use_sigmoid: False
