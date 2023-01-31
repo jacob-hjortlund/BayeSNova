@@ -107,6 +107,138 @@ def _Ebv_prior_convolution(
 
     return probs, status
 
+# ---------- RB/E(B-V) PRIOR DOUBLE INTEGRAL ------------
+
+@nb.jit
+def dbl_integral_body(
+    x, y, i1, i2, i3, i5,
+    i6, i9, r1, r2, r3,
+    Rb, tau_Rb, gamma_Rb, shift_Rb,
+    Ebv, tau_Ebv, gamma_Ebv
+):
+
+    if not tau_Ebv:
+        tau_Ebv = Ebv / gamma_Ebv
+    if not tau_Rb:
+        tau_Rb = Rb / gamma_Rb
+
+    if x < 0.:
+        return 0.
+
+    # update res and cov
+    r1 -= (x * tau_Rb + shift_Rb) * y * tau_Ebv
+    r3 -= y * tau_Ebv
+
+    # precalcs
+    A1 = i5 * i9 - i6 * i6
+    A2 = i6 * i3 - i2 * i9
+    A3 = i2 * i6 - i5 * i3
+    A5 = i1 * i9 - i3 * i3
+    A6 = i2 * i3 - i1 * i6
+    A9 = i1 * i5 - i2 * i2
+    det_m1 = 1. / (i1 * A1 + i2 * A2 + i3 * A3)
+
+    # # calculate prob
+    r_inv_cov_r = det_m1 * (r1 * r1 * A1 + r2 * r2 * A5 + r3 * r3 * A9 + 2 * (r1 * r2 * A2 + r1 * r3 * A3 + r2 * r3 * A6))
+    exponent_Ebv = gamma_Ebv - 1.
+    exponent_Rb = gamma_Rb - 1.
+    value = (
+        np.exp(-0.5 * r_inv_cov_r - x - y) * x**exponent_Rb * y**exponent_Ebv * det_m1**0.5 
+    )
+
+    return value
+
+@nb.cfunc(quadpack_sig)
+def Rb_integral(x, data):
+
+    _data = nb.carray(data, (20,))
+    i1 = _data[0]
+    i2 = _data[1]
+    i3 = _data[2]
+    i5 = _data[4]
+    i6 = _data[5]
+    i9 = _data[8]
+    r1 = _data[9]
+    r2 = _data[10]
+    r3 = _data[11]
+    Rb = _data[12]
+    gamma_Rb = _data[13]
+    Ebv = _data[14]
+    gamma_Ebv = _data[15]
+    shift_Rb = _data[-4]
+    y = _data[-1]
+
+    return dbl_integral_body(
+        x, y, i1, i2, i3, i5, 
+        i6, i9, r1, r2, r3, 
+        Rb, gamma_Rb, shift_Rb,
+        Ebv, gamma_Ebv
+    )
+Rb_integral_ptr = Rb_integral.address
+
+@nb.cfunc(quadpack_sig)
+def Ebv_Rb_integral(y, data):
+    _data = nb.carray(data, (19,))
+    _new_data = np.concatenate(
+        (_data, np.array([y]))
+    )
+
+    inner_value, _, _ = dqags(
+        Rb_integral_ptr, _data[-2], _data[-1], _new_data
+    )
+
+    return inner_value
+Ebv_Rb_integral_ptr = Ebv_Rb_integral.address
+
+@nb.njit
+def _Ebv_Rb_prior_convolution(
+    cov_1: np.ndarray, res_1: np.ndarray,
+    cov_2: np.ndarray, res_2: np.ndarray,
+    Rb_1: float, gamma_Rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
+    lower_bound_Ebv_1: float, upper_bound_Ebv_1: float,
+    lower_bound_Rb_1: float, upper_bound_Rb_1: float,
+    Rb_2: float, gamma_Rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
+    lower_bound_Ebv_2: float, upper_bound_Ebv_2: float,
+    lower_bound_Rb_2: float, upper_bound_Rb_2: float, shift_Rb: float,
+):
+
+    n_sn = len(cov_1)
+    probs = np.zeros((n_sn, 2))
+    status = np.ones((n_sn, 2), dtype='bool')
+    params_1 = np.array([
+        Rb_1, gamma_Rb_1,
+        Ebv_1, gamma_Ebv_1,
+        shift_Rb, lower_bound_Rb_1, upper_bound_Rb_1
+    ])
+    params_2 = np.array([
+        Rb_2, gamma_Rb_2,
+        Ebv_2, gamma_Ebv_2,
+        shift_Rb, lower_bound_Rb_2, upper_bound_Rb_2
+    ])
+
+    for i in range(n_sn):
+        tmp_params_1 = np.concatenate((
+            cov_1[i].ravel(), res_1[i].ravel(), params_1
+        )).copy()
+        tmp_params_1.astype(np.float64)
+        tmp_params_2 = np.concatenate((
+            cov_2[i].ravel(), res_2[i].ravel(), params_2
+        )).copy()
+        tmp_params_2.astype(np.float64)
+        prob_1, _, s1 = dqags(
+            Ebv_Rb_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
+        )
+        prob_2, _, s2 = dqags(
+            Ebv_Rb_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
+        )
+
+        probs[i, 0] = prob_1
+        probs[i, 1] = prob_2
+        status[i, 0] = s1
+        status[i, 1] = s2
+
+    return probs, status
+
 # ---------- MODEL CLASS ------------
 
 class Model():
@@ -141,7 +273,7 @@ class Model():
         self.gRb_quantiles = self.set_gamma_quantiles(cfg, 'Rb')
 
         self.Ebv_prior_conv_fn = _Ebv_prior_convolution
-        self.Rb_Ebv_prior_conv_fn = _Rb_Ebv_prior_convolution
+        self.Rb_Ebv_prior_conv_fn = _Ebv_Rb_prior_convolution
 
         self.__dict__.update(cfg['preset_values'])
     
