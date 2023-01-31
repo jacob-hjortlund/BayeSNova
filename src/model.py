@@ -67,22 +67,25 @@ Ebv_integral_ptr = Ebv_integral.address
 def _Ebv_prior_convolution(
     cov_1: np.ndarray, res_1: np.ndarray,
     cov_2: np.ndarray, res_2: np.ndarray,
-    rb_1: float, rb_2: float,
-    sig_rb_1: float, sig_rb_2: float,
-    tau_rb_1: float, tau_rb_2: float,
-    gamma_rb_1: float, gamma_rb_2: float,
+    Rb_1: float, Rb_2: float,
+    sig_Rb_1: float, sig_Rb_2: float,
+    tau_Rb_1: float, tau_Rb_2: float,
+    gamma_Rb_1: float, gamma_Rb_2: float,
     Ebv_1: float, Ebv_2: float,
     tau_Ebv_1: float, tau_Ebv_2: float,
     gamma_Ebv_1: float, gamma_Ebv_2: float,
+    lower_bound_Rb_1: float, lower_bound_Rb_2: float,
+    upper_bound_Rb_1: float, upper_bound_Rb_2: float,
     lower_bound_Ebv_1: float, lower_bound_Ebv_2: float,
-    upper_bound_Ebv_1: float, upper_bound_Ebv_2: float
+    upper_bound_Ebv_1: float, upper_bound_Ebv_2: float,
+    shift_Rb: float
 ):
 
     n_sn = len(cov_1)
     probs = np.zeros((n_sn, 2))
     status = np.ones((n_sn, 2), dtype='bool')
-    params_1 = np.array([rb_1, sig_rb_1, Ebv_1, tau_Ebv_1, gamma_Ebv_1])
-    params_2 = np.array([rb_2, sig_rb_2, Ebv_2, tau_Ebv_2, gamma_Ebv_2])
+    params_1 = np.array([Rb_1, sig_Rb_1, Ebv_1, tau_Ebv_1, gamma_Ebv_1])
+    params_2 = np.array([Rb_2, sig_Rb_2, Ebv_2, tau_Ebv_2, gamma_Ebv_2])
 
     for i in range(n_sn):
         tmp_params_1 = np.concatenate((
@@ -151,7 +154,7 @@ def dbl_integral_body(
 @nb.cfunc(quadpack_sig)
 def Rb_integral(x, data):
 
-    _data = nb.carray(data, (20,))
+    _data = nb.carray(data, (22,))
     i1 = _data[0]
     i2 = _data[1]
     i3 = _data[2]
@@ -162,23 +165,25 @@ def Rb_integral(x, data):
     r2 = _data[10]
     r3 = _data[11]
     Rb = _data[12]
-    gamma_Rb = _data[13]
-    Ebv = _data[14]
-    gamma_Ebv = _data[15]
+    tau_Rb = _data[13]
+    gamma_Rb = _data[14]
+    Ebv = _data[15]
+    tau_Ebv = _data[16]
+    gamma_Ebv = _data[17]
     shift_Rb = _data[-4]
     y = _data[-1]
 
     return dbl_integral_body(
         x, y, i1, i2, i3, i5, 
         i6, i9, r1, r2, r3, 
-        Rb, gamma_Rb, shift_Rb,
-        Ebv, gamma_Ebv
+        Rb, tau_Rb, gamma_Rb, shift_Rb,
+        Ebv, tau_Ebv, gamma_Ebv
     )
 Rb_integral_ptr = Rb_integral.address
 
 @nb.cfunc(quadpack_sig)
 def Ebv_Rb_integral(y, data):
-    _data = nb.carray(data, (19,))
+    _data = nb.carray(data, (21,))
     _new_data = np.concatenate(
         (_data, np.array([y]))
     )
@@ -194,25 +199,31 @@ Ebv_Rb_integral_ptr = Ebv_Rb_integral.address
 def _Ebv_Rb_prior_convolution(
     cov_1: np.ndarray, res_1: np.ndarray,
     cov_2: np.ndarray, res_2: np.ndarray,
-    Rb_1: float, gamma_Rb_1: float, Ebv_1: float, gamma_Ebv_1: float,
-    lower_bound_Ebv_1: float, upper_bound_Ebv_1: float,
-    lower_bound_Rb_1: float, upper_bound_Rb_1: float,
-    Rb_2: float, gamma_Rb_2: float, Ebv_2: float, gamma_Ebv_2: float,
-    lower_bound_Ebv_2: float, upper_bound_Ebv_2: float,
-    lower_bound_Rb_2: float, upper_bound_Rb_2: float, shift_Rb: float,
+    Rb_1: float, Rb_2: float,
+    sig_Rb_1: float, sig_Rb_2: float,
+    tau_Rb_1: float, tau_Rb_2: float,
+    gamma_Rb_1: float, gamma_Rb_2: float,
+    Ebv_1: float, Ebv_2: float,
+    tau_Ebv_1: float, tau_Ebv_2: float,
+    gamma_Ebv_1: float, gamma_Ebv_2: float,
+    lower_bound_Rb_1: float, lower_bound_Rb_2: float,
+    upper_bound_Rb_1: float, upper_bound_Rb_2: float,
+    lower_bound_Ebv_1: float, lower_bound_Ebv_2: float,
+    upper_bound_Ebv_1: float, upper_bound_Ebv_2: float,
+    shift_Rb: float
 ):
 
     n_sn = len(cov_1)
     probs = np.zeros((n_sn, 2))
     status = np.ones((n_sn, 2), dtype='bool')
     params_1 = np.array([
-        Rb_1, gamma_Rb_1,
-        Ebv_1, gamma_Ebv_1,
+        Rb_1, tau_Rb_1, gamma_Rb_1,
+        Ebv_1, tau_Ebv_1, gamma_Ebv_1,
         shift_Rb, lower_bound_Rb_1, upper_bound_Rb_1
     ])
     params_2 = np.array([
-        Rb_2, gamma_Rb_2,
-        Ebv_2, gamma_Ebv_2,
+        Rb_2, tau_Rb_2, gamma_Rb_2,
+        Ebv_2, tau_Ebv_2, gamma_Ebv_2,
         shift_Rb, lower_bound_Rb_2, upper_bound_Rb_2
     ])
 
@@ -402,21 +413,31 @@ class Model():
         residuals_1: np.ndarray, residuals_2: np.ndarray
     ) -> float:
         
+        upper_bound_Rb_1, upper_bound_Rb_2 = self.get_upper_bounds('Rb')
         upper_bound_Ebv_1, upper_bound_Ebv_2 = self.get_upper_bounds('Ebv')
+
         norm_1 = sp_special.gammainc(self.gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(self.gamma_Ebv_1)
         norm_2 = sp_special.gammainc(self.gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(self.gamma_Ebv_2)
 
+        if self.gamma_Rb_1:
+            norm_1 *= sp_special.gammainc(self.gamma_Rb_1, upper_bound_Rb_1) * sp_special.gamma(self.gamma_Rb_1)
+        if self.gamma_Rb_2:
+            norm_2 *= sp_special.gammainc(self.gamma_Rb_2, upper_bound_Rb_2) * sp_special.gamma(self.gamma_Rb_2)
+
         probs, status = self.convolution_fn(
             cov_1=covs_1, cov_2=covs_2, res_1=residuals_1, res_2=residuals_2,
-            rb_1=self.Rb_1, rb_2=self.Rb_2,
-            sig_rb_1=self.sig_Rb_1, sig_rb_2=self.sig_Rb_2,
-            tau_rb_1=self.tau_Rb_1, tau_rb_2=self.tau_Rb_2,
-            gamma_rb_1=self.gamma_Rb_1, gamma_rb_2=self.gamma_Rb_2,
+            Rb_1=self.Rb_1, Rb_2=self.Rb_2,
+            sig_Rb_1=self.sig_Rb_1, sig_Rb_2=self.sig_Rb_2,
+            tau_Rb_1=self.tau_Rb_1, tau_Rb_2=self.tau_Rb_2,
+            gamma_Rb_1=self.gamma_Rb_1, gamma_Rb_2=self.gamma_Rb_2,
             Ebv_1=self.Ebv_1, Ebv_2=self.Ebv_2,
             tau_Ebv_1=self.tau_Ebv_1, tau_Ebv_2=self.tau_Ebv_2,
             gamma_Ebv_1=self.gamma_Ebv_1, gamma_Ebv_2=self.gamma_Ebv_2,
+            lower_bound_Rb_1=self.Rb_integral_lower_bound, lower_bound_Rb_2=self.Rb_integral_lower_bound,
+            upper_bound_Rb_1=upper_bound_Rb_1, upper_bound_Rb_2=upper_bound_Rb_2,
             lower_bound_Ebv_1=self.Ebv_integral_lower_bound, lower_bound_Ebv_2=self.Ebv_integral_lower_bound,
-            upper_bound_Ebv_1=upper_bound_Ebv_1, upper_bound_Ebv_2=upper_bound_Ebv_2
+            upper_bound_Ebv_1=upper_bound_Ebv_1, upper_bound_Ebv_2=upper_bound_Ebv_2,
+            shift_Rb=self.shift_Rb
         )
 
         p_1 = probs[:, 0] / norm_1
