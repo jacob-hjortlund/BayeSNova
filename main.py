@@ -29,7 +29,11 @@ def main(cfg: omegaconf.DictConfig) -> None:
     task_name = utils.create_task_name(cfg)
     tags = ["-".join(cfg['model_cfg']['independent_par_names'])] + cfg['clearml_cfg']['tags']
 
-    if cfg['emcee_cfg']['pool_type'] == 'MPI' and MPI.COMM_WORLD.rank == 0:
+    using_MPI_and_is_master = cfg['emcee_cfg']['pool_type'] == 'MPI' and MPI.COMM_WORLD.rank == 0
+    using_multiprocessing = cfg['emcee_cfg']['pool_type'] == 'MP'
+    no_pool = cfg['emcee_cfg']['pool_type'] == ''
+
+    if using_MPI_and_is_master or using_multiprocessing or no_pool:
         cl.Task.set_offline(offline_mode=cfg['clearml_cfg']['offline_mode'])
         task = cl.Task.init(
             project_name=cfg['clearml_cfg']['project_name'],
