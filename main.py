@@ -17,6 +17,8 @@ import src.probabilities as prob
 from time import time
 from mpi4py import MPI
 
+PATH_PREFIX = '/lustre/hpc'
+
 @hydra.main(
     version_base=None, config_path="configs", config_name="config"
 )
@@ -25,11 +27,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
     # Setup clearml
     task_name = utils.create_task_name(cfg)
     tags = ["-".join(cfg['model_cfg']['independent_par_names'])] + cfg['clearml_cfg']['tags']
-    
-    if cfg['emcee_cfg']['pool_type'] == 'MPI':
-        is_master = MPI.COMM_WORLD.rank == 0
-    
-    if is_master:
+
+    if cfg['emcee_cfg']['pool_type'] == 'MPI' and MPI.COMM_WORLD.rank == 0:
         cl.Task.set_offline(offline_mode=cfg['clearml_cfg']['offline_mode'])
         task = cl.Task.init(
             project_name=cfg['clearml_cfg']['project_name'],
