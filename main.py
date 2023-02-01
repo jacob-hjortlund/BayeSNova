@@ -2,6 +2,7 @@ import hydra
 import omegaconf
 import os
 import corner
+import tqdm
 
 import emcee as em
 import numpy as np
@@ -53,23 +54,26 @@ def main(cfg: omegaconf.DictConfig) -> None:
     )
 
     # Preprocess
-    sn_covs = prep.build_covariance_matrix(data.to_numpy())
+    # global sn_covariances
+    # global sn_observables
+    # sn_covariances = prep.build_covariance_matrix(data.to_numpy())
     # sn_observables = data[['mB', 'x1', 'c', 'z']].to_numpy()
-
-    # # Gen log_prob function
-    # log_prob = model.Model(
-    #     cfg=cfg['model_cfg'], covariances=sn_covs, observables=sn_observables
-    # )
-    sn_mb = data['mB'].to_numpy()
-    sn_s = data['x1'].to_numpy()
-    sn_c = data['c'].to_numpy()
-    sn_z = data['z'].to_numpy()
+    prep.init_global_data(data, cfg['model_cfg'])
 
     # Gen log_prob function
-    log_prob = prob.generate_log_prob(
-        cfg['model_cfg'], sn_covs=sn_covs,
-        sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c, sn_z=sn_z
+    log_prob = model.Model(
+        #cfg=cfg['model_cfg']#, covariances=sn_covs, observables=sn_observables
     )
+    # sn_mb = data['mB'].to_numpy()
+    # sn_s = data['x1'].to_numpy()
+    # sn_c = data['c'].to_numpy()
+    # sn_z = data['z'].to_numpy()
+
+    # # Gen log_prob function
+    # log_prob = prob.generate_log_prob(
+    #     cfg['model_cfg'], sn_covs=sn_covs,
+    #     sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c, sn_z=sn_z
+    # )
 
     t0 = time()
     with utils.PoolWrapper(cfg['emcee_cfg']['pool_type']) as wrapped_pool:
@@ -194,7 +198,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     symmetrized_stds = 0.5 * (quantiles[1] - quantiles[0])
     post_marg_values = np.zeros((5, len(par_names)))
     
-    for i in range(len(par_names)):
+    for i in tqdm.tqdm(range(len(par_names))):
         samples = sample_thetas[:, i]
         par_range = np.arange(
             np.min(samples), np.max(samples), np.abs(np.min(samples))/10
