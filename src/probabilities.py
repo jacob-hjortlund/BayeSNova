@@ -229,10 +229,10 @@ def _fast_dbl_prior_convolution(
         )).copy()
         tmp_params_2.astype(np.float64)
         prob_1, _, s1 = dqags(
-            integrate_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
+            Ebv_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
         )
         prob_2, _, s2 = dqags(
-            integrate_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
+            Ebv_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
         )
 
         probs[i, 0] = prob_1

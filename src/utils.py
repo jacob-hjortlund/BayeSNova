@@ -83,6 +83,8 @@ def create_task_name(
 
     changes = []
     for setting in diff_dict['values_changed'].keys():
+        if "git_repository_path" in setting or "git_branch_name" in setting:
+            continue
         setting_str = '['+"[".join(setting.split('[')[2:])
         new_value = str(diff_dict['values_changed'][setting]['new_value'])
         changes.append(
