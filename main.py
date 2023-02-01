@@ -16,6 +16,7 @@ import src.preprocessing as prep
 import src.probabilities as prob
 
 from time import time
+from mpi4py import MPI
 
 @hydra.main(
     version_base=None, config_path="configs", config_name="config"
@@ -23,14 +24,19 @@ from time import time
 def main(cfg: omegaconf.DictConfig) -> None:   
 
     # Setup clearml
-    cl.Task.set_offline(offline_mode=cfg['clearml_cfg']['offline_mode'])
     task_name = utils.create_task_name(cfg)
     tags = ["-".join(cfg['model_cfg']['independent_par_names'])] + cfg['clearml_cfg']['tags']
-    task = cl.Task.init(
-        project_name=cfg['clearml_cfg']['project_name'],
-        task_name=task_name, tags=tags, task_type=cfg['clearml_cfg']['task_type']
-    )
-    clearml_logger = task.get_logger()
+    
+    if cfg['emcee_cfg']['pool_type'] == 'MPI':
+        is_master = MPI.COMM_WORLD.rank == 0
+    
+    if is_master:
+        cl.Task.set_offline(offline_mode=cfg['clearml_cfg']['offline_mode'])
+        task = cl.Task.init(
+            project_name=cfg['clearml_cfg']['project_name'],
+            task_name=task_name, tags=tags, task_type=cfg['clearml_cfg']['task_type']
+        )
+        clearml_logger = task.get_logger()
 
     # Setup results dir
     path = os.path.join(
@@ -45,22 +51,22 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     # Preprocess
     sn_covs = prep.build_covariance_matrix(data.to_numpy())
-    sn_observables = data[['mB', 'x1', 'c', 'z']].to_numpy()
-
-    # Gen log_prob function
-    log_prob = model.Model(
-        cfg=cfg['model_cfg'], covariances=sn_covs, observables=sn_observables
-    )
-    # sn_mb = data['mB'].to_numpy()
-    # sn_s = data['x1'].to_numpy()
-    # sn_c = data['c'].to_numpy()
-    # sn_z = data['z'].to_numpy()
+    # sn_observables = data[['mB', 'x1', 'c', 'z']].to_numpy()
 
     # # Gen log_prob function
-    # log_prob = prob.generate_log_prob(
-    #     cfg['model_cfg'], sn_covs=sn_covs,
-    #     sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c, sn_z=sn_z
+    # log_prob = model.Model(
+    #     cfg=cfg['model_cfg'], covariances=sn_covs, observables=sn_observables
     # )
+    sn_mb = data['mB'].to_numpy()
+    sn_s = data['x1'].to_numpy()
+    sn_c = data['c'].to_numpy()
+    sn_z = data['z'].to_numpy()
+
+    # Gen log_prob function
+    log_prob = prob.generate_log_prob(
+        cfg['model_cfg'], sn_covs=sn_covs,
+        sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c, sn_z=sn_z
+    )
 
     t0 = time()
     with utils.PoolWrapper(cfg['emcee_cfg']['pool_type']) as wrapped_pool:
@@ -107,174 +113,175 @@ def main(cfg: omegaconf.DictConfig) -> None:
             init_theta, cfg['emcee_cfg']['n_steps'], progress=use_progress_bar
         )
     
-    t1 = time()
-    total_time = t1-t0
-    avg_eval_time = (total_time) / (cfg['emcee_cfg']['n_walkers'] * cfg['emcee_cfg']['n_steps'])
-    print(f"\nTotal MCMC time:", total_time)
-    print(f"Avg. time pr. step: {avg_eval_time} s\n")
+    if is_master:
+        t1 = time()
+        total_time = t1-t0
+        avg_eval_time = (total_time) / (cfg['emcee_cfg']['n_walkers'] * cfg['emcee_cfg']['n_steps'])
+        print(f"\nTotal MCMC time:", total_time)
+        print(f"Avg. time pr. step: {avg_eval_time} s\n")
 
-    # If using sigmoid, transform samples
-    if cfg['model_cfg']['use_sigmoid']:
-        backend = utils.transformed_backend(
-            backend, filename, name=cfg['emcee_cfg']['run_name']+"_transformed",
-            sigmoid_cfg=cfg['model_cfg']['sigmoid_cfg'], shared_par_names=cfg['model_cfg']['shared_par_names']
+        # If using sigmoid, transform samples
+        if cfg['model_cfg']['use_sigmoid']:
+            backend = utils.transformed_backend(
+                backend, filename, name=cfg['emcee_cfg']['run_name']+"_transformed",
+                sigmoid_cfg=cfg['model_cfg']['sigmoid_cfg'], shared_par_names=cfg['model_cfg']['shared_par_names']
+            )
+        accept_frac = np.mean(sampler.acceptance_fraction)
+        print("\nMean accepance fraction:", accept_frac, "\n")
+
+        try:
+            taus = backend.get_autocorr_time(
+                tol=cfg['emcee_cfg']['tau_tol']
+            )
+            tau = np.max(taus)
+            print("\nAtuocorr lengths:\n", taus)
+            print("Max autocorr length:", tau, "\n")
+        except Exception as e:
+            print("\nGot exception:\n")
+            print(e, "\n")
+            tau = cfg['emcee_cfg']['default_tau']
+            print("\nUsing default tau:", tau, "\n")
+
+        burnin = np.max(
+            [int(5 * tau), int(cfg['emcee_cfg']['default_burnin'])]
         )
-    accept_frac = np.mean(sampler.acceptance_fraction)
-    print("\nMean accepance fraction:", accept_frac, "\n")
 
-    try:
-        taus = backend.get_autocorr_time(
-            tol=cfg['emcee_cfg']['tau_tol']
+        print(f"\nThinning by {burnin} steps\n")
+
+        print("\n----------------- MAX LOG(P) ---------------------\n")
+        # TODO: Redo without interpolation
+        sample_thetas = backend.get_chain(discard=burnin, thin=int(0.5*tau), flat=True)
+        sample_log_probs = backend.get_log_prob(discard=burnin, thin=int(0.5*tau), flat=True)
+        idx_max = np.argmax(sample_log_probs)
+        max_sample_log_prob = sample_log_probs[idx_max]
+        max_thetas = sample_thetas[idx_max]
+        nlp = lambda *args: -log_prob(*args)
+        sol = sp_opt.minimize(nlp, max_thetas)
+        
+        opt_pars = sol.x
+        opt_log_prob = -nlp(opt_pars)
+        
+        if not sol.success:
+            print("Optimization not successful:", sol.message, "\n")
+            print("Using init values corresponding to max sample log(P).")
+            opt_log_prob = -nlp(max_thetas)
+        
+        print("Max sample log(P):", max_sample_log_prob)
+        print("Optimized log(P):", opt_log_prob, "\n")
+
+        # Log chain settings and log(P) values
+        clearml_logger.report_single_value(name='acceptance_fraction', value=accept_frac)
+        clearml_logger.report_single_value(name='tau', value=tau)
+        clearml_logger.report_single_value(name='burnin', value=burnin)
+        clearml_logger.report_single_value(name="max_sample_log_prob", value=max_sample_log_prob)
+        clearml_logger.report_single_value(name="opt_log_prob", value=opt_log_prob)
+
+        print("\n-------- POSTERIOR / MARGINALIZED DIST COMPARISON -----------\n")
+
+        par_names = (
+            cfg['model_cfg']['shared_par_names'] +
+            utils.gen_pop_par_names(
+                cfg['model_cfg']['independent_par_names']
+            ) +
+            [cfg['model_cfg']['ratio_par_name']]
         )
-        tau = np.max(taus)
-        print("\nAtuocorr lengths:\n", taus)
-        print("Max autocorr length:", tau, "\n")
-    except Exception as e:
-        print("\nGot exception:\n")
-        print(e, "\n")
-        tau = cfg['emcee_cfg']['default_tau']
-        print("\nUsing default tau:", tau, "\n")
 
-    burnin = np.max(
-        [int(5 * tau), int(cfg['emcee_cfg']['default_burnin'])]
-    )
-
-    print(f"\nThinning by {burnin} steps\n")
-
-    print("\n----------------- MAX LOG(P) ---------------------\n")
-    # TODO: Redo without interpolation
-    sample_thetas = backend.get_chain(discard=burnin, thin=int(0.5*tau), flat=True)
-    sample_log_probs = backend.get_log_prob(discard=burnin, thin=int(0.5*tau), flat=True)
-    idx_max = np.argmax(sample_log_probs)
-    max_sample_log_prob = sample_log_probs[idx_max]
-    max_thetas = sample_thetas[idx_max]
-    nlp = lambda *args: -log_prob(*args)
-    sol = sp_opt.minimize(nlp, max_thetas)
-    
-    opt_pars = sol.x
-    opt_log_prob = -nlp(opt_pars)
-    
-    if not sol.success:
-        print("Optimization not successful:", sol.message, "\n")
-        print("Using init values corresponding to max sample log(P).")
-        opt_log_prob = -nlp(max_thetas)
-    
-    print("Max sample log(P):", max_sample_log_prob)
-    print("Optimized log(P):", opt_log_prob, "\n")
-
-    # Log chain settings and log(P) values
-    clearml_logger.report_single_value(name='acceptance_fraction', value=accept_frac)
-    clearml_logger.report_single_value(name='tau', value=tau)
-    clearml_logger.report_single_value(name='burnin', value=burnin)
-    clearml_logger.report_single_value(name="max_sample_log_prob", value=max_sample_log_prob)
-    clearml_logger.report_single_value(name="opt_log_prob", value=opt_log_prob)
-
-    print("\n-------- POSTERIOR / MARGINALIZED DIST COMPARISON -----------\n")
-
-    par_names = (
-        cfg['model_cfg']['shared_par_names'] +
-        utils.gen_pop_par_names(
-            cfg['model_cfg']['independent_par_names']
-        ) +
-        [cfg['model_cfg']['ratio_par_name']]
-    )
-
-    quantiles = np.quantile(
-        sample_thetas, [0.16, 0.84], axis=0
-    )
-    symmetrized_stds = 0.5 * (quantiles[1] - quantiles[0])
-    post_marg_values = np.zeros((5, len(par_names)))
-    
-    for i in range(len(par_names)):
-        samples = sample_thetas[:, i]
-        par_range = np.arange(
-            np.min(samples), np.max(samples), np.abs(np.min(samples))/10
+        quantiles = np.quantile(
+            sample_thetas, [0.16, 0.84], axis=0
         )
-        kde = sp_stats.gaussian_kde(samples)(par_range)
-        post_marg_values[0, i] = max_thetas[i]
-        post_marg_values[1, i] = par_range[np.argmax(kde)]
-        post_marg_values[2, i] = np.std(samples)
-        post_marg_values[3, i] = symmetrized_stds[i]
-        post_marg_values[4, i] = np.abs(
-            post_marg_values[0, i] - post_marg_values[1, i]
-        ) / post_marg_values[3, i]
-    
-    post_marg_df = pd.DataFrame(
-        post_marg_values, index=['MAP', 'MMAP', 'sigma', 'sym_sigma', 'Z'], columns=par_names
-    )
-    clearml_logger.report_table(
-        title='MAP_MMAP_Distance',
-        series='MAP_MMAP_Distance',
-        iteration=0,
-        table_plot=post_marg_df
-    )
+        symmetrized_stds = 0.5 * (quantiles[1] - quantiles[0])
+        post_marg_values = np.zeros((5, len(par_names)))
+        
+        for i in range(len(par_names)):
+            samples = sample_thetas[:, i]
+            par_range = np.arange(
+                np.min(samples), np.max(samples), np.abs(np.min(samples))/10
+            )
+            kde = sp_stats.gaussian_kde(samples)(par_range)
+            post_marg_values[0, i] = max_thetas[i]
+            post_marg_values[1, i] = par_range[np.argmax(kde)]
+            post_marg_values[2, i] = np.std(samples)
+            post_marg_values[3, i] = symmetrized_stds[i]
+            post_marg_values[4, i] = np.abs(
+                post_marg_values[0, i] - post_marg_values[1, i]
+            ) / post_marg_values[3, i]
+        
+        post_marg_df = pd.DataFrame(
+            post_marg_values, index=['MAP', 'MMAP', 'sigma', 'sym_sigma', 'Z'], columns=par_names
+        )
+        clearml_logger.report_table(
+            title='MAP_MMAP_Distance',
+            series='MAP_MMAP_Distance',
+            iteration=0,
+            table_plot=post_marg_df
+        )
 
-    print("\n----------------- PLOTS ---------------------\n")
-    n_shared = len(cfg['model_cfg']['shared_par_names'])
-    n_independent = len(cfg['model_cfg']['independent_par_names'])
-    labels = (
-        cfg['model_cfg']['shared_par_names'] +
-        cfg['model_cfg']['independent_par_names'] +
-        [cfg['model_cfg']['ratio_par_name']]
-    )
+        print("\n----------------- PLOTS ---------------------\n")
+        n_shared = len(cfg['model_cfg']['shared_par_names'])
+        n_independent = len(cfg['model_cfg']['independent_par_names'])
+        labels = (
+            cfg['model_cfg']['shared_par_names'] +
+            cfg['model_cfg']['independent_par_names'] +
+            [cfg['model_cfg']['ratio_par_name']]
+        )
 
-    fx = sample_thetas[:, :n_shared]
-    fig_pop_2 = None
-
-    # Handling in case of independent parameters
-    if n_independent > 0:
         fx = sample_thetas[:, :n_shared]
+        fig_pop_2 = None
+
+        # Handling in case of independent parameters
+        if n_independent > 0:
+            fx = sample_thetas[:, :n_shared]
+            fx = np.concatenate(
+                (
+                    fx, sample_thetas[:, n_shared:-1:2]
+                ), axis=-1
+            )
+
+            sx = sample_thetas[:, :n_shared]
+            sx = np.concatenate(
+                (
+                    sx,
+                    sample_thetas[:, n_shared+1:-1:2],
+                    sample_thetas[:,-1][:, None]
+                ), axis=-1
+            )
+
+            fig_pop_2 = corner.corner(data=sx, color='r', **cfg['plot_cfg'])
+
         fx = np.concatenate(
             (
-                fx, sample_thetas[:, n_shared:-1:2]
+                fx, sample_thetas[:,-1][:, None]
             ), axis=-1
         )
 
-        sx = sample_thetas[:, :n_shared]
-        sx = np.concatenate(
-            (
-                sx,
-                sample_thetas[:, n_shared+1:-1:2],
-                sample_thetas[:,-1][:, None]
-            ), axis=-1
+        fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, labels=labels, **cfg['plot_cfg'])
+        fig_pop_1.tight_layout()
+        fig_pop_1.suptitle('Corner plot', fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
+        fig_pop_1.savefig(
+            os.path.join(path, cfg['emcee_cfg']['run_name']+"_corner.pdf")
         )
 
-        fig_pop_2 = corner.corner(data=sx, color='r', **cfg['plot_cfg'])
-
-    fx = np.concatenate(
-        (
-            fx, sample_thetas[:,-1][:, None]
-        ), axis=-1
-    )
-
-    fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, labels=labels, **cfg['plot_cfg'])
-    fig_pop_1.tight_layout()
-    fig_pop_1.suptitle('Corner plot', fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
-    fig_pop_1.savefig(
-        os.path.join(path, cfg['emcee_cfg']['run_name']+"_corner.pdf")
-    )
-
-    full_chain = backend.get_chain()
-    fig, axes = plt.subplots(
-        ndim, figsize=(10, int(np.ceil(7*ndim/3))), sharex=True
-    )
-    for i in range(ndim):
-        ax = axes[i]
-        ax.plot(full_chain[:, :, i], "k", alpha=0.3)
-        ax.set_xlim(0, len(full_chain))
-        ax.set_ylabel(par_names[i], fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
-        ax.axvline(burnin, color='r', alpha=0.5)
-    axes[-1].set_xlabel("step number", fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
-    fig.tight_layout()
-    if cfg['model_cfg']['use_sigmoid']:
-        suffix = "_transformed"
-    else:
-        suffix = ""
-    fig.subplots_adjust(top=0.1)
-    fig.suptitle("Walkers" + suffix, fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
-    fig.savefig(
-        os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_walkers.pdf")
-    )
+        full_chain = backend.get_chain()
+        fig, axes = plt.subplots(
+            ndim, figsize=(10, int(np.ceil(7*ndim/3))), sharex=True
+        )
+        for i in range(ndim):
+            ax = axes[i]
+            ax.plot(full_chain[:, :, i], "k", alpha=0.3)
+            ax.set_xlim(0, len(full_chain))
+            ax.set_ylabel(par_names[i], fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+            ax.axvline(burnin, color='r', alpha=0.5)
+        axes[-1].set_xlabel("step number", fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+        fig.tight_layout()
+        if cfg['model_cfg']['use_sigmoid']:
+            suffix = "_transformed"
+        else:
+            suffix = ""
+        fig.subplots_adjust(top=0.1)
+        fig.suptitle("Walkers" + suffix, fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
+        fig.savefig(
+            os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_walkers.pdf")
+        )
 
 if __name__ == "__main__":
     main()
