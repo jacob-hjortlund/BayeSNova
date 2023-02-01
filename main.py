@@ -15,6 +15,7 @@ import src.preprocessing as prep
 import src.probabilities as prob
 
 from time import time
+from mpi4py import MPI
 
 @hydra.main(
     version_base=None, config_path="configs", config_name="config"
@@ -22,14 +23,19 @@ from time import time
 def main(cfg: omegaconf.DictConfig) -> None:   
 
     # Setup clearml
-    cl.Task.set_offline(offline_mode=cfg['clearml_cfg']['offline_mode'])
     task_name = utils.create_task_name(cfg)
     tags = ["-".join(cfg['model_cfg']['independent_par_names'])] + cfg['clearml_cfg']['tags']
-    task = cl.Task.init(
-        project_name=cfg['clearml_cfg']['project_name'],
-        task_name=task_name, tags=tags, task_type=cfg['clearml_cfg']['task_type']
-    )
-    clearml_logger = task.get_logger()
+    
+    if cfg['emcee_cfg']['pool_type'] == 'MPI':
+        is_master = MPI.COMM_WORLD.rank == 0
+    
+    if is_master:
+        cl.Task.set_offline(offline_mode=cfg['clearml_cfg']['offline_mode'])
+        task = cl.Task.init(
+            project_name=cfg['clearml_cfg']['project_name'],
+            task_name=task_name, tags=tags, task_type=cfg['clearml_cfg']['task_type']
+        )
+        clearml_logger = task.get_logger()
 
     # Setup results dir
     path = os.path.join(
