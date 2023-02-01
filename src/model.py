@@ -399,7 +399,7 @@ class Model():
 
         return residuals[0], residuals[1]
     
-    def get_upper_bounds(self, par: str) -> tuple[float]:
+    def get_upper_bounds(self, par: str) -> tuple:
 
         var_dict = self.__dict__
         
