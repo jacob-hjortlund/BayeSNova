@@ -258,54 +258,8 @@ def _Ebv_Rb_prior_convolution(
 
 class Model():
 
-    def __init__(
-        self, #cfg: dict, observables: np.ndarray, covariances: np.ndarray
-    ) -> None:
+    def __init__(self) -> None:
         pass
-        # self.mb = observables[:, 0]
-        # self.s = observables[:, 1]
-        # self.c = observables[:, 2]
-        # self.z = observables[:, 3]
-        # self.covs = covariances
-
-        #self.shared_par_names = cfg['shared_par_names']
-        #self.independent_par_names = cfg['independent_par_names']
-        #self.stretch_par_name = cfg['stretch_par_name']
-        #self.ratio_par_name = cfg['ratio_par_name']
-        #self.preset_pars = cfg['preset_values']
-        #self.use_sigmoid = cfg['use_sigmoid']
-        #self.sigmoid_cfg = cfg['sigmoid_cfg']
-        #self.prior_bounds = cfg['prior_bounds']
-        #self.Ebv_integral_lower_bound = cfg.get('Ebv_integral_lower_bound', 0)
-        #self.Ebv_integral_upper_bound = cfg.get('Ebv_integral_upper_bound', -9999.)
-        #self.Rb_integral_lower_bound = cfg.get('Rb_integral_lower_bound', 0)
-        #self.Rb_integral_upper_bound = cfg.get('Rb_integral_upper_bound', -9999.)
-
-        # if self.stretch_par_name in self.independent_par_names:
-        #     self.stretch_independent = True
-        # else:
-        #     self.stretch_independent = False
-
-        # self.gEbv_quantiles = self.set_gamma_quantiles(cfg, 'Ebv')
-        # self.gRb_quantiles = self.set_gamma_quantiles(cfg, 'Rb')
-
-        # self.Ebv_prior_conv_fn = _Ebv_prior_convolution
-        # self.Rb_Ebv_prior_conv_fn = _Ebv_Rb_prior_convolution
-
-        #self.__dict__.update(cfg['preset_values'])
-    
-    # def set_gamma_quantiles(self, cfg: dict, par: str) -> np.ndarray:
-
-    #     if self.__dict__[par + "_integral_upper_bound"] == NULL_VALUE:
-    #         quantiles = utils.create_gamma_quantiles(
-    #             cfg['prior_bounds']['gamma_' + par]['lower'],
-    #             cfg['prior_bounds']['gamma_' + par]['upper'],
-    #             cfg['resolution_g' + par], cfg['cdf_limit_g' + par]
-    #         )
-    #     else:
-    #         quantiles = None
-
-    #     return quantiles
 
     def log_prior(self, par_dict: dict) -> float:
         
@@ -427,54 +381,27 @@ class Model():
         ) + np.log10(cosmo.H0.value / H0)
 
         residuals[:, :, 0] = np.tile(mb, (2, 1)) - np.array([
-            # [self.Mb_1 + self.alpha_1 * self.s_1 + self.beta_1 * self.c_1],
-            # [self.Mb_2 + self.alpha_2 * self.s_2 + self.beta_2 * self.c_2]
             [Mb_1 + alpha_1 * s_1 + beta_1 * c_1],
             [Mb_2 + alpha_2 * s_2 + beta_2 * c_2]
         ]) - distance_moduli
         residuals[:, :, 1] = np.tile(s, (2, 1)) - np.array([
-            # [self.s_1], [self.s_2]
             [s_1], [s_2]
         ])
         residuals[:, :, 2] = np.tile(c, (2, 1)) - np.array([
-            # [self.c_1], [self.c_2]
             [c_1], [c_2]
         ])
 
         return residuals[0], residuals[1]
-    
-    # def get_upper_bounds(self, par: str) -> tuple:
-
-    #     var_dict = self.__dict__
-        
-    #     if (
-    #         var_dict["g" + par + "_quantiles"] is not None and
-    #         var_dict['gamma_' + par + '_1'] != NULL_VALUE and
-    #         var_dict['gamma_' + par + '_2'] != NULL_VALUE
-    #     ):
-    #         quantiles = var_dict["g" + par + "_quantiles"]
-    #         idx_upper_bound_1 = utils.find_nearest_idx(quantiles[0], var_dict['gamma_' + par + '_1'])
-    #         idx_upper_bound_2 = utils.find_nearest_idx(quantiles[0], var_dict['gamma_' + par + '_2'])
-    #         upper_bound_1 = quantiles[1, idx_upper_bound_1]
-    #         upper_bound_2 = quantiles[1, idx_upper_bound_2]
-    #     else:
-    #         upper_bound_1 = upper_bound_2 = var_dict[par + '_integral_upper_bound']
-
-    #     return upper_bound_1, upper_bound_2
 
     def get_upper_bounds(
         self, quantiles: np.ndarray, gamma_1: float, gamma_2: float, par: str
     ) -> tuple:
-
-        #var_dict = self.__dict__
         
         if (
-            #var_dict["g" + par + "_quantiles"] is not None and
             quantiles is not None and
             gamma_1 != NULL_VALUE and
             gamma_2 != NULL_VALUE
         ):
-            #quantiles = var_dict["g" + par + "_quantiles"]
             idx_upper_bound_1 = utils.find_nearest_idx(quantiles[0], gamma_1)
             idx_upper_bound_2 = utils.find_nearest_idx(quantiles[0], gamma_2)
             upper_bound_1 = quantiles[1, idx_upper_bound_1]
@@ -497,38 +424,12 @@ class Model():
         gamma_Ebv_1: float, gamma_Ebv_2: float
     ) -> float:
         
-        # upper_bound_Rb_1, upper_bound_Rb_2 = self.get_upper_bounds('Rb')
-        # upper_bound_Ebv_1, upper_bound_Ebv_2 = self.get_upper_bounds('Ebv')
         upper_bound_Rb_1, upper_bound_Rb_2 = self.get_upper_bounds(
             prep.gRb_quantiles, gamma_Rb_1, gamma_Rb_2, "Rb"
         )
         upper_bound_Ebv_1, upper_bound_Ebv_2 = self.get_upper_bounds(
             prep.gEbv_quantiles, gamma_Ebv_1, gamma_Ebv_2, "Ebv"
         )
-
-        # norm_1 = sp_special.gammainc(self.gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(self.gamma_Ebv_1)
-        # norm_2 = sp_special.gammainc(self.gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(self.gamma_Ebv_2)
-
-        # if self.gamma_Rb_1 != NULL_VALUE:
-        #     norm_1 *= sp_special.gammainc(self.gamma_Rb_1, upper_bound_Rb_1) * sp_special.gamma(self.gamma_Rb_1)
-        # if self.gamma_Rb_2 != NULL_VALUE:
-        #     norm_2 *= sp_special.gammainc(self.gamma_Rb_2, upper_bound_Rb_2) * sp_special.gamma(self.gamma_Rb_2)
-
-        # probs, status = self.convolution_fn(
-        #     cov_1=covs_1, cov_2=covs_2, res_1=residuals_1, res_2=residuals_2,
-        #     Rb_1=self.Rb_1, Rb_2=self.Rb_2,
-        #     sig_Rb_1=self.sig_Rb_1, sig_Rb_2=self.sig_Rb_2,
-        #     tau_Rb_1=self.tau_Rb_1, tau_Rb_2=self.tau_Rb_2,
-        #     gamma_Rb_1=self.gamma_Rb_1, gamma_Rb_2=self.gamma_Rb_2,
-        #     Ebv_1=self.Ebv_1, Ebv_2=self.Ebv_2,
-        #     tau_Ebv_1=self.tau_Ebv_1, tau_Ebv_2=self.tau_Ebv_2,
-        #     gamma_Ebv_1=self.gamma_Ebv_1, gamma_Ebv_2=self.gamma_Ebv_2,
-        #     lower_bound_Rb_1=self.Rb_integral_lower_bound, lower_bound_Rb_2=self.Rb_integral_lower_bound,
-        #     upper_bound_Rb_1=upper_bound_Rb_1, upper_bound_Rb_2=upper_bound_Rb_2,
-        #     lower_bound_Ebv_1=self.Ebv_integral_lower_bound, lower_bound_Ebv_2=self.Ebv_integral_lower_bound,
-        #     upper_bound_Ebv_1=upper_bound_Ebv_1, upper_bound_Ebv_2=upper_bound_Ebv_2,
-        #     shift_Rb=self.shift_Rb
-        # )
 
         norm_1 = sp_special.gammainc(gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(gamma_Ebv_1)
         norm_2 = sp_special.gammainc(gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(gamma_Ebv_2)
@@ -561,15 +462,6 @@ class Model():
 
         p1_nans = np.isnan(p_1)
         p2_nans = np.isnan(p_2)
-
-        # if np.any(p1_nans):
-        #     print("Pop 1 contains nan probabilities:", np.count_nonzero(p1_nans)/len(p1_nans)*100, "%")
-        #     print("Pop 1 pars:", [self.Rb_1, self.sig_Rb_1, self.Ebv_1, self.gamma_Ebv_1])
-        #     print("Pop 1 norm:", norm_1, "\n")
-        # if np.any(p2_nans):
-        #     print("Pop 2 contains nan probabilities:", np.count_nonzero(p2_nans)/len(p2_nans)*100, "%")
-        #     print("Pop 1 pars:", [self.Rb_2, self.sig_Rb_2, self.Ebv_2, self.gamma_Ebv_2])
-        #     print("Pop 2 norm:", norm_2, "\n")
 
         if np.any(p1_nans):
             print("Pop 1 contains nan probabilities:", np.count_nonzero(p1_nans)/len(p1_nans)*100, "%")
@@ -651,7 +543,6 @@ class Model():
         # TODO: Fix numerical stability by using logsumexp somehow
         log_prob = np.sum(
             np.log(
-                # self.w * probs_1 + (1-self.w) * probs_2
                 w * probs_1 + (1-w) * probs_2
             )
         )
@@ -683,8 +574,6 @@ class Model():
         log_prior = self.log_prior(param_dict)
         if np.isinf(log_prior):
             return log_prior
-
-        #self.__dict__.update(param_dict)
         
         if prep.global_model_cfg.use_sigmoid:
             param_dict = utils.apply_sigmoid(
@@ -692,13 +581,6 @@ class Model():
                 independent_par_names=prep.global_model_cfg.independent_par_names,
                 ratio_par_name=prep.global_model_cfg.ratio_par_name
             )
-            # self.__dict__.update(
-            #     utils.apply_sigmoid(
-            #         self.__dict__, sigmoid_cfg=self.sigmoid_cfg,
-            #         independent_par_names=self.independent_par_names,
-            #         ratio_par_name=self.ratio_par_name
-            #     )
-            # )
         
         param_dict =  {
             **param_dict, **prep.global_model_cfg.preset_values
