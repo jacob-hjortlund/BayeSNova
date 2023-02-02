@@ -7,6 +7,7 @@ import numba as nb
 import emcee as em
 import schwimmbad as swbd
 import deepdiff.diff as diff
+import scipy.stats as sp_stats
 import scipy.special as sp_special
 
 from mpi4py import MPI
@@ -66,6 +67,17 @@ class PoolWrapper():
         if not self.pool.is_master():
             self.pool.wait()
             sys.exit(0)
+
+def estimate_mmap(samples):
+
+    par_range = np.arange(
+        np.min(samples), np.max(samples), np.abs(np.min(samples))/10
+    )
+    kde = sp_stats.gaussian_kde(samples)(par_range)
+    output = par_range[np.argmax(kde)]
+
+    return output
+    
 
 def create_task_name(
     cfg: omegaconf.DictConfig, default_path: str ='./configs/config.yaml'

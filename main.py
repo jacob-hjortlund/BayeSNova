@@ -132,6 +132,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     print("\n----------------- MAX LOG(P) ---------------------\n")
     # TODO: Redo without interpolation
     sample_thetas = backend.get_chain(discard=burnin, thin=int(0.5*tau), flat=True)
+    transposed_sample_thetas = sample_thetas.T
     sample_log_probs = backend.get_log_prob(discard=burnin, thin=int(0.5*tau), flat=True)
     idx_max = np.argmax(sample_log_probs)
     max_sample_log_prob = sample_log_probs[idx_max]
@@ -171,30 +172,38 @@ def main(cfg: omegaconf.DictConfig) -> None:
         sample_thetas, [0.16, 0.84], axis=0
     )
     symmetrized_stds = 0.5 * (quantiles[1] - quantiles[0])
-    post_marg_values = np.zeros((5, len(par_names)))
+    stds = np.std(sample_thetas, axis=0)
+    map_mmap_values = np.zeros((5, len(par_names)))
     
-    for i in tqdm.tqdm(range(len(par_names))):
-        samples = sample_thetas[:, i]
-        par_range = np.arange(
-            np.min(samples), np.max(samples), np.abs(np.min(samples))/10
-        )
-        kde = sp_stats.gaussian_kde(samples)(par_range)
-        post_marg_values[0, i] = max_thetas[i]
-        post_marg_values[1, i] = par_range[np.argmax(kde)]
-        post_marg_values[2, i] = np.std(samples)
-        post_marg_values[3, i] = symmetrized_stds[i]
-        post_marg_values[4, i] = np.abs(
-            post_marg_values[0, i] - post_marg_values[1, i]
-        ) / post_marg_values[3, i]
+    t2 = time()
+    with utils.PoolWrapper(cfg['emcee_cfg']['pool_type']) as wrapped_pool:
+        
+        if wrapped_pool.is_mpi:
+            wrapped_pool.check_if_master()
+        
+        if wrapped_pool.pool_type == "":
+            mmaps = np.array(list(map(utils.estimate_mmap, transposed_sample_thetas)))
+        else:
+            mmaps = np.array(wrapped_pool.map(utils.estimate_mmap, transposed_sample_thetas))
+    t3 = time()
+    print("\nTime for MMAP estimation:", t3-t2, "s\n")
+
+    map_mmap_values[0] = max_thetas
+    map_mmap_values[1] = mmaps
+    map_mmap_values[2] = stds
+    map_mmap_values[3] = symmetrized_stds
+    map_mmap_values[4] = np.abs(
+        map_mmap_values[0] - map_mmap_values[1]
+    ) / map_mmap_values[3]
     
-    post_marg_df = pd.DataFrame(
-        post_marg_values, index=['MAP', 'MMAP', 'sigma', 'sym_sigma', 'Z'], columns=par_names
+    map_mmap_df = pd.DataFrame(
+        map_mmap_values, index=['MAP', 'MMAP', 'sigma', 'sym_sigma', 'Z'], columns=par_names
     )
     clearml_logger.report_table(
         title='MAP_MMAP_Distance',
         series='MAP_MMAP_Distance',
         iteration=0,
-        table_plot=post_marg_df
+        table_plot=map_mmap_df
     )
 
     print("\n----------------- PLOTS ---------------------\n")
