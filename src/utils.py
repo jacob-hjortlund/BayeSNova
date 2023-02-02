@@ -9,6 +9,7 @@ import emcee as em
 import schwimmbad as swbd
 import deepdiff.diff as diff
 import scipy.stats as sp_stats
+import scipy.optimize as sp_opt
 import scipy.special as sp_special
 
 from mpi4py import MPI
@@ -71,20 +72,23 @@ class PoolWrapper():
 
 def estimate_mmap(samples):
 
-    min_val = np.min(samples)
-    max_val = np.max(samples)
-    resolution = np.abs(min_val)/10 
-    par_range = np.arange(
-        min_val, max_val, resolution
-    )
-    print("\n Par ranging from ", min_val, " to ", max_val, " with resolution ", resolution)
+
+    mean_val = np.mean(samples)
     t0 = time.time()
-    kde = sp_stats.gaussian_kde(samples)(par_range)
+    kernel = sp_stats.gaussian_kde(samples)
     t1 = time.time()
 
-    print(f"KDE took {t1-t0} seconds to run.\n")
+    t2 = time.time()
+    output = sp_opt.minimize(
+        lambda x: -kernel(x),
+        mean_val,
+        method='Nelder-Mead',
+        options={'disp': False}
+    ).x[0]
+    t3 = time.time()
 
-    output = par_range[np.argmax(kde)]
+    print(f"\nKDE took {t1-t0} seconds to run and {t3-t2} seconds to optimize.\n")
+
 
     return output
     

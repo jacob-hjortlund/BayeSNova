@@ -165,7 +165,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print(using_MPI_and_is_master)
         print(using_multiprocessing)
         print(no_pool)
-        
+
         par_names = (
             cfg['model_cfg']['shared_par_names'] +
             utils.gen_pop_par_names(
@@ -182,15 +182,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         map_mmap_values = np.zeros((5, len(par_names)))
         
         t2 = time()
-        # with utils.PoolWrapper(cfg['emcee_cfg']['pool_type']) as wrapped_pool:
-            
-        #     if wrapped_pool.is_mpi:
-        #         wrapped_pool.check_if_master()
-            
-            # if wrapped_pool.pool_type == "":
         mmaps = np.array(list(map(utils.estimate_mmap, transposed_sample_thetas)))
-            # else:
-            #     mmaps = np.array(list(wrapped_pool.pool.map(utils.estimate_mmap, transposed_sample_thetas)))
         t3 = time()
         print("\nTime for MMAP estimation:", t3-t2, "s\n")
         print(mmaps)
