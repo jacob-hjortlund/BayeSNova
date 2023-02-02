@@ -285,17 +285,17 @@ def transformed_backend(
 
     return backend
 
-# def create_gamma_quantiles(
-#     lower: float, upper: float, resolution: float, cdf_limit: float
-# ):
-#     vals = np.arange(lower, upper, resolution)
-#     quantiles = np.stack((
-#         vals, sp_special.gammaincinv(
-#             vals, cdf_limit
-#         )
-#     ))
+def create_gamma_quantiles(
+    lower: float, upper: float, resolution: float, cdf_limit: float
+):
+    vals = np.arange(lower, upper, resolution)
+    quantiles = np.stack((
+        vals, sp_special.gammaincinv(
+            vals, cdf_limit
+        )
+    ))
 
-#     return quantiles
+    return quantiles
 
 #@nb.njit
 def find_nearest_idx(array, value):

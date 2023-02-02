@@ -4,7 +4,7 @@ import src.utils as utils
 
 # TODO: Vectorized cut functions
 
-NULL_VALUE = -999
+NULL_VALUE = -9999.
 
 def init_global_data(
     data: pd.pandas.DataFrame, cfg: dict
