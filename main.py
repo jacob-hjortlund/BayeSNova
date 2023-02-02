@@ -48,32 +48,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
     )
     os.makedirs(path, exist_ok=True)
 
-    # Import data
     data = pd.read_csv(
         filepath_or_buffer=cfg['data_cfg']['path'], sep=cfg['data_cfg']['sep']
     )
-
-    # Preprocess
-    # global sn_covariances
-    # global sn_observables
-    # sn_covariances = prep.build_covariance_matrix(data.to_numpy())
-    # sn_observables = data[['mB', 'x1', 'c', 'z']].to_numpy()
     prep.init_global_data(data, cfg['model_cfg'])
 
-    # Gen log_prob function
-    log_prob = model.Model(
-        #cfg=cfg['model_cfg']#, covariances=sn_covs, observables=sn_observables
-    )
-    # sn_mb = data['mB'].to_numpy()
-    # sn_s = data['x1'].to_numpy()
-    # sn_c = data['c'].to_numpy()
-    # sn_z = data['z'].to_numpy()
-
-    # # Gen log_prob function
-    # log_prob = prob.generate_log_prob(
-    #     cfg['model_cfg'], sn_covs=sn_covs,
-    #     sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c, sn_z=sn_z
-    # )
+    log_prob = model.Model()
 
     t0 = time()
     with utils.PoolWrapper(cfg['emcee_cfg']['pool_type']) as wrapped_pool:
@@ -86,11 +66,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print(omegaconf.OmegaConf.to_yaml(cfg),"\n")
 
         print("\n----------------- SETUP ---------------------\n")
-        # Setup init pos and log_prob
-        theta = np.array([
-                -0.14, 3.1, 3.7, 0.6, 2.9, -19.3, -19.3, -0.09, -0.09, 0.05, 0.03, -0.25, 0.1, 1.1, 1.1, 0.04, 0.04, 0.4
-            ]) 
-        #init_theta = theta + 3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'], len(theta))
         init_theta = utils.prior_initialisation(
             cfg['model_cfg']['prior_bounds'], cfg['model_cfg']['init_values'], cfg['model_cfg']['shared_par_names'],
             cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name']
