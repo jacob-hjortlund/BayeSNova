@@ -160,51 +160,58 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     print("\n-------- POSTERIOR / MARGINALIZED DIST COMPARISON -----------\n")
 
-    par_names = (
-        cfg['model_cfg']['shared_par_names'] +
-        utils.gen_pop_par_names(
-            cfg['model_cfg']['independent_par_names']
-        ) +
-        [cfg['model_cfg']['ratio_par_name']]
-    )
+    if using_MPI_and_is_master or using_multiprocessing or no_pool:
 
-    quantiles = np.quantile(
-        sample_thetas, [0.16, 0.84], axis=0
-    )
-    symmetrized_stds = 0.5 * (quantiles[1] - quantiles[0])
-    stds = np.std(sample_thetas, axis=0)
-    map_mmap_values = np.zeros((5, len(par_names)))
-    
-    t2 = time()
-    with utils.PoolWrapper(cfg['emcee_cfg']['pool_type']) as wrapped_pool:
+        print(using_MPI_and_is_master)
+        print(using_multiprocessing)
+        print(no_pool)
         
-        if wrapped_pool.is_mpi:
-            wrapped_pool.check_if_master()
-        
-        if wrapped_pool.pool_type == "":
-            mmaps = np.array(list(map(utils.estimate_mmap, transposed_sample_thetas)))
-        else:
-            mmaps = np.array(wrapped_pool.map(utils.estimate_mmap, transposed_sample_thetas))
-    t3 = time()
-    print("\nTime for MMAP estimation:", t3-t2, "s\n")
+        par_names = (
+            cfg['model_cfg']['shared_par_names'] +
+            utils.gen_pop_par_names(
+                cfg['model_cfg']['independent_par_names']
+            ) +
+            [cfg['model_cfg']['ratio_par_name']]
+        )
 
-    map_mmap_values[0] = max_thetas
-    map_mmap_values[1] = mmaps
-    map_mmap_values[2] = stds
-    map_mmap_values[3] = symmetrized_stds
-    map_mmap_values[4] = np.abs(
-        map_mmap_values[0] - map_mmap_values[1]
-    ) / map_mmap_values[3]
-    
-    map_mmap_df = pd.DataFrame(
-        map_mmap_values, index=['MAP', 'MMAP', 'sigma', 'sym_sigma', 'Z'], columns=par_names
-    )
-    clearml_logger.report_table(
-        title='MAP_MMAP_Distance',
-        series='MAP_MMAP_Distance',
-        iteration=0,
-        table_plot=map_mmap_df
-    )
+        quantiles = np.quantile(
+            sample_thetas, [0.16, 0.84], axis=0
+        )
+        symmetrized_stds = 0.5 * (quantiles[1] - quantiles[0])
+        stds = np.std(sample_thetas, axis=0)
+        map_mmap_values = np.zeros((5, len(par_names)))
+        
+        t2 = time()
+        # with utils.PoolWrapper(cfg['emcee_cfg']['pool_type']) as wrapped_pool:
+            
+        #     if wrapped_pool.is_mpi:
+        #         wrapped_pool.check_if_master()
+            
+            # if wrapped_pool.pool_type == "":
+        mmaps = np.array(list(map(utils.estimate_mmap, transposed_sample_thetas)))
+            # else:
+            #     mmaps = np.array(list(wrapped_pool.pool.map(utils.estimate_mmap, transposed_sample_thetas)))
+        t3 = time()
+        print("\nTime for MMAP estimation:", t3-t2, "s\n")
+        print(mmaps)
+
+        map_mmap_values[0] = max_thetas
+        map_mmap_values[1] = mmaps
+        map_mmap_values[2] = stds
+        map_mmap_values[3] = symmetrized_stds
+        map_mmap_values[4] = np.abs(
+            map_mmap_values[0] - map_mmap_values[1]
+        ) / map_mmap_values[3]
+        
+        map_mmap_df = pd.DataFrame(
+            map_mmap_values, index=['MAP', 'MMAP', 'sigma', 'sym_sigma', 'Z'], columns=par_names
+        )
+        clearml_logger.report_table(
+            title='MAP_MMAP_Distance',
+            series='MAP_MMAP_Distance',
+            iteration=0,
+            table_plot=map_mmap_df
+        )
 
     print("\n----------------- PLOTS ---------------------\n")
     n_shared = len(cfg['model_cfg']['shared_par_names'])

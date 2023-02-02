@@ -1,6 +1,7 @@
 import sys
 import tqdm
 import yaml
+import time
 import omegaconf
 import numpy as np
 import numba as nb
@@ -70,10 +71,19 @@ class PoolWrapper():
 
 def estimate_mmap(samples):
 
+    min_val = np.min(samples)
+    max_val = np.max(samples)
+    resolution = np.abs(min_val)/10 
     par_range = np.arange(
-        np.min(samples), np.max(samples), np.abs(np.min(samples))/10
+        min_val, max_val, resolution
     )
+    print("\n Par ranging from ", min_val, " to ", max_val, " with resolution ", resolution)
+    t0 = time.time()
     kde = sp_stats.gaussian_kde(samples)(par_range)
+    t1 = time.time()
+
+    print(f"KDE took {t1-t0} seconds to run.\n")
+
     output = par_range[np.argmax(kde)]
 
     return output
