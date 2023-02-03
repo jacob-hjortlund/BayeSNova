@@ -2,6 +2,7 @@ import hydra
 import omegaconf
 import os
 import corner
+import tqdm
 
 import emcee as em
 import numpy as np
@@ -11,6 +12,7 @@ import scipy.stats as sp_stats
 import scipy.optimize as sp_opt
 import matplotlib.pyplot as plt
 import src.utils as utils
+import src.model as model
 import src.preprocessing as prep
 import src.probabilities as prob
 
@@ -28,7 +30,11 @@ def main(cfg: omegaconf.DictConfig) -> None:
     task_name = utils.create_task_name(cfg)
     tags = ["-".join(cfg['model_cfg']['independent_par_names'])] + cfg['clearml_cfg']['tags']
 
-    if cfg['emcee_cfg']['pool_type'] == 'MPI' and MPI.COMM_WORLD.rank == 0:
+    using_MPI_and_is_master = cfg['emcee_cfg']['pool_type'] == 'MPI' and MPI.COMM_WORLD.rank == 0
+    using_multiprocessing = cfg['emcee_cfg']['pool_type'] == 'MP'
+    no_pool = cfg['emcee_cfg']['pool_type'] == ''
+
+    if using_MPI_and_is_master or using_multiprocessing or no_pool:
         cl.Task.set_offline(offline_mode=cfg['clearml_cfg']['offline_mode'])
         task = cl.Task.init(
             project_name=cfg['clearml_cfg']['project_name'],
@@ -42,23 +48,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
     )
     os.makedirs(path, exist_ok=True)
 
-    # Import data
     data = pd.read_csv(
         filepath_or_buffer=cfg['data_cfg']['path'], sep=cfg['data_cfg']['sep']
     )
+    prep.init_global_data(data, cfg['model_cfg'])
 
-    # Preprocess
-    sn_covs = prep.build_covariance_matrix(data.to_numpy())
-    sn_mb = data['mB'].to_numpy()
-    sn_s = data['x1'].to_numpy()
-    sn_c = data['c'].to_numpy()
-    sn_z = data['z'].to_numpy()
-
-    # Gen log_prob function
-    log_prob = prob.generate_log_prob(
-        cfg['model_cfg'], sn_covs=sn_covs,
-        sn_mb=sn_mb, sn_s=sn_s, sn_c=sn_c, sn_z=sn_z
-    )
+    log_prob = model.Model()
 
     t0 = time()
     with utils.PoolWrapper(cfg['emcee_cfg']['pool_type']) as wrapped_pool:
@@ -71,11 +66,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print(omegaconf.OmegaConf.to_yaml(cfg),"\n")
 
         print("\n----------------- SETUP ---------------------\n")
-        # Setup init pos and log_prob
-        theta = np.array([
-                -0.14, 3.1, 3.7, 0.6, 2.9, -19.3, -19.3, -0.09, -0.09, 0.05, 0.03, -0.25, 0.1, 1.1, 1.1, 0.04, 0.04, 0.4
-            ]) 
-        #init_theta = theta + 3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'], len(theta))
         init_theta = utils.prior_initialisation(
             cfg['model_cfg']['prior_bounds'], cfg['model_cfg']['init_values'], cfg['model_cfg']['shared_par_names'],
             cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name']
@@ -142,6 +132,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     print("\n----------------- MAX LOG(P) ---------------------\n")
     # TODO: Redo without interpolation
     sample_thetas = backend.get_chain(discard=burnin, thin=int(0.5*tau), flat=True)
+    transposed_sample_thetas = sample_thetas.T
     sample_log_probs = backend.get_log_prob(discard=burnin, thin=int(0.5*tau), flat=True)
     idx_max = np.argmax(sample_log_probs)
     max_sample_log_prob = sample_log_probs[idx_max]
@@ -169,43 +160,50 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     print("\n-------- POSTERIOR / MARGINALIZED DIST COMPARISON -----------\n")
 
-    par_names = (
-        cfg['model_cfg']['shared_par_names'] +
-        utils.gen_pop_par_names(
-            cfg['model_cfg']['independent_par_names']
-        ) +
-        [cfg['model_cfg']['ratio_par_name']]
-    )
+    if using_MPI_and_is_master or using_multiprocessing or no_pool:
 
-    quantiles = np.quantile(
-        sample_thetas, [0.16, 0.84], axis=0
-    )
-    symmetrized_stds = 0.5 * (quantiles[1] - quantiles[0])
-    post_marg_values = np.zeros((5, len(par_names)))
-    
-    for i in range(len(par_names)):
-        samples = sample_thetas[:, i]
-        par_range = np.arange(
-            np.min(samples), np.max(samples), np.abs(np.min(samples))/10
+        print(using_MPI_and_is_master)
+        print(using_multiprocessing)
+        print(no_pool)
+
+        par_names = (
+            cfg['model_cfg']['shared_par_names'] +
+            utils.gen_pop_par_names(
+                cfg['model_cfg']['independent_par_names']
+            ) +
+            [cfg['model_cfg']['ratio_par_name']]
         )
-        kde = sp_stats.gaussian_kde(samples)(par_range)
-        post_marg_values[0, i] = max_thetas[i]
-        post_marg_values[1, i] = par_range[np.argmax(kde)]
-        post_marg_values[2, i] = np.std(samples)
-        post_marg_values[3, i] = symmetrized_stds[i]
-        post_marg_values[4, i] = np.abs(
-            post_marg_values[0, i] - post_marg_values[1, i]
-        ) / post_marg_values[3, i]
-    
-    post_marg_df = pd.DataFrame(
-        post_marg_values, index=['MAP', 'MMAP', 'sigma', 'sym_sigma', 'Z'], columns=par_names
-    )
-    clearml_logger.report_table(
-        title='MAP_MMAP_Distance',
-        series='MAP_MMAP_Distance',
-        iteration=0,
-        table_plot=post_marg_df
-    )
+
+        quantiles = np.quantile(
+            sample_thetas, [0.16, 0.84], axis=0
+        )
+        symmetrized_stds = 0.5 * (quantiles[1] - quantiles[0])
+        stds = np.std(sample_thetas, axis=0)
+        map_mmap_values = np.zeros((5, len(par_names)))
+        
+        t2 = time()
+        mmaps = np.array(list(map(utils.estimate_mmap, transposed_sample_thetas)))
+        t3 = time()
+        print("\nTime for MMAP estimation:", t3-t2, "s\n")
+        print(mmaps)
+
+        map_mmap_values[0] = max_thetas
+        map_mmap_values[1] = mmaps
+        map_mmap_values[2] = stds
+        map_mmap_values[3] = symmetrized_stds
+        map_mmap_values[4] = np.abs(
+            map_mmap_values[0] - map_mmap_values[1]
+        ) / map_mmap_values[3]
+        
+        map_mmap_df = pd.DataFrame(
+            map_mmap_values, index=['MAP', 'MMAP', 'sigma', 'sym_sigma', 'Z'], columns=par_names
+        )
+        clearml_logger.report_table(
+            title='MAP_MMAP_Distance',
+            series='MAP_MMAP_Distance',
+            iteration=0,
+            table_plot=map_mmap_df
+        )
 
     print("\n----------------- PLOTS ---------------------\n")
     n_shared = len(cfg['model_cfg']['shared_par_names'])

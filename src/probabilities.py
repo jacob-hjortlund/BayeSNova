@@ -7,6 +7,8 @@ import scipy.special as sp_special
 from NumbaQuadpack import quadpack_sig, dqags
 from astropy.cosmology import Planck18 as cosmo
 
+NULL_VALUE = -9999.0
+
 # ------------- PRIOR AND POP COV/RES --------------
 
 def _log_prior(
@@ -36,9 +38,12 @@ def _log_prior(
         
         is_in_priors = bounds_key in prior_bounds.keys()
         if is_in_priors:
+            if kwargs[value_key] == NULL_VALUE:
+                continue
             value += utils.uniform(
                 kwargs[value_key], **prior_bounds[bounds_key]
             )
+        #filler = 1
 
     return value
 
@@ -481,7 +486,7 @@ def _log_likelihood(
     Mb_2, alpha_2, beta_2, s_2, sig_s_2, c_2,
     sig_c_2, sig_int_2, Rb_2, sig_Rb_2,
     gamma_Rb_2, Ebv_2, gamma_Ebv_2,
-    w, H0, gEbv_quantiles, gRb_quantiles, shift_Rb
+    w, H0, gEbv_quantiles, gRb_quantiles, shift_Rb, **kwargs
 ):
 
     covs_1, r_1 = _population_cov_and_residual(
@@ -497,10 +502,10 @@ def _log_likelihood(
     )
 
     use_gaussian_Rb = (
-        not gamma_Rb_1 and
-        not gamma_Rb_2 and
-        sig_Rb_1 and
-        sig_Rb_2
+        gamma_Rb_1 == NULL_VALUE and
+        gamma_Rb_2 == NULL_VALUE and
+        sig_Rb_1 != NULL_VALUE and
+        sig_Rb_2 != NULL_VALUE
     )
 
     if use_gaussian_Rb:

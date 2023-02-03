@@ -1,16 +1,20 @@
 import sys
 import tqdm
 import yaml
+import time
 import omegaconf
 import numpy as np
 import numba as nb
 import emcee as em
 import schwimmbad as swbd
 import deepdiff.diff as diff
+import scipy.stats as sp_stats
+import scipy.optimize as sp_opt
 import scipy.special as sp_special
 
 from mpi4py import MPI
 
+NULL_VALUE = -9999.
 
 class _FunctionWrapper:
     """
@@ -66,6 +70,29 @@ class PoolWrapper():
             self.pool.wait()
             sys.exit(0)
 
+def estimate_mmap(samples):
+
+
+    mean_val = np.mean(samples)
+    t0 = time.time()
+    kernel = sp_stats.gaussian_kde(samples)
+    t1 = time.time()
+
+    t2 = time.time()
+    output = sp_opt.minimize(
+        lambda x: -kernel(x),
+        mean_val,
+        method='Nelder-Mead',
+        options={'disp': False}
+    ).x[0]
+    t3 = time.time()
+
+    print(f"\nKDE took {t1-t0} seconds to run and {t3-t2} seconds to optimize.\n")
+
+
+    return output
+    
+
 def create_task_name(
     cfg: omegaconf.DictConfig, default_path: str ='./configs/config.yaml'
 ) -> str:
@@ -90,6 +117,7 @@ def create_task_name(
             setting_str + '-' + new_value
         )
     run_name = '_'.join(changes)
+    run_name= run_name.replace("'", "")
 
     return run_name
 
@@ -177,7 +205,9 @@ def theta_to_dict(
     extended_shared_par_names = gen_pop_par_names(shared_par_names)
     extended_independent_par_names = gen_pop_par_names(independent_par_names)
     missing_par_names = list(
-        set(['gamma_Rb', 'Rb', 'sig_Rb']) -
+        set([
+            'gamma_Rb', 'Rb', 'sig_Rb', 'tau_Rb', 'Ebv', 'tau_Ebv'
+        ]) -
         set(shared_par_names + independent_par_names)
     )
     extended_missing_par_names = gen_pop_par_names(missing_par_names)
@@ -195,7 +225,7 @@ def theta_to_dict(
         )
 
     shared_pars, independent_pars = extend_theta(theta, n_shared_pars)
-    missing_pars = [None] * len(extended_missing_par_names)
+    missing_pars = [NULL_VALUE] * len(extended_missing_par_names)
     pars = np.concatenate([shared_pars, independent_pars, missing_pars, [theta[-1]]])
     arg_dict = {name: par for name, par in zip(par_names, pars)}
 
@@ -293,7 +323,7 @@ def create_gamma_quantiles(
 
     return quantiles
 
-@nb.njit
+#@nb.njit
 def find_nearest_idx(array, value):
     idx = (np.abs(array - value)).argmin()
     return idx

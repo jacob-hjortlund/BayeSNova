@@ -3,6 +3,7 @@ data_cfg:
   sep: ' '
 model_cfg:
   ratio_par_name: w
+  stretch_par_name: s
   shared_par_names: [
     alpha,
     beta,
@@ -50,6 +51,8 @@ model_cfg:
     sig_Rb:
       lower: 0.
       upper: 1.5
+    tau_Rb:
+      lower: 0.
     gamma_Rb:
       lower: 1.
       upper: 7.
@@ -58,6 +61,8 @@ model_cfg:
     Ebv:
       lower: 0.
       upper: 10.
+    tau_Ebv:
+      lower: 0.
     gamma_Ebv:
       lower: 1.
       upper: 7.
@@ -69,14 +74,20 @@ model_cfg:
     sig_c: 0.05
     sig_s: 1.
     Ebv: 0.12
+    tau_Ebv: 0.02
     gamma_Ebv: 2.9
     Rb: 3.7
+    tau_Rb: 0.02
     gamma_Rb: 2.9
     shift_Rb: 1.5
   use_sigmoid: False
   sigmoid_cfg:
     scale: 750.
     shift: 0.99
+  Ebv_integral_lower_bound: 0.
+  Ebv_integral_upper_bound: -9999.
+  Rb_integral_lower_bound: 0.
+  Rb_integral_upper_bound: -9999.
   resolution_gEbv: 0.01
   cdf_limit_gEbv: 0.99
   resolution_gRb: 0.01
@@ -87,8 +98,8 @@ emcee_cfg:
   run_name: "base"
   pool_type: "MPI"
   continue_from_chain: False
-  n_walkers: 128
-  n_steps: 100
+  n_walkers: 256
+  n_steps: 100000
   tau_tol: 25
   default_tau: 2000
   default_burnin: 20000
