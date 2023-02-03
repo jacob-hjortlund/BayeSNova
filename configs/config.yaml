@@ -67,8 +67,8 @@ model_cfg:
       lower: 1.
       upper: 7.
     w:
-      lower: 0.1
-      upper: 0.9
+      lower: 0.12
+      upper: 0.88
   init_values:
     Mb: -19.3
     sig_c: 0.05
