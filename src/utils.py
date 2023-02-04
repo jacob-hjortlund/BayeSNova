@@ -92,7 +92,6 @@ def estimate_mmap(samples):
 
     return output
     
-
 def create_task_name(
     cfg: omegaconf.DictConfig, default_path: str ='./configs/config.yaml'
 ) -> str:
@@ -109,7 +108,7 @@ def create_task_name(
 
     changes = []
     for setting in diff_dict['values_changed'].keys():
-        if "git_repository_path" in setting or "git_branch_name" in setting:
+        if "independent_par_name" in setting:
             continue
         setting_str = '['+"[".join(setting.split('[')[2:])
         new_value = str(diff_dict['values_changed'][setting]['new_value'])
@@ -117,7 +116,10 @@ def create_task_name(
             setting_str + '-' + new_value
         )
     run_name = '_'.join(changes)
-    run_name= run_name.replace("'", "")
+    run_name = run_name.replace("'", "")
+    run_name = run_name.replace("][", "_")
+    run_name = run_name.replace("[", "")
+    run_name = run_name.replace("]", "")
 
     return run_name
 

@@ -28,7 +28,11 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     # Setup clearml
     task_name = utils.create_task_name(cfg)
-    tags = ["-".join(cfg['model_cfg']['independent_par_names'])] + cfg['clearml_cfg']['tags']
+    if len(cfg['model_cfg']['independent_par_names']) > 0:
+        tags = ["-".join(cfg['model_cfg']['independent_par_names'])]
+    else:
+        tags = ["all_shared"]
+    tags += cfg['clearml_cfg']['tags']
 
     using_MPI_and_is_master = cfg['emcee_cfg']['pool_type'] == 'MPI' and MPI.COMM_WORLD.rank == 0
     using_multiprocessing = cfg['emcee_cfg']['pool_type'] == 'MP'
