@@ -112,9 +112,12 @@ def create_task_name(
             continue
         setting_str = '['+"[".join(setting.split('[')[2:])
         new_value = str(diff_dict['values_changed'][setting]['new_value'])
-        changes.append(
-            setting_str + '-' + new_value
-        )
+        if "shared_par_name" in setting:
+            changes.append(new_value)
+        else:
+            changes.append(
+                setting_str + '-' + new_value
+            )
     run_name = '_'.join(changes)
     run_name = run_name.replace("'", "")
     run_name = run_name.replace("][", "_")
