@@ -562,8 +562,8 @@ class Model():
         idx_only_below = (~prep.idx_above_cut) & (~prep.idx_no_logsSFR)
 
         probs = w * probs_1 + (1-w) * probs_2
-        probs[idx_only_below] = probs_1[idx_only_below]
-        probs[idx_only_above] = probs_2[idx_only_above]
+        probs[idx_only_below] = w * probs_1[idx_only_below]
+        probs[idx_only_above] = (1 - w) * probs_2[idx_only_above]
         
         log_prob = np.sum(np.log(probs))
         if np.isnan(log_prob):
