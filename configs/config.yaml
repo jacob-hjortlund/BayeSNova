@@ -1,5 +1,5 @@
 data_cfg:
-  path: './data/Super_0.023_0.15_zHD_cut_22_no_2007rx'
+  path: './data/supercal_cut_w_logsSFR'
   sep: ' '
 model_cfg:
   ratio_par_name: w
@@ -84,6 +84,9 @@ model_cfg:
   sigmoid_cfg:
     scale: 750.
     shift: 0.99
+  use_logsSFR: False
+  logsSFR_cfg:
+    cut: -10.8
   Ebv_integral_lower_bound: 0.
   Ebv_integral_upper_bound: -9999.
   Rb_integral_lower_bound: 0.

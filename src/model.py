@@ -82,7 +82,8 @@ def _Ebv_prior_convolution(
     upper_bound_Rb_1: float, upper_bound_Rb_2: float,
     lower_bound_Ebv_1: float, lower_bound_Ebv_2: float,
     upper_bound_Ebv_1: float, upper_bound_Ebv_2: float,
-    shift_Rb: float
+    shift_Rb: float, no_logsSFR: np.ndarray,
+    above_logsSFR_cut: np.ndarray, below_logsSFR_cut: np.ndarray
 ):
 
     n_sn = len(cov_1)
@@ -91,7 +92,9 @@ def _Ebv_prior_convolution(
     params_1 = np.array([Rb_1, sig_Rb_1, Ebv_1, tau_Ebv_1, gamma_Ebv_1])
     params_2 = np.array([Rb_2, sig_Rb_2, Ebv_2, tau_Ebv_2, gamma_Ebv_2])
 
-    for i in range(n_sn):
+    for i, (is_logsSFR_measured, is_above_cut, is_below_cut) in enumerate(
+        zip(no_logsSFR, above_logsSFR_cut, below_logsSFR_cut)
+    ):
         tmp_params_1 = np.concatenate((
             cov_1[i].ravel(), res_1[i].ravel(), params_1
         )).copy()
@@ -100,12 +103,22 @@ def _Ebv_prior_convolution(
             cov_2[i].ravel(), res_2[i].ravel(), params_2
         )).copy()
         tmp_params_2.astype(np.float64)
-        prob_1, _, s1 = dqags(
-            Ebv_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
-        )
-        prob_2, _, s2 = dqags(
-            Ebv_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
-        )
+        
+        if is_below_cut:
+            prob_1, _, s1 = dqags(
+                Ebv_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
+            )
+        elif not is_logsSFR_measured and not is_below_cut:
+            prob_1 = 0.
+            s1 = True
+
+        if is_above_cut:
+            prob_2, _, s2 = dqags(
+                Ebv_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
+            )
+        elif not is_logsSFR_measured and not is_above_cut:
+            prob_2 = 0.
+            s2 = True
 
         probs[i, 0] = prob_1
         probs[i, 1] = prob_2
@@ -214,7 +227,8 @@ def _Ebv_Rb_prior_convolution(
     upper_bound_Rb_1: float, upper_bound_Rb_2: float,
     lower_bound_Ebv_1: float, lower_bound_Ebv_2: float,
     upper_bound_Ebv_1: float, upper_bound_Ebv_2: float,
-    shift_Rb: float
+    shift_Rb: float, no_logsSFR: np.ndarray,
+    above_logsSFR_cut: np.ndarray, below_logsSFR_cut: np.ndarray
 ):
 
     n_sn = len(cov_1)
@@ -231,7 +245,9 @@ def _Ebv_Rb_prior_convolution(
         shift_Rb, lower_bound_Rb_2, upper_bound_Rb_2
     ])
 
-    for i in range(n_sn):
+    for i, (is_logsSFR_measured, is_above_cut, is_below_cut) in enumerate(
+        zip(no_logsSFR, above_logsSFR_cut, below_logsSFR_cut)
+    ):
         tmp_params_1 = np.concatenate((
             cov_1[i].ravel(), res_1[i].ravel(), params_1
         )).copy()
@@ -240,12 +256,22 @@ def _Ebv_Rb_prior_convolution(
             cov_2[i].ravel(), res_2[i].ravel(), params_2
         )).copy()
         tmp_params_2.astype(np.float64)
-        prob_1, _, s1 = dqags(
-            Ebv_Rb_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
-        )
-        prob_2, _, s2 = dqags(
-            Ebv_Rb_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
-        )
+
+        if is_below_cut:
+            prob_1, _, s1 = dqags(
+                Ebv_Rb_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
+            )
+        elif not is_logsSFR_measured and not is_below_cut:
+            prob_1 = 0.
+            s1 = True
+
+        if is_above_cut:
+            prob_2, _, s2 = dqags(
+                Ebv_Rb_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
+            )
+        elif not is_logsSFR_measured and not is_above_cut:
+            prob_2 = 0.
+            s2 = True
 
         probs[i, 0] = prob_1
         probs[i, 1] = prob_2
@@ -264,8 +290,6 @@ class Model():
     def log_prior(self, par_dict: dict) -> float:
         
         value = 0.
-        # stretch_1_par = self.stretch_par_name + "_1"
-        # stretch_2_par = self.stretch_par_name + "_2"
         stretch_1_par = prep.global_model_cfg.stretch_par_name + "_1"
         stretch_2_par = prep.global_model_cfg.stretch_par_name + "_2"
         if prep.global_model_cfg.stretch_par_name in prep.global_model_cfg.independent_par_names:
@@ -317,8 +341,6 @@ class Model():
         sig_c_1: float, sig_c_2: float,
     ) -> np.ndarray:
 
-        #global sn_covariances
-        #global sn_observables
         z = prep.sn_observables[:, 3]
 
         cov = np.tile(prep.sn_covariances, (2, 1, 1, 1))
@@ -326,8 +348,6 @@ class Model():
         c = 300000. # km / s
         
         cov[:,:,0,0] += np.array([
-            # [self.sig_int_1**2 + self.alpha_1**2 * self.sig_s_1**2 + self.beta_1**2 * self.sig_c_1**2],
-            # [self.sig_int_2**2 + self.alpha_2**2 * self.sig_s_2**2 + self.beta_2**2 * self.sig_c_2**2]
             [sig_int_1**2 + alpha_1**2 * sig_s_1**2 + beta_1**2 * sig_c_1**2],
             [sig_int_2**2 + alpha_2**2 * sig_s_2**2 + beta_2**2 * sig_c_2**2]
         ])
@@ -339,19 +359,15 @@ class Model():
         )
 
         cov[:,:,1,1] += np.array([
-            # [self.sig_s_1**2], [self.sig_s_2**2]
             [sig_s_1**2], [sig_s_2**2]
         ])
         cov[:,:,2,2] += np.array([
-            # [self.sig_c_1**2], [self.sig_c_2**2]
             [sig_c_1**2], [sig_c_2**2]
         ])
         cov[:,:,0,1] += np.array([
-            # [self.alpha_1 * self.sig_s_1**2], [self.alpha_2 * self.sig_s_2**2]
             [alpha_1 * sig_s_1**2], [alpha_2 * sig_s_2**2]
         ])
         cov[:,:,0,2] += np.array([
-            # [self.beta_1 * self.sig_c_1**2], [self.beta_2 * self.sig_c_2**2]
             [beta_1 * sig_c_1**2], [beta_2 * sig_c_2**2]
         ])
         cov[:,:,1,0] = cov[:,:,0,1]
@@ -454,7 +470,9 @@ class Model():
             lower_bound_Ebv_1=prep.global_model_cfg.Ebv_integral_lower_bound,
             lower_bound_Ebv_2=prep.global_model_cfg.Ebv_integral_lower_bound,
             upper_bound_Ebv_1=upper_bound_Ebv_1, upper_bound_Ebv_2=upper_bound_Ebv_2,
-            shift_Rb=shift_Rb
+            shift_Rb=shift_Rb, no_logsSFR=prep.idx_no_logsSFR,
+            above_logsSFR_cut=prep.idx_above_cut,
+            below_logsSFR_cut=prep.idx_below_cut
         )
 
         p_1 = probs[:, 0] / norm_1
@@ -533,20 +551,21 @@ class Model():
             shift_Rb=shift_Rb,
             Ebv_1=Ebv_1, Ebv_2=Ebv_2,
             tau_Ebv_1=tau_Ebv_1, tau_Ebv_2=tau_Ebv_2,
-            gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2,
+            gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2
         )
 
         if np.any(probs_1 < 0.) | np.any(probs_2 < 0.):
             print("\nOh no, someones below 0\n")
             return -np.inf
 
-        # TODO: Fix numerical stability by using logsumexp somehow
-        log_prob = np.sum(
-            np.log(
-                w * probs_1 + (1-w) * probs_2
-            )
-        )
+        idx_only_above = (~prep.idx_below_cut) & (~prep.idx_no_logsSFR)
+        idx_only_below = (~prep.idx_above_cut) & (~prep.idx_no_logsSFR)
 
+        probs = w * probs_1 + (1-w) * probs_2
+        probs[idx_only_below] = probs_1[idx_only_below]
+        probs[idx_only_above] = probs_2[idx_only_above]
+        
+        log_prob = np.sum(np.log(probs))
         if np.isnan(log_prob):
             log_prob = -np.inf
 
