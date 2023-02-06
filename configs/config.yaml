@@ -24,6 +24,7 @@ model_cfg:
     sig_int_1: 0.
     sig_int_2: 0.
     shift_Rb: 0.
+    logsSFR_cut: -10.8
   prior_bounds:
     Mb:
       lower: -100.
@@ -66,6 +67,9 @@ model_cfg:
     gamma_Ebv:
       lower: 1.
       upper: 7.
+    logsSFR_cut:
+      lower: -14.
+      upper: -9.
     w:
       lower: 0.12
       upper: 0.88
