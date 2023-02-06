@@ -183,7 +183,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         )
 
         if cfg['model_cfg']['use_free_logsSFR_cut']:
-            par_names.insert(len(par_names)-1, ["logsSFR_cut"])
+            par_names.insert(len(par_names)-1, "logsSFR_cut")
 
         quantiles = np.quantile(
             sample_thetas, [0.16, 0.84], axis=0
@@ -227,11 +227,11 @@ def main(cfg: omegaconf.DictConfig) -> None:
     print("\n----------------- PLOTS ---------------------\n")
     n_shared = len(cfg['model_cfg']['shared_par_names'])
     n_independent = len(cfg['model_cfg']['independent_par_names'])
-    labels = [
+    labels = (
         cfg['model_cfg']['shared_par_names'] +
         cfg['model_cfg']['independent_par_names'] +
         [cfg['model_cfg']['ratio_par_name']]
-    ]
+    )
 
     idx_cutoff = int(n_shared + 2 * n_independent - sample_thetas.shape[1])
     fx = sample_thetas[:, :n_shared]
@@ -239,26 +239,27 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     # Handling in case of independent parameters
     if n_independent > 0:
-        fx = sample_thetas[:, :n_shared]
         fx = np.concatenate(
             (
                 fx, sample_thetas[:, n_shared:idx_cutoff:2]
             ), axis=-1
         )
 
-        sx = sample_thetas[:, :n_shared]
-        sx = np.concatenate(
-            (
-                sx,
-                sample_thetas[:, n_shared+1:idx_cutoff:2],
-                sample_thetas[:,-1][:, None]
-            ), axis=-1
-        )
+        sx_list = [
+            sample_thetas[:, :n_shared],
+            sample_thetas[:, n_shared+1:idx_cutoff:2],
+            sample_thetas[:,-1][:, None]
+        ]
+        if cfg['model_cfg']['use_free_logsSFR_cut']:
+            sx_list.insert(len(sx_list)-1, sample_thetas[:, -2][:, None])
+
+        sx = np.concatenate(sx_list, axis=-1)
 
         fig_pop_2 = corner.corner(data=sx, color='r', **cfg['plot_cfg'])
     
     fx_list = [fx, sample_thetas[:,-1][:, None]]
     if cfg['model_cfg']['use_free_logsSFR_cut']:
+        labels.insert(len(labels)-1, "logsSFR_cut")
         fx_list.insert(len(fx_list)-1, sample_thetas[:, -2][:, None])
     fx = np.concatenate(fx_list, axis=-1)
 
