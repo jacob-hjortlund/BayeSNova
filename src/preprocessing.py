@@ -12,27 +12,20 @@ def init_global_data(
 
     global sn_covariances
     global sn_observables
+    global sn_logsSFR
     global gRb_quantiles
     global gEbv_quantiles
     global global_model_cfg
-    global idx_no_logsSFR
-    global idx_above_cut
-    global idx_below_cut
 
     global_model_cfg = cfg
 
     sn_covariances = build_covariance_matrix(data.to_numpy())
     sn_observables = data[['mB', 'x1', 'c', 'z']].to_numpy()
-
+    
     if "logsSFR" in data and cfg['use_logsSFR']:
-        cut = cfg['logsSFR_cfg']['cut']
-        idx_no_logsSFR = (data['logsSFR'] == NULL_VALUE).to_numpy()
-        idx_above_cut = (data['logsSFR'] >= cut).to_numpy() | idx_no_logsSFR
-        idx_below_cut = (data['logsSFR'] < cut).to_numpy()
+        sn_logsSFR = data['logsSFR'].to_numpy()
     else:
-        idx_no_logsSFR = np.ones(len(data), dtype=bool)
-        idx_above_cut = np.ones(len(data), dtype=bool)
-        idx_below_cut = np.ones(len(data), dtype=bool)
+        sn_logsSFR = np.ones(len(data)) * NULL_VALUE
 
     gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
     gEbv_quantiles = set_gamma_quantiles(cfg, 'Ebv')

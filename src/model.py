@@ -437,8 +437,9 @@ class Model():
         shift_Rb: float,
         Ebv_1: float, Ebv_2: float,
         tau_Ebv_1: float, tau_Ebv_2: float,
-        gamma_Ebv_1: float, gamma_Ebv_2: float
-    ) -> float:
+        gamma_Ebv_1: float, gamma_Ebv_2: float,
+        logsSFR_cut: float
+    ) -> tuple:
         
         upper_bound_Rb_1, upper_bound_Rb_2 = self.get_upper_bounds(
             prep.gRb_quantiles, gamma_Rb_1, gamma_Rb_2, "Rb"
@@ -454,6 +455,10 @@ class Model():
             norm_1 *= sp_special.gammainc(gamma_Rb_1, upper_bound_Rb_1) * sp_special.gamma(gamma_Rb_1)
         if gamma_Rb_2 != NULL_VALUE:
             norm_2 *= sp_special.gammainc(gamma_Rb_2, upper_bound_Rb_2) * sp_special.gamma(gamma_Rb_2)
+        
+        idx_no_logsSFR = prep.sn_logsSFR == NULL_VALUE
+        idx_above_logsSFR_cut = (prep.sn_logsSFR >= logsSFR_cut) | idx_no_logsSFR
+        idx_below_logsSFR_cut = prep.sn_logsSFR < logsSFR_cut
 
         probs, status = self.convolution_fn(
             cov_1=covs_1, cov_2=covs_2, res_1=residuals_1, res_2=residuals_2,
@@ -470,9 +475,9 @@ class Model():
             lower_bound_Ebv_1=prep.global_model_cfg.Ebv_integral_lower_bound,
             lower_bound_Ebv_2=prep.global_model_cfg.Ebv_integral_lower_bound,
             upper_bound_Ebv_1=upper_bound_Ebv_1, upper_bound_Ebv_2=upper_bound_Ebv_2,
-            shift_Rb=shift_Rb, no_logsSFR=prep.idx_no_logsSFR,
-            above_logsSFR_cut=prep.idx_above_cut,
-            below_logsSFR_cut=prep.idx_below_cut
+            shift_Rb=shift_Rb, no_logsSFR=idx_no_logsSFR,
+            above_logsSFR_cut=idx_above_logsSFR_cut,
+            below_logsSFR_cut=idx_below_logsSFR_cut
         )
 
         p_1 = probs[:, 0] / norm_1
@@ -510,7 +515,7 @@ class Model():
         Ebv_1: float, Ebv_2: float,
         tau_Ebv_1: float, tau_Ebv_2: float,
         gamma_Ebv_1: float, gamma_Ebv_2: float,
-        w: float, H0: float
+        logsSFR_cut: float, w: float, H0: float
     ) -> float:
         
         cov_1, cov_2 = self.population_covariances(
@@ -551,20 +556,15 @@ class Model():
             shift_Rb=shift_Rb,
             Ebv_1=Ebv_1, Ebv_2=Ebv_2,
             tau_Ebv_1=tau_Ebv_1, tau_Ebv_2=tau_Ebv_2,
-            gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2
+            gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2,
+            logsSFR_cut=logsSFR_cut
         )
 
         if np.any(probs_1 < 0.) | np.any(probs_2 < 0.):
             print("\nOh no, someones below 0\n")
             return -np.inf
 
-        idx_only_above = (~prep.idx_below_cut) & (~prep.idx_no_logsSFR)
-        idx_only_below = (~prep.idx_above_cut) & (~prep.idx_no_logsSFR)
-
         probs = w * probs_1 + (1-w) * probs_2
-        probs[idx_only_below] = w * probs_1[idx_only_below]
-        probs[idx_only_above] = (1 - w) * probs_2[idx_only_above]
-        
         log_prob = np.sum(np.log(probs))
         if np.isnan(log_prob):
             log_prob = -np.inf
@@ -587,7 +587,8 @@ class Model():
         param_dict = utils.theta_to_dict(
             theta=theta, shared_par_names=prep.global_model_cfg.shared_par_names,
             independent_par_names=prep.global_model_cfg.independent_par_names,
-            ratio_par_name=prep.global_model_cfg.ratio_par_name
+            ratio_par_name=prep.global_model_cfg.ratio_par_name,
+            use_free_logsSFR_cut=prep.global_model_cfg.use_free_logsSFR_cut
         )
 
         log_prior = self.log_prior(param_dict)
@@ -602,7 +603,7 @@ class Model():
             )
         
         param_dict =  {
-            **param_dict, **prep.global_model_cfg.preset_values
+            **prep.global_model_cfg.preset_values, **param_dict
         }
         log_likelihood = self.log_likelihood(**param_dict)
 
