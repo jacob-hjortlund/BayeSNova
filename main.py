@@ -183,7 +183,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         )
 
         if cfg['model_cfg']['use_free_logsSFR_cut']:
-            par_names.insert(len(par_names)-1, "logsSFR_cut")
+            par_names.insert(len(par_names)-1, ["logsSFR_cut"])
 
         quantiles = np.quantile(
             sample_thetas, [0.16, 0.84], axis=0
@@ -233,9 +233,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         [cfg['model_cfg']['ratio_par_name']]
     ]
 
-    if cfg['model_cfg']['use_free_logsSFR_cut']:
-            labels.insert(len(par_names)-1, "logsSFR_cut")
-
+    idx_cutoff = int(n_shared + 2 * n_independent - sample_thetas.shape[1])
     fx = sample_thetas[:, :n_shared]
     fig_pop_2 = None
 
@@ -244,7 +242,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         fx = sample_thetas[:, :n_shared]
         fx = np.concatenate(
             (
-                fx, sample_thetas[:, n_shared:-1:2]
+                fx, sample_thetas[:, n_shared:idx_cutoff:2]
             ), axis=-1
         )
 
@@ -252,18 +250,17 @@ def main(cfg: omegaconf.DictConfig) -> None:
         sx = np.concatenate(
             (
                 sx,
-                sample_thetas[:, n_shared+1:-1:2],
+                sample_thetas[:, n_shared+1:idx_cutoff:2],
                 sample_thetas[:,-1][:, None]
             ), axis=-1
         )
 
         fig_pop_2 = corner.corner(data=sx, color='r', **cfg['plot_cfg'])
-
-    fx = np.concatenate(
-        (
-            fx, sample_thetas[:,-1][:, None]
-        ), axis=-1
-    )
+    
+    fx_list = [fx, sample_thetas[:,-1][:, None]]
+    if cfg['model_cfg']['use_free_logsSFR_cut']:
+        fx_list.insert(len(fx_list)-1, sample_thetas[:, -2][:, None])
+    fx = np.concatenate(fx_list, axis=-1)
 
     fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, labels=labels, **cfg['plot_cfg'])
     fig_pop_1.tight_layout()
