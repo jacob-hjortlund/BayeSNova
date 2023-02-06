@@ -32,6 +32,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
         tags = ["-".join(cfg['model_cfg']['independent_par_names'])]
     else:
         tags = ["all_shared"]
+    tags += [
+        os.path.split(cfg['data_cfg']['path'])[1].split(".")[0]
+    ]
     tags += cfg['clearml_cfg']['tags']
 
     using_MPI_and_is_master = cfg['emcee_cfg']['pool_type'] == 'MPI' and MPI.COMM_WORLD.rank == 0
