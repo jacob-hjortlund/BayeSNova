@@ -3,6 +3,7 @@ data_cfg:
   sep: ' '
 model_cfg:
   ratio_par_name: w
+  use_free_logsSFR_cut: False
   stretch_par_name: s
   shared_par_names: [
     alpha,
@@ -84,13 +85,12 @@ model_cfg:
     tau_Rb: 0.02
     gamma_Rb: 2.9
     shift_Rb: 1.5
+    logsSFR_cut: -10.8
   use_sigmoid: False
   sigmoid_cfg:
     scale: 750.
     shift: 0.99
   use_logsSFR: False
-  logsSFR_cfg:
-    cut: -10.8
   Ebv_integral_lower_bound: 0.
   Ebv_integral_upper_bound: -9999.
   Rb_integral_lower_bound: 0.

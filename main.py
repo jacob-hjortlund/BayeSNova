@@ -75,7 +75,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print("\n----------------- SETUP ---------------------\n")
         init_theta = utils.prior_initialisation(
             cfg['model_cfg']['prior_bounds'], cfg['model_cfg']['init_values'], cfg['model_cfg']['shared_par_names'],
-            cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name']
+            cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name'],
+            cfg['model_cfg']['use_free_logsSFR_cut']
         )
         init_theta = init_theta + 3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'], len(init_theta))
         _ = log_prob(init_theta[0]) # call func once befor loop to jit compile

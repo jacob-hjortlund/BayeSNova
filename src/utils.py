@@ -156,10 +156,12 @@ def extend_theta(theta: np.ndarray, n_shared_pars: int) -> tuple:
 
 def prior_initialisation(
     priors: dict, preset_init_values: dict, shared_par_names: list,
-    independent_par_names: list, ratio_par_name: str,
+    independent_par_names: list, ratio_par_name: str, use_free_logsSFR_cut: bool
 ):
 
     par_names = shared_par_names + independent_par_names + [ratio_par_name]
+    if use_free_logsSFR_cut:
+        par_names.insert(len(par_names)-1, "logsSFR_cut")
     init_values = []
     # 3-deep conditional bleeeh
     for par in par_names:
@@ -180,9 +182,15 @@ def prior_initialisation(
         init_values.append(init_par)
     
     init_values = np.array(init_values)
+    cut_off_index = len(shared_par_names) + len(independent_par_names) - len(par_names)
     shared_init_pars = init_values[:len(shared_par_names)]
-    independent_init_pars = np.repeat(init_values[len(shared_par_names):-1], 2)
-    init_pars = np.concatenate([shared_init_pars, independent_init_pars, [init_values[-1]]])
+    independent_init_pars = np.repeat(init_values[len(shared_par_names):cut_off_index], 2)
+    init_par_list = [shared_init_pars, independent_init_pars, [init_values[-1]]]
+    if use_free_logsSFR_cut:
+        init_par_list.insert(
+            len(init_par_list)-1, [init_values[-2]]
+        )
+    init_pars = np.concatenate(init_par_list)
 
     # Check if stretch is shared and correct to account for prior
     try:
@@ -207,7 +215,7 @@ def gen_pop_par_names(par_names):
 
 def theta_to_dict(
     theta: np.ndarray, shared_par_names: list, independent_par_names: list,
-    ratio_par_name: str
+    ratio_par_name: str, use_free_logsSFR_cut: bool
 ) -> dict:
 
     extended_shared_par_names = gen_pop_par_names(shared_par_names)
@@ -227,14 +235,19 @@ def theta_to_dict(
     n_shared_pars = len(shared_par_names)
     n_independent_pars = len(independent_par_names)
 
-    if len(theta) != n_shared_pars + 2 * n_independent_pars + 1:
+    no_pars = n_shared_pars + 2 * n_independent_pars + use_free_logsSFR_cut + 1
+    if len(theta) != no_pars:
         raise ValueError(
             "MCMC parameter dimensions does not match no. of shared and independent parameters."
         )
 
     shared_pars, independent_pars = extend_theta(theta, n_shared_pars)
     missing_pars = [NULL_VALUE] * len(extended_missing_par_names)
-    pars = np.concatenate([shared_pars, independent_pars, missing_pars, [theta[-1]]])
+    par_list = [shared_pars, independent_pars, missing_pars, [theta[-1]]]
+    if use_free_logsSFR_cut:
+        par_names.insert(len(par_names)-1, "logsSFR_cut")
+        par_list.insert(len(par_list)-1,[theta[-2]])
+    pars = np.concatenate(par_list)
     arg_dict = {name: par for name, par in zip(par_names, pars)}
 
     return arg_dict

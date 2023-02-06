@@ -457,7 +457,7 @@ class Model():
             norm_2 *= sp_special.gammainc(gamma_Rb_2, upper_bound_Rb_2) * sp_special.gamma(gamma_Rb_2)
         
         idx_no_logsSFR = prep.sn_logsSFR == NULL_VALUE
-        idx_above_logsSFR_cut = prep.sn_logsSFR >= logsSFR_cut | idx_no_logsSFR
+        idx_above_logsSFR_cut = (prep.sn_logsSFR >= logsSFR_cut) | idx_no_logsSFR
         idx_below_logsSFR_cut = prep.sn_logsSFR < logsSFR_cut
 
         probs, status = self.convolution_fn(
@@ -556,7 +556,8 @@ class Model():
             shift_Rb=shift_Rb,
             Ebv_1=Ebv_1, Ebv_2=Ebv_2,
             tau_Ebv_1=tau_Ebv_1, tau_Ebv_2=tau_Ebv_2,
-            gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2
+            gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2,
+            logsSFR_cut=logsSFR_cut
         )
 
         if np.any(probs_1 < 0.) | np.any(probs_2 < 0.):
@@ -564,10 +565,6 @@ class Model():
             return -np.inf
 
         probs = w * probs_1 + (1-w) * probs_2
-        idx_no_logsSFR = prep.sn_logsSFR == NULL_VALUE
-        idx_above_logsSFR_cut = prep.sn_logsSFR >= logsSFR_cut | idx_no_logsSFR
-        idx_below_logsSFR_cut = prep.sn_logsSFR < logsSFR_cut
-        
         log_prob = np.sum(np.log(probs))
         if np.isnan(log_prob):
             log_prob = -np.inf
@@ -590,7 +587,8 @@ class Model():
         param_dict = utils.theta_to_dict(
             theta=theta, shared_par_names=prep.global_model_cfg.shared_par_names,
             independent_par_names=prep.global_model_cfg.independent_par_names,
-            ratio_par_name=prep.global_model_cfg.ratio_par_name
+            ratio_par_name=prep.global_model_cfg.ratio_par_name,
+            use_free_logsSFR_cut=prep.global_model_cfg.use_free_logsSFR_cut
         )
 
         log_prior = self.log_prior(param_dict)
