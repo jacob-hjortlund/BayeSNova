@@ -147,10 +147,13 @@ def uniform(value: float, lower: float = -np.inf, upper: float = np.inf):
     else:
         return 0.
 
-def extend_theta(theta: np.ndarray, n_shared_pars: int) -> tuple:
+def extend_theta(
+    theta: np.ndarray, n_shared_pars: int, n_independent_pars: int
+) -> tuple:
 
+    idx_cut_off = n_shared_pars + 2*n_independent_pars - len(theta)
     shared_pars = np.repeat(theta[:n_shared_pars], 2)
-    independent_pars = theta[n_shared_pars:-1]
+    independent_pars = theta[n_shared_pars:idx_cut_off]
 
     return shared_pars, independent_pars
 
@@ -241,7 +244,7 @@ def theta_to_dict(
             "MCMC parameter dimensions does not match no. of shared and independent parameters."
         )
 
-    shared_pars, independent_pars = extend_theta(theta, n_shared_pars)
+    shared_pars, independent_pars = extend_theta(theta, n_shared_pars, n_independent_pars)
     missing_pars = [NULL_VALUE] * len(extended_missing_par_names)
     par_list = [shared_pars, independent_pars, missing_pars, [theta[-1]]]
     if use_free_logsSFR_cut:

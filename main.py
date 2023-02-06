@@ -182,6 +182,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
             [cfg['model_cfg']['ratio_par_name']]
         )
 
+        if cfg['model_cfg']['use_free_logsSFR_cut']:
+            par_names.insert(len(par_names)-1, "logsSFR_cut")
+
         quantiles = np.quantile(
             sample_thetas, [0.16, 0.84], axis=0
         )
@@ -224,11 +227,14 @@ def main(cfg: omegaconf.DictConfig) -> None:
     print("\n----------------- PLOTS ---------------------\n")
     n_shared = len(cfg['model_cfg']['shared_par_names'])
     n_independent = len(cfg['model_cfg']['independent_par_names'])
-    labels = (
+    labels = [
         cfg['model_cfg']['shared_par_names'] +
         cfg['model_cfg']['independent_par_names'] +
         [cfg['model_cfg']['ratio_par_name']]
-    )
+    ]
+
+    if cfg['model_cfg']['use_free_logsSFR_cut']:
+            labels.insert(len(par_names)-1, "logsSFR_cut")
 
     fx = sample_thetas[:, :n_shared]
     fig_pop_2 = None
