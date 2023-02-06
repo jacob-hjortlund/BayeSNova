@@ -201,6 +201,14 @@ def main(cfg: omegaconf.DictConfig) -> None:
         map_mmap_values[4] = np.abs(
             map_mmap_values[0] - map_mmap_values[1]
         ) / map_mmap_values[3]
+
+        rms_value = np.sqrt(
+            np.mean(
+                (map_mmap_values[0] - map_mmap_values[1])**2 / map_mmap_values[3]**2
+            )
+        )
+
+        clearml_logger.report_single_value(name='rms_Z', value=rms_value)
         
         map_mmap_df = pd.DataFrame(
             map_mmap_values, index=['MAP', 'MMAP', 'sigma', 'sym_sigma', 'Z'], columns=par_names
