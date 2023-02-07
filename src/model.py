@@ -310,13 +310,14 @@ class Model():
                 ) and stretch_independent
             )
             is_not_ratio_par_name = value_key != prep.global_model_cfg.ratio_par_name
+            is_not_logsSFR_cut = value_key != "logsSFR_cut"
 
             if is_independent_stretch:
                 if not par_dict[stretch_1_par] < par_dict[stretch_2_par]:
                     value += -np.inf
                     break
             
-            if is_not_ratio_par_name:
+            if is_not_ratio_par_name and is_not_logsSFR_cut:
                 bounds_key = "_".join(value_key.split("_")[:-1])
             else:
                 bounds_key = value_key
