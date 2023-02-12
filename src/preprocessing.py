@@ -12,7 +12,6 @@ def init_global_data(
 
     global sn_covariances
     global sn_observables
-    global sn_logsSFR
     global gRb_quantiles
     global gEbv_quantiles
     global global_model_cfg
@@ -21,12 +20,6 @@ def init_global_data(
 
     sn_covariances = build_covariance_matrix(data.to_numpy())
     sn_observables = data[['mB', 'x1', 'c', 'z']].to_numpy()
-    
-    if "logsSFR" in data and cfg['use_logsSFR']:
-        sn_logsSFR = data['logsSFR'].to_numpy()
-    else:
-        sn_logsSFR = np.ones(len(data)) * NULL_VALUE
-
     gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
     gEbv_quantiles = set_gamma_quantiles(cfg, 'Ebv')
 

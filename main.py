@@ -2,19 +2,16 @@ import hydra
 import omegaconf
 import os
 import corner
-import tqdm
 
 import emcee as em
 import numpy as np
 import pandas as pd
 import clearml as cl
-import scipy.stats as sp_stats
 import scipy.optimize as sp_opt
 import matplotlib.pyplot as plt
 import src.utils as utils
 import src.model as model
 import src.preprocessing as prep
-import src.probabilities as prob
 
 from time import time
 from mpi4py import MPI
@@ -75,8 +72,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print("\n----------------- SETUP ---------------------\n")
         init_theta = utils.prior_initialisation(
             cfg['model_cfg']['prior_bounds'], cfg['model_cfg']['init_values'], cfg['model_cfg']['shared_par_names'],
-            cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name'],
-            cfg['model_cfg']['use_free_logsSFR_cut']
+            cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name']
         )
         init_theta = init_theta + 3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'], len(init_theta))
         _ = log_prob(init_theta[0]) # call func once befor loop to jit compile
@@ -182,9 +178,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
             [cfg['model_cfg']['ratio_par_name']]
         )
 
-        if cfg['model_cfg']['use_free_logsSFR_cut']:
-            par_names.insert(len(par_names)-1, "logsSFR_cut")
-
         quantiles = np.quantile(
             sample_thetas, [0.16, 0.84], axis=0
         )
@@ -250,17 +243,11 @@ def main(cfg: omegaconf.DictConfig) -> None:
             sample_thetas[:, n_shared+1:idx_cutoff:2],
             sample_thetas[:,-1][:, None]
         ]
-        if cfg['model_cfg']['use_free_logsSFR_cut']:
-            sx_list.insert(len(sx_list)-1, sample_thetas[:, -2][:, None])
-
         sx = np.concatenate(sx_list, axis=-1)
 
         fig_pop_2 = corner.corner(data=sx, color='r', **cfg['plot_cfg'])
     
     fx_list = [fx, sample_thetas[:,-1][:, None]]
-    if cfg['model_cfg']['use_free_logsSFR_cut']:
-        labels.insert(len(labels)-1, "logsSFR_cut")
-        fx_list.insert(len(fx_list)-1, sample_thetas[:, -2][:, None])
     fx = np.concatenate(fx_list, axis=-1)
 
     fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, labels=labels, **cfg['plot_cfg'])
