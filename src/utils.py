@@ -72,7 +72,6 @@ class PoolWrapper():
 
 def estimate_mmap(samples):
 
-
     mean_val = np.mean(samples)
     t0 = time.time()
     kernel = sp_stats.gaussian_kde(samples)
@@ -148,12 +147,11 @@ def uniform(value: float, lower: float = -np.inf, upper: float = np.inf):
         return 0.
 
 def extend_theta(
-    theta: np.ndarray, n_shared_pars: int, n_independent_pars: int
+    theta: np.ndarray, n_shared_pars: int
 ) -> tuple:
 
-    idx_cut_off = n_shared_pars + 2*n_independent_pars - len(theta)
     shared_pars = np.repeat(theta[:n_shared_pars], 2)
-    independent_pars = theta[n_shared_pars:idx_cut_off]
+    independent_pars = theta[n_shared_pars:-1]
 
     return shared_pars, independent_pars
 
@@ -214,7 +212,7 @@ def gen_pop_par_names(par_names):
 
 def theta_to_dict(
     theta: np.ndarray, shared_par_names: list, independent_par_names: list,
-    ratio_par_name: str
+    n_host_galaxy_observables: int, ratio_par_name: str
 ) -> dict:
 
     extended_shared_par_names = gen_pop_par_names(shared_par_names)
@@ -232,19 +230,27 @@ def theta_to_dict(
     )
 
     n_shared_pars = len(shared_par_names)
-    n_independent_pars = len(independent_par_names)
+    n_independent_pars = 2 * (len(independent_par_names) + n_host_galaxy_observables)
 
-    no_pars = n_shared_pars + 2 * n_independent_pars + 1
+    no_pars = n_shared_pars + n_independent_pars + 1
     if len(theta) != no_pars:
         raise ValueError(
             "MCMC parameter dimensions does not match no. of shared and independent parameters."
         )
 
-    shared_pars, independent_pars = extend_theta(theta, n_shared_pars, n_independent_pars)
+    shared_pars, independent_pars = extend_theta(theta, n_shared_pars)
     missing_pars = [NULL_VALUE] * len(extended_missing_par_names)
-    par_list = [shared_pars, independent_pars, missing_pars, [theta[-1]]]
+    par_list = [
+        shared_pars,
+        independent_pars[:n_independent_pars - 2 * n_host_galaxy_observables],
+        missing_pars,
+        [theta[-1]]
+    ]
     pars = np.concatenate(par_list)
     arg_dict = {name: par for name, par in zip(par_names, pars)}
+
+    if n_host_galaxy_observables > 0:
+        arg_dict['host_galaxy_pars'] = independent_pars[-2 * n_host_galaxy_observables:]
 
     return arg_dict
 
