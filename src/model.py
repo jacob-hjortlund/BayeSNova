@@ -468,6 +468,31 @@ class Model():
 
         return p_1, p_2, status
 
+    def host_galaxy_likelihoods(
+        self,
+        host_galaxy_means: np.ndarray,
+        host_galaxy_sigmas: np.ndarray,
+    ):
+
+        mu_1, mu_2 = host_galaxy_means[::2], host_galaxy_means[1::2]
+        res_1 = prep.host_galaxy_observables - mu_1
+        res_2 = prep.host_galaxy_observables - mu_2
+
+        sig_1, sig_2 = host_galaxy_sigmas[::2], host_galaxy_sigmas[1::2]
+        cov_1 = prep.host_galaxy_covariances + np.diag(sig_1**2)
+        cov_2 = prep.host_galaxy_covariances + np.diag(sig_2**2)
+
+        prob_1 = (
+            ((2 * np.pi)**(-len(res_1)/2) * np.linalg.det(cov_1)**(-1/2)) * 
+            np.exp(-0.5 * res_1 @ np.linalg.inv(cov_1) @ res_1)
+        )
+        prob_2 = (
+            ((2 * np.pi)**(-len(res_2)/2) * np.linalg.det(cov_2)**(-1/2)) * 
+            np.exp(-0.5 * res_2 @ np.linalg.inv(cov_2) @ res_2)
+        )
+
+        return prob_1, prob_2
+
     def log_likelihood(
         self,
         Mb_1: float, Mb_2: float,
@@ -486,17 +511,19 @@ class Model():
         Ebv_1: float, Ebv_2: float,
         tau_Ebv_1: float, tau_Ebv_2: float,
         gamma_Ebv_1: float, gamma_Ebv_2: float,
+        host_galaxy_means: np.ndarray,
+        host_galaxy_sigs: np.ndarray,
         w: float, H0: float
     ) -> float:
         
-        cov_1, cov_2 = self.population_covariances(
+        sn_cov_1, sn_cov_2 = self.population_covariances(
             alpha_1=alpha_1, alpha_2=alpha_2,
             beta_1=beta_1, beta_2=beta_2,
             sig_int_1=sig_int_1, sig_int_2=sig_int_2,
             sig_s_1=sig_s_1, sig_s_2=sig_s_2,
             sig_c_1=sig_c_1, sig_c_2=sig_c_2,
         )
-        residuals_1, residuals_2 = self.population_residuals(
+        sn_residuals_1, sn_residuals_2 = self.population_residuals(
             Mb_1=Mb_1, Mb_2=Mb_2,
             s_1=s_1, s_2=s_2,
             c_1=c_1, c_2=c_2,
@@ -517,9 +544,9 @@ class Model():
         else:
             self.convolution_fn = _Ebv_Rb_prior_convolution
         
-        probs_1, probs_2, status = self.prior_convolutions(
-            covs_1=cov_1, covs_2=cov_2,
-            residuals_1=residuals_1, residuals_2=residuals_2,
+        sn_probs_1, sn_probs_2, status = self.prior_convolutions(
+            covs_1=sn_cov_1, covs_2=sn_cov_2,
+            residuals_1=sn_residuals_1, residuals_2=sn_residuals_2,
             Rb_1=Rb_1, Rb_2=Rb_2,
             sig_Rb_1=sig_Rb_1, sig_Rb_2=sig_Rb_2,
             tau_Rb_1=tau_Rb_1, tau_Rb_2=tau_Rb_2,
@@ -530,19 +557,28 @@ class Model():
             gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2,
         )
 
-        if np.any(probs_1 < 0.) | np.any(probs_2 < 0.):
+        if np.any(sn_probs_1 < 0.) | np.any(sn_probs_2 < 0.):
             print("\nOh no, someones below 0\n")
             return -np.inf
 
-        probs = w * probs_1 + (1-w) * probs_2
-        log_prob = np.sum(np.log(probs))
+        if host_galaxy_means.shape[0] > 0:
+            host_probs_1, host_probs_2 = self.host_galaxy_likelihoods(
+                host_galaxy_means=host_galaxy_means,
+                host_galaxy_sigmas=host_galaxy_sigs,
+            )
+            host_probs = w * host_probs_1 + (1-w) * host_probs_2 
+
+        sn_probs = w * sn_probs_1 + (1-w) * sn_probs_2
+        log_prob = np.sum(
+            np.log(sn_probs) + np.log(host_probs)
+        )
         if np.isnan(log_prob):
             log_prob = -np.inf
 
         s1, s2 = np.all(status[:, 0]), np.all(status[:, 1])
         if not s1 or not s2:
-            mean1, mean2 = np.mean(probs_1), np.mean(probs_2)
-            std1, std2 = np.std(probs_1), np.std(probs_2)
+            mean1, mean2 = np.mean(sn_probs_1), np.mean(sn_probs_2)
+            std1, std2 = np.std(sn_probs_1), np.std(sn_probs_2)
             f1, f2 = np.count_nonzero(~status[:, 0])/len(status), np.count_nonzero(~status[:, 1])/len(status)
             print("\nPop 1 mean and std, percentage failed:", mean1, "+-", std1, ",", f1*100, "%")
             print("Pop 2 mean and std, percentage failed:", mean2, "+-", std2, ",", f2*100, "%")
@@ -557,6 +593,7 @@ class Model():
         param_dict = utils.theta_to_dict(
             theta=theta, shared_par_names=prep.global_model_cfg.shared_par_names,
             independent_par_names=prep.global_model_cfg.independent_par_names,
+            n_host_galaxy_observables=prep.host_galaxy_observables.shape[1],
             ratio_par_name=prep.global_model_cfg.ratio_par_name,
         )
 

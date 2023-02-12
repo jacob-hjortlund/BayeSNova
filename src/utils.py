@@ -248,12 +248,17 @@ def theta_to_dict(
     ]
     pars = np.concatenate(par_list)
     arg_dict = {name: par for name, par in zip(par_names, pars)}
-    arg_dict['host_galaxy_pars'] = np.zeros(0)
+    arg_dict['host_galaxy_means'] = np.zeros(0)
+    arg_dict['host_galaxy_covs'] = np.zeros(0)
 
     if n_host_galaxy_observables > 0:
-        arg_dict['host_galaxy_pars'] = np.array(
+        host_pars = np.array(
             independent_pars[-2 * n_host_galaxy_observables:]
         )
+        idx_means = np.array([True, True, False, False] * n_host_galaxy_observables)
+        idx_sigs = np.array([False, False, True, True] * n_host_galaxy_observables)
+        arg_dict['host_galaxy_means'] = host_pars[idx_means]
+        arg_dict['host_galaxy_sigs'] = np.diag(host_pars[idx_sigs])
 
     return arg_dict
 
@@ -274,13 +279,19 @@ def apply_sigmoid(
         arg_dict[name1] = s2 * p1 + (1-s2) * p2
         arg_dict[name2] = s1 * p1 + (1-s1) * p2
     
-    n_host_galaxy_pars = arg_dict['host_galaxy_pars'].shape[0]
+    n_host_galaxy_pars = arg_dict['host_galaxy_means'].shape[0]
     if n_host_galaxy_pars > 0:
+        means = arg_dict['host_galaxy_means']
+        sigs = arg_dict['host_galaxy_sigs']
         for i in range(n_host_galaxy_pars // 2):
-            p1 = arg_dict['host_galaxy_pars'][i]
-            p2 = arg_dict['host_galaxy_pars'][i+1]
-            arg_dict['host_galaxy_pars'][i] = s2 * p1 + (1-s2) * p2
-            arg_dict['host_galaxy_pars'][i+1] = s1 * p1 + (1-s1) * p2
+            pm1, ps1 = means[i], sigs[i]
+            pm2, ps2 = means[i+1], sigs[i+1]
+
+            means[i] = s2 * pm1 + (1-s2) * pm2
+            means[i+1] = s1 * pm1 + (1-s1) * pm2
+            
+            sigs[i] = s2 * ps1 + (1-s2) * ps2
+            sigs[i+1] = s1 * ps1 + (1-s1) * ps2
 
     return arg_dict
 
