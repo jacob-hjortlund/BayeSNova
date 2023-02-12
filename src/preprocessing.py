@@ -27,7 +27,7 @@ def init_global_data(
         sn_observable_keys + sn_covariance_keys + ['CID'], axis=1, inplace=True
     )
 
-    if data.shape[1] == 0:
+    if data.shape[1] == 0 or not cfg['use_host_galaxy_properties']:
         host_galaxy_observables = None
         host_galaxy_covariance_values = None
     elif (data.shape[1] % 2) == 0:
