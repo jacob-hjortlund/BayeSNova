@@ -61,12 +61,10 @@ def build_covariance_matrix(
     host_cov_values: np.ndarray = None,
 ) -> np.ndarray:
     """Given a SN covariance value array with shape (N,M), populate
-    a set of covariance matrices with the shape (N,3,3). If any host
-    galaxy properties are provided (with shape (N,K)), they are added
-    to the covariance matrix. SN and host galaxy properties are assumed
-    to be independent. If any covariance matrix has a zero or negative
-    determinant, a small value is added along the diagonal.
-
+    a set of covariance matrices with the shape (N,3,3). Host galaxy
+    property covariance matrices with shape (N,K,K) are calculated 
+    given a host galaxy covariance value array with shape (N,K). SN 
+    and host galaxy properties are assumed to be independent.
     Args:
         sn_cov_values (np.ndarray): SN covariance values array with shape (N,M)
         host_cov_values (np.ndarray, optional): Host galaxy covariance values array with shape (N,K). 
@@ -75,31 +73,25 @@ def build_covariance_matrix(
         np.ndarray: (N,3,3) covariance matrix
     """
 
-    shape = 3
+    cov_sn = np.zeros((sn_cov_values.shape[0], 3, 3))
     if np.any(host_cov_values):
-        shape += host_cov_values.shape[1]
-        cov = np.zeros((sn_cov_values.shape[0], shape, shape))
-        diag_host_covs = np.eye(host_cov_values.shape[1]) * host_cov_values[:, None, :]
-        cov[:,3:,3:] = diag_host_covs
+        cov_host = np.eye(host_cov_values.shape[1]) * host_cov_values[:, None, :]
+        posdef_cov_host = utils.ensure_posdef(cov_host)
     else:
-        cov = np.zeros((sn_cov_values.shape[0], 3, 3))
+        posdef_cov_host = np.zeros((0,0))
 
-    # diagonals
-    cov[:,0,0] = sn_cov_values[:, 1] ** 2 # omega_m^2
-    cov[:,1,1] = sn_cov_values[:, 2] ** 2 # omega_x^2
-    cov[:,2,2] = sn_cov_values[:, 3] ** 2 # omega_colour^2
+    cov_sn[:,0,0] = sn_cov_values[:, 1] ** 2 # omega_m^2
+    cov_sn[:,1,1] = sn_cov_values[:, 2] ** 2 # omega_x^2
+    cov_sn[:,2,2] = sn_cov_values[:, 3] ** 2 # omega_colour^2
 
-    # upper off-diagonals
-    cov[:,0,1] = sn_cov_values[:, 5] * (-2.5 / (np.log(10.) * sn_cov_values[:, 0]))
-    cov[:,0,2] = sn_cov_values[:, 6] * (-2.5 / (np.log(10.) * sn_cov_values[:, 0]))
-    cov[:,1,2] = sn_cov_values[:, 4]
+    cov_sn[:,0,1] = sn_cov_values[:, 5] * (-2.5 / (np.log(10.) * sn_cov_values[:, 0]))
+    cov_sn[:,0,2] = sn_cov_values[:, 6] * (-2.5 / (np.log(10.) * sn_cov_values[:, 0]))
+    cov_sn[:,1,2] = sn_cov_values[:, 4]
 
-    # lower off-diagonals
-    cov[:,1,0] = cov[:,0,1]
-    cov[:,2,0] = cov[:,0,2]
-    cov[:,2,1] = cov[:,1,2]
+    cov_sn[:,1,0] = cov_sn[:,0,1]
+    cov_sn[:,2,0] = cov_sn[:,0,2]
+    cov_sn[:,2,1] = cov_sn[:,1,2]
 
-    # add constant to covs with negative determinant
-    posdef_covs = utils.ensure_posdef(cov)
+    posdef_cov_sn = utils.ensure_posdef(cov_sn)
     
-    return posdef_covs
+    return posdef_cov_sn, posdef_cov_host
