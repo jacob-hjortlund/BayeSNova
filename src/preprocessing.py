@@ -16,6 +16,7 @@ def init_global_data(
     global gEbv_quantiles
     global global_model_cfg
     global host_galaxy_observables
+    global host_galaxy_covariances
 
     global_model_cfg = cfg
 
@@ -36,7 +37,7 @@ def init_global_data(
     else:
         raise ValueError("Host galaxy properties must be provided as even columns.")
 
-    sn_covariances = build_covariance_matrix(
+    sn_covariances, host_galaxy_covariances = build_covariance_matrix(
         sn_covariance_values, host_galaxy_covariance_values
     )
     gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
