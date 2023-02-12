@@ -159,7 +159,8 @@ def extend_theta(
 
 def prior_initialisation(
     priors: dict, preset_init_values: dict, shared_par_names: list,
-    independent_par_names: list, ratio_par_name: str
+    independent_par_names: list, host_galaxy_init_values: list,
+    ratio_par_name: str
 ):
 
     par_names = shared_par_names + independent_par_names + [ratio_par_name]
@@ -182,10 +183,11 @@ def prior_initialisation(
             init_par = 0.
         init_values.append(init_par)
     
+    init_values = init_values + host_galaxy_init_values
+
     init_values = np.array(init_values)
-    cut_off_index = len(shared_par_names) + len(independent_par_names) - len(par_names)
     shared_init_pars = init_values[:len(shared_par_names)]
-    independent_init_pars = np.repeat(init_values[len(shared_par_names):cut_off_index], 2)
+    independent_init_pars = np.repeat(init_values[len(shared_par_names):-1], 2)
     init_par_list = [shared_init_pars, independent_init_pars, [init_values[-1]]]
     init_pars = np.concatenate(init_par_list)
 
