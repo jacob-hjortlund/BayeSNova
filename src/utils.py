@@ -248,9 +248,12 @@ def theta_to_dict(
     ]
     pars = np.concatenate(par_list)
     arg_dict = {name: par for name, par in zip(par_names, pars)}
+    arg_dict['host_galaxy_pars'] = np.zeros(0)
 
     if n_host_galaxy_observables > 0:
-        arg_dict['host_galaxy_pars'] = independent_pars[-2 * n_host_galaxy_observables:]
+        arg_dict['host_galaxy_pars'] = np.array(
+            independent_pars[-2 * n_host_galaxy_observables:]
+        )
 
     return arg_dict
 
@@ -271,6 +274,14 @@ def apply_sigmoid(
         arg_dict[name1] = s2 * p1 + (1-s2) * p2
         arg_dict[name2] = s1 * p1 + (1-s1) * p2
     
+    n_host_galaxy_pars = arg_dict['host_galaxy_pars'].shape[0]
+    if n_host_galaxy_pars > 0:
+        for i in range(n_host_galaxy_pars // 2):
+            p1 = arg_dict['host_galaxy_pars'][i]
+            p2 = arg_dict['host_galaxy_pars'][i+1]
+            arg_dict['host_galaxy_pars'][i] = s2 * p1 + (1-s2) * p2
+            arg_dict['host_galaxy_pars'][i+1] = s1 * p1 + (1-s1) * p2
+
     return arg_dict
 
 def vectorized_apply_sigmoid(
