@@ -16,8 +16,6 @@ import src.preprocessing as prep
 from time import time
 from mpi4py import MPI
 
-PATH_PREFIX = '/lustre/hpc'
-
 @hydra.main(
     version_base=None, config_path="configs", config_name="config"
 )
