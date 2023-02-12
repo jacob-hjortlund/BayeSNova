@@ -54,7 +54,8 @@ def build_covariance_matrix(
 
     Args:
         sn_cov_values (np.ndarray): SN covariance values array with shape (N,M)
-
+        host_cov_values (np.ndarray, optional): Host galaxy covariance values array with shape (N,K). 
+        Currently only handles / assumes independent properties. Defaults to None.
     Returns:
         np.ndarray: (N,3,3) covariance matrix
     """
