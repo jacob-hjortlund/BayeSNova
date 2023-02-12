@@ -28,8 +28,8 @@ def init_global_data(
     )
 
     if data.shape[1] == 0 or not cfg['use_host_galaxy_properties']:
-        host_galaxy_observables = None
-        host_galaxy_covariance_values = None
+        host_galaxy_observables = np.zeros((0,0))
+        host_galaxy_covariance_values = np.zeros((0,0))
     elif (data.shape[1] % 2) == 0:
         host_galaxy_observables = data.to_numpy()[:, ::2]
         host_galaxy_covariance_values = data.to_numpy()[:, 1::2]
