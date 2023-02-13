@@ -171,7 +171,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         host_galaxy_par_names = [
             host_gal_par_name for i in range(
-                len(cfg['model_cfg']['host_galaxy_init_values'])
+                prep.host_galaxy_observables.shape[1]
             )
             for host_gal_par_name in ("mu_"+str(i), "sig_"+str(i))
         ]
@@ -181,7 +181,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
             utils.gen_pop_par_names(
                 cfg['model_cfg']['independent_par_names']
             ) +
-            utils.gen_pop_par_names(host_galaxy_par_names)
+            utils.gen_pop_par_names(host_galaxy_par_names) +
             [cfg['model_cfg']['ratio_par_name']]
         )
 
