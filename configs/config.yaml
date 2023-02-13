@@ -22,6 +22,7 @@ model_cfg:
   host_galaxy_cfg:
     use_properties: False
     covariance_null_value: 1000.
+    init_values: [11.,9.,1.,1.]
   preset_values:
     H0: 73.0
     sig_int_1: 0.
