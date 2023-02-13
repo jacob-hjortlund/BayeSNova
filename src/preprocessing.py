@@ -51,7 +51,6 @@ def init_global_data(
     gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
     gEbv_quantiles = set_gamma_quantiles(cfg, 'Ebv')
 
-
 def set_gamma_quantiles(cfg: dict, par: str) -> np.ndarray:
 
     if cfg[par + "_integral_upper_bound"] == NULL_VALUE:
