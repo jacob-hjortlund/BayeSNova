@@ -468,6 +468,33 @@ class Model():
 
         return p_1, p_2, status
 
+    def independent_mvgaussian(
+        self, means: np.ndarray, sigmas: np.ndarray
+    ):
+
+        n_properties = prep.host_galaxy_observables.shape[1]
+        res = np.atleast_3d(
+            np.where(
+                prep.host_galaxy_observables == NULL_VALUE,
+                0.,
+                prep.host_galaxy_observables - means
+            )
+        )
+
+        cov = prep.host_galaxy_covariances + np.diag(sigmas**2)
+
+        exponent = np.squeeze(
+            np.moveaxis(res, 1, 2) @ np.linalg.inv(cov) @ res
+        )
+
+        prob = (
+            ((2 * np.pi)**(-n_properties/2) *
+            np.linalg.det(cov)**(-1/2)) *
+            np.exp(-0.5 * exponent)
+        )
+
+        return prob
+
     def host_galaxy_likelihoods(
         self,
         host_galaxy_means: np.ndarray,
@@ -475,21 +502,10 @@ class Model():
     ):
 
         mu_1, mu_2 = host_galaxy_means[::2], host_galaxy_means[1::2]
-        res_1 = prep.host_galaxy_observables - mu_1
-        res_2 = prep.host_galaxy_observables - mu_2
-
         sig_1, sig_2 = host_galaxy_sigmas[::2], host_galaxy_sigmas[1::2]
-        cov_1 = prep.host_galaxy_covariances + np.diag(sig_1**2)
-        cov_2 = prep.host_galaxy_covariances + np.diag(sig_2**2)
 
-        prob_1 = (
-            ((2 * np.pi)**(-len(res_1)/2) * np.linalg.det(cov_1)**(-1/2)) * 
-            np.exp(-0.5 * res_1 @ np.linalg.inv(cov_1) @ res_1)
-        )
-        prob_2 = (
-            ((2 * np.pi)**(-len(res_2)/2) * np.linalg.det(cov_2)**(-1/2)) * 
-            np.exp(-0.5 * res_2 @ np.linalg.inv(cov_2) @ res_2)
-        )
+        prob_1 = self.independent_mvgaussian(mu_1, sig_1)
+        prob_2 = self.independent_mvgaussian(mu_2, sig_2)
 
         return prob_1, prob_2
 
