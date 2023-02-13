@@ -495,7 +495,7 @@ class Model():
 
         return prob
 
-    def host_galaxy_likelihoods(
+    def host_galaxy_probs(
         self,
         host_galaxy_means: np.ndarray,
         host_galaxy_sigmas: np.ndarray,
@@ -578,7 +578,7 @@ class Model():
             return -np.inf
 
         if host_galaxy_means.shape[0] > 0:
-            host_probs_1, host_probs_2 = self.host_galaxy_likelihoods(
+            host_probs_1, host_probs_2 = self.host_galaxy_probs(
                 host_galaxy_means=host_galaxy_means,
                 host_galaxy_sigmas=host_galaxy_sigs,
             )
