@@ -583,6 +583,8 @@ class Model():
                 host_galaxy_sigmas=host_galaxy_sigs,
             )
             host_probs = w * host_probs_1 + (1-w) * host_probs_2 
+        else:
+            host_probs = np.ones_like(sn_probs_1)
 
         sn_probs = w * sn_probs_1 + (1-w) * sn_probs_2
         log_prob = np.sum(
