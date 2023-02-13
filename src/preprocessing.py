@@ -15,14 +15,41 @@ def init_global_data(
     global gRb_quantiles
     global gEbv_quantiles
     global global_model_cfg
+    global host_galaxy_observables
+    global host_galaxy_covariances
 
     global_model_cfg = cfg
 
-    sn_covariances = build_covariance_matrix(data.to_numpy())
-    sn_observables = data[['mB', 'x1', 'c', 'z']].to_numpy()
+    sn_observable_keys = ['mB', 'x1', 'c', 'z']
+    sn_covariance_keys = ['x0', 'mBErr', 'x1Err', 'cErr', 'cov_x1_c', 'cov_x1_x0', 'cov_c_x0']
+    sn_observables = data[sn_observable_keys].copy().to_numpy()
+    sn_covariance_values = data[sn_covariance_keys].copy().to_numpy()
+    data.drop(
+        sn_observable_keys + sn_covariance_keys + ['CID'], axis=1, inplace=True
+    )
+
+    if (
+        data.shape[1] == 0 or
+        not cfg['host_galaxy_cfg']['use_properties']
+    ):
+        host_galaxy_observables = np.zeros((0,0))
+        host_galaxy_covariance_values = np.zeros((0,0))
+    elif (data.shape[1] % 2) == 0:
+        host_galaxy_observables = data.to_numpy()[:, ::2]
+        host_galaxy_covariance_values = data.to_numpy()[:, 1::2]
+        host_galaxy_covariance_values = np.where(
+            host_galaxy_covariance_values == NULL_VALUE,
+            cfg['host_galaxy_cfg']['covariance_null_value'],
+            host_galaxy_covariance_values
+        )
+    else:
+        raise ValueError("Host galaxy properties must be provided as even columns.")
+
+    sn_covariances, host_galaxy_covariances = build_covariance_matrix(
+        sn_covariance_values, host_galaxy_covariance_values
+    )
     gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
     gEbv_quantiles = set_gamma_quantiles(cfg, 'Ebv')
-
 
 def set_gamma_quantiles(cfg: dict, par: str) -> np.ndarray:
 
@@ -37,37 +64,42 @@ def set_gamma_quantiles(cfg: dict, par: str) -> np.ndarray:
 
     return quantiles
 
-def build_covariance_matrix(data: np.ndarray) -> np.ndarray:
-    """Given a data array with shape (N,M), populate a set of 
-    covariance matrices with the shape (N,3,3). If any covariance
-    matrix has a zero or negative determinant, a small value is
-    added along the diagonal.
-
+def build_covariance_matrix(
+    sn_cov_values: np.ndarray,
+    host_cov_values: np.ndarray = None,
+) -> np.ndarray:
+    """Given a SN covariance value array with shape (N,M), populate
+    a set of covariance matrices with the shape (N,3,3). Host galaxy
+    property covariance matrices with shape (N,K,K) are calculated 
+    given a host galaxy covariance value array with shape (N,K). SN 
+    and host galaxy properties are assumed to be independent.
     Args:
-        data (np.ndarray): input array with shape (N,M)
-
+        sn_cov_values (np.ndarray): SN covariance values array with shape (N,M)
+        host_cov_values (np.ndarray, optional): Host galaxy covariance values array with shape (N,K). 
+        Currently only handles / assumes independent properties. Defaults to None.
     Returns:
         np.ndarray: (N,3,3) covariance matrix
     """
 
-    cov = np.zeros((data.shape[0], 3, 3))
+    cov_sn = np.zeros((sn_cov_values.shape[0], 3, 3))
+    if np.any(host_cov_values):
+        cov_host = np.eye(host_cov_values.shape[1]) * host_cov_values[:, None, :]
+        posdef_cov_host = utils.ensure_posdef(cov_host)
+    else:
+        posdef_cov_host = np.zeros((0,0))
 
-    # diagonals
-    cov[:,0,0] = data[:, 1] ** 2 # omega_m^2
-    cov[:,1,1] = data[:, 3] ** 2 # omega_x^2
-    cov[:,2,2] = data[:, 5] ** 2 # omega_colour^2
+    cov_sn[:,0,0] = sn_cov_values[:, 1] ** 2 # omega_m^2
+    cov_sn[:,1,1] = sn_cov_values[:, 2] ** 2 # omega_x^2
+    cov_sn[:,2,2] = sn_cov_values[:, 3] ** 2 # omega_colour^2
 
-    # upper off-diagonals
-    cov[:,0,1] = data[:, 8] * (-2.5 / (np.log(10.) * data[:, 6]))
-    cov[:,0,2] = data[:, 9] * (-2.5 / (np.log(10.) * data[:, 6]))
-    cov[:,1,2] = data[:, 7]
+    cov_sn[:,0,1] = sn_cov_values[:, 5] * (-2.5 / (np.log(10.) * sn_cov_values[:, 0]))
+    cov_sn[:,0,2] = sn_cov_values[:, 6] * (-2.5 / (np.log(10.) * sn_cov_values[:, 0]))
+    cov_sn[:,1,2] = sn_cov_values[:, 4]
 
-    # lower off-diagonals
-    cov[:,1,0] = cov[:,0,1]
-    cov[:,2,0] = cov[:,0,2]
-    cov[:,2,1] = cov[:,1,2]
+    cov_sn[:,1,0] = cov_sn[:,0,1]
+    cov_sn[:,2,0] = cov_sn[:,0,2]
+    cov_sn[:,2,1] = cov_sn[:,1,2]
 
-    # add constant to covs with negative determinant
-    posdef_covs = utils.ensure_posdef(cov)
+    posdef_cov_sn = utils.ensure_posdef(cov_sn)
     
-    return posdef_covs
+    return posdef_cov_sn, posdef_cov_host

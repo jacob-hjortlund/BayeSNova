@@ -16,8 +16,6 @@ import src.preprocessing as prep
 from time import time
 from mpi4py import MPI
 
-PATH_PREFIX = '/lustre/hpc'
-
 @hydra.main(
     version_base=None, config_path="configs", config_name="config"
 )
@@ -72,7 +70,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print("\n----------------- SETUP ---------------------\n")
         init_theta = utils.prior_initialisation(
             cfg['model_cfg']['prior_bounds'], cfg['model_cfg']['init_values'], cfg['model_cfg']['shared_par_names'],
-            cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name']
+            cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['host_galaxy_cfg']['init_values'],
+            cfg['model_cfg']['ratio_par_name']
         )
         init_theta = init_theta + 3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'], len(init_theta))
         _ = log_prob(init_theta[0]) # call func once befor loop to jit compile
@@ -170,11 +169,19 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print(using_multiprocessing)
         print(no_pool)
 
+        host_galaxy_par_names = [
+            host_gal_par_name for i in range(
+                prep.host_galaxy_observables.shape[1]
+            )
+            for host_gal_par_name in ("mu_"+str(i), "sig_"+str(i))
+        ]
+
         par_names = (
             cfg['model_cfg']['shared_par_names'] +
             utils.gen_pop_par_names(
                 cfg['model_cfg']['independent_par_names']
             ) +
+            utils.gen_pop_par_names(host_galaxy_par_names) +
             [cfg['model_cfg']['ratio_par_name']]
         )
 
@@ -223,10 +230,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
     labels = (
         cfg['model_cfg']['shared_par_names'] +
         cfg['model_cfg']['independent_par_names'] +
+        host_galaxy_par_names +
         [cfg['model_cfg']['ratio_par_name']]
     )
 
-    idx_cutoff = int(n_shared + 2 * n_independent - sample_thetas.shape[1])
     fx = sample_thetas[:, :n_shared]
     fig_pop_2 = None
 
@@ -234,13 +241,13 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if n_independent > 0:
         fx = np.concatenate(
             (
-                fx, sample_thetas[:, n_shared:idx_cutoff:2]
+                fx, sample_thetas[:, n_shared:-1:2]
             ), axis=-1
         )
 
         sx_list = [
             sample_thetas[:, :n_shared],
-            sample_thetas[:, n_shared+1:idx_cutoff:2],
+            sample_thetas[:, n_shared+1:-1:2],
             sample_thetas[:,-1][:, None]
         ]
         sx = np.concatenate(sx_list, axis=-1)

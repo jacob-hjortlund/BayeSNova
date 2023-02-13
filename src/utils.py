@@ -72,7 +72,6 @@ class PoolWrapper():
 
 def estimate_mmap(samples):
 
-
     mean_val = np.mean(samples)
     t0 = time.time()
     kernel = sp_stats.gaussian_kde(samples)
@@ -110,7 +109,8 @@ def create_task_name(
     for setting in diff_dict['values_changed'].keys():
         if (
             "independent_par_name" in setting or
-            "clearml_cfg" in setting
+            "clearml_cfg" in setting or
+            "data_cfg" in setting
         ):
             continue
         setting_str = '['+"[".join(setting.split('[')[2:])
@@ -148,18 +148,18 @@ def uniform(value: float, lower: float = -np.inf, upper: float = np.inf):
         return 0.
 
 def extend_theta(
-    theta: np.ndarray, n_shared_pars: int, n_independent_pars: int
+    theta: np.ndarray, n_shared_pars: int
 ) -> tuple:
 
-    idx_cut_off = n_shared_pars + 2*n_independent_pars - len(theta)
     shared_pars = np.repeat(theta[:n_shared_pars], 2)
-    independent_pars = theta[n_shared_pars:idx_cut_off]
+    independent_pars = theta[n_shared_pars:-1]
 
     return shared_pars, independent_pars
 
 def prior_initialisation(
     priors: dict, preset_init_values: dict, shared_par_names: list,
-    independent_par_names: list, ratio_par_name: str
+    independent_par_names: list, host_galaxy_init_values: list,
+    ratio_par_name: str
 ):
 
     par_names = shared_par_names + independent_par_names + [ratio_par_name]
@@ -181,12 +181,13 @@ def prior_initialisation(
         else:
             init_par = 0.
         init_values.append(init_par)
-    
+
     init_values = np.array(init_values)
-    cut_off_index = len(shared_par_names) + len(independent_par_names) - len(par_names)
     shared_init_pars = init_values[:len(shared_par_names)]
-    independent_init_pars = np.repeat(init_values[len(shared_par_names):cut_off_index], 2)
-    init_par_list = [shared_init_pars, independent_init_pars, [init_values[-1]]]
+    independent_init_pars = np.repeat(init_values[len(shared_par_names):-1], 2)
+    init_par_list = [
+        shared_init_pars, independent_init_pars, host_galaxy_init_values, [init_values[-1]]
+    ]
     init_pars = np.concatenate(init_par_list)
 
     # Check if stretch is shared and correct to account for prior
@@ -212,7 +213,7 @@ def gen_pop_par_names(par_names):
 
 def theta_to_dict(
     theta: np.ndarray, shared_par_names: list, independent_par_names: list,
-    ratio_par_name: str
+    n_host_galaxy_observables: int, ratio_par_name: str
 ) -> dict:
 
     extended_shared_par_names = gen_pop_par_names(shared_par_names)
@@ -230,19 +231,35 @@ def theta_to_dict(
     )
 
     n_shared_pars = len(shared_par_names)
-    n_independent_pars = len(independent_par_names)
+    n_independent_pars = 2 * len(independent_par_names) + 4 * n_host_galaxy_observables
 
-    no_pars = n_shared_pars + 2 * n_independent_pars + 1
+    no_pars = n_shared_pars + n_independent_pars + 1
     if len(theta) != no_pars:
         raise ValueError(
             "MCMC parameter dimensions does not match no. of shared and independent parameters."
         )
 
-    shared_pars, independent_pars = extend_theta(theta, n_shared_pars, n_independent_pars)
+    shared_pars, independent_pars = extend_theta(theta, n_shared_pars)
     missing_pars = [NULL_VALUE] * len(extended_missing_par_names)
-    par_list = [shared_pars, independent_pars, missing_pars, [theta[-1]]]
+    par_list = [
+        shared_pars,
+        independent_pars[:n_independent_pars - 4 * n_host_galaxy_observables],
+        missing_pars,
+        [theta[-1]]
+    ]
     pars = np.concatenate(par_list)
     arg_dict = {name: par for name, par in zip(par_names, pars)}
+    arg_dict['host_galaxy_means'] = np.zeros(0)
+    arg_dict['host_galaxy_sigs'] = np.zeros(0)
+
+    if n_host_galaxy_observables > 0:
+        host_pars = np.array(
+            independent_pars[-4 * n_host_galaxy_observables:]
+        )
+        idx_means = np.array([True, True, False, False] * n_host_galaxy_observables)
+        idx_sigs = np.array([False, False, True, True] * n_host_galaxy_observables)
+        arg_dict['host_galaxy_means'] = host_pars[idx_means]
+        arg_dict['host_galaxy_sigs'] = host_pars[idx_sigs]
 
     return arg_dict
 
@@ -263,6 +280,20 @@ def apply_sigmoid(
         arg_dict[name1] = s2 * p1 + (1-s2) * p2
         arg_dict[name2] = s1 * p1 + (1-s1) * p2
     
+    n_host_galaxy_pars = arg_dict['host_galaxy_means'].shape[0]
+    if n_host_galaxy_pars > 0:
+        means = arg_dict['host_galaxy_means']
+        sigs = arg_dict['host_galaxy_sigs']
+        for i in range(n_host_galaxy_pars // 2):
+            pm1, ps1 = means[i], sigs[i]
+            pm2, ps2 = means[i+1], sigs[i+1]
+
+            means[i] = s2 * pm1 + (1-s2) * pm2
+            means[i+1] = s1 * pm1 + (1-s1) * pm2
+            
+            sigs[i] = s2 * ps1 + (1-s2) * ps2
+            sigs[i+1] = s1 * ps1 + (1-s1) * ps2
+
     return arg_dict
 
 def vectorized_apply_sigmoid(
