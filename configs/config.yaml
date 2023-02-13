@@ -17,7 +17,7 @@ model_cfg:
     sig_c,
     s,
     sig_s,
-    Ebv
+    tau_Ebv
   ]
   host_galaxy_cfg:
     use_properties: False

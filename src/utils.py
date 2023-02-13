@@ -230,7 +230,7 @@ def theta_to_dict(
     )
 
     n_shared_pars = len(shared_par_names)
-    n_independent_pars = 2 * (len(independent_par_names) + n_host_galaxy_observables)
+    n_independent_pars = 2 * len(independent_par_names) + 4 * n_host_galaxy_observables
 
     no_pars = n_shared_pars + n_independent_pars + 1
     if len(theta) != no_pars:
@@ -242,23 +242,23 @@ def theta_to_dict(
     missing_pars = [NULL_VALUE] * len(extended_missing_par_names)
     par_list = [
         shared_pars,
-        independent_pars[:n_independent_pars - 2 * n_host_galaxy_observables],
+        independent_pars[:n_independent_pars - 4 * n_host_galaxy_observables],
         missing_pars,
         [theta[-1]]
     ]
     pars = np.concatenate(par_list)
     arg_dict = {name: par for name, par in zip(par_names, pars)}
     arg_dict['host_galaxy_means'] = np.zeros(0)
-    arg_dict['host_galaxy_covs'] = np.zeros(0)
+    arg_dict['host_galaxy_sigs'] = np.zeros(0)
 
     if n_host_galaxy_observables > 0:
         host_pars = np.array(
-            independent_pars[-2 * n_host_galaxy_observables:]
+            independent_pars[-4 * n_host_galaxy_observables:]
         )
         idx_means = np.array([True, True, False, False] * n_host_galaxy_observables)
         idx_sigs = np.array([False, False, True, True] * n_host_galaxy_observables)
         arg_dict['host_galaxy_means'] = host_pars[idx_means]
-        arg_dict['host_galaxy_sigs'] = np.diag(host_pars[idx_sigs])
+        arg_dict['host_galaxy_sigs'] = host_pars[idx_sigs]
 
     return arg_dict
 

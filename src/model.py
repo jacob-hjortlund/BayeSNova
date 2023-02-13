@@ -277,6 +277,9 @@ class Model():
 
         for value_key in par_dict.keys():
             
+            if type(par_dict[value_key]) == np.ndarray:
+                continue
+
             if par_dict[value_key] == NULL_VALUE:
                 continue
 
