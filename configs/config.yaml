@@ -19,6 +19,9 @@ model_cfg:
     sig_s,
     Ebv
   ]
+  host_galaxy_cfg:
+    use_properties: False
+    covariance_null_value: 1000.
   preset_values:
     H0: 73.0
     sig_int_1: 0.

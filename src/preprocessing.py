@@ -28,12 +28,20 @@ def init_global_data(
         sn_observable_keys + sn_covariance_keys + ['CID'], axis=1, inplace=True
     )
 
-    if data.shape[1] == 0 or not cfg['use_host_galaxy_properties']:
+    if (
+        data.shape[1] == 0 or
+        not cfg['host_galaxy_cfg']['use_properties']
+    ):
         host_galaxy_observables = np.zeros((0,0))
         host_galaxy_covariance_values = np.zeros((0,0))
     elif (data.shape[1] % 2) == 0:
         host_galaxy_observables = data.to_numpy()[:, ::2]
         host_galaxy_covariance_values = data.to_numpy()[:, 1::2]
+        host_galaxy_covariance_values = np.where(
+            host_galaxy_covariance_values == NULL_VALUE,
+            cfg['host_galaxy_cfg']['covariance_null_value'],
+            host_galaxy_covariance_values
+        )
     else:
         raise ValueError("Host galaxy properties must be provided as even columns.")
 
