@@ -277,12 +277,18 @@ class Model():
 
         for value_key in par_dict.keys():
             
-            if type(par_dict[value_key]) == np.ndarray:
+            skip_this_par = (
+                np.all(par_dict[value_key] == NULL_VALUE) or
+                value_key == 'host_galaxy_means'
+            )
+            if skip_this_par:
                 continue
-
-            if par_dict[value_key] == NULL_VALUE:
-                continue
-
+            
+            if value_key == 'host_galaxy_sigs':
+                if np.any(par_dict[value_key] <= 0.):
+                    value += -np.inf
+                    break
+            
             # TODO: Remove 3-deep conditionals bleeeeh
             bounds_key = ""
             is_independent_stretch = (
