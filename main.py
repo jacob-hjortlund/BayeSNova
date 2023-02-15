@@ -161,6 +161,18 @@ def main(cfg: omegaconf.DictConfig) -> None:
     clearml_logger.report_single_value(name="max_sample_log_prob", value=max_sample_log_prob)
     clearml_logger.report_single_value(name="opt_log_prob", value=opt_log_prob)
 
+    # Save locally in dataframe
+    metrics_df = pd.DataFrame(
+        {
+            "acceptance_fraction": [accept_frac],
+            "tau": [tau],
+            "burnin": [burnin],
+            "max_sample_log_prob": [max_sample_log_prob],
+            "opt_log_prob": [opt_log_prob]
+        }
+    )
+    metrics_df.to_csv(os.path.join(path, "metrics.csv"))
+
     print("\n-------- POSTERIOR / MARGINALIZED DIST COMPARISON -----------\n")
 
     if using_MPI_and_is_master or using_multiprocessing or no_pool:
@@ -186,9 +198,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
         )
 
         quantiles = np.quantile(
-            sample_thetas, [0.16, 0.84], axis=0
+            sample_thetas, [0.16, 0.50, 0.84], axis=0
         )
-        symmetrized_stds = 0.5 * (quantiles[1] - quantiles[0])
+        symmetrized_stds = 0.5 * (quantiles[2] - quantiles[0])
         stds = np.std(sample_thetas, axis=0)
         map_mmap_values = np.zeros((5, len(par_names)))
         
@@ -223,6 +235,55 @@ def main(cfg: omegaconf.DictConfig) -> None:
             iteration=0,
             table_plot=map_mmap_df
         )
+
+        map_mmap_df.to_csv(os.path.join(path, "map_mmap.csv"))
+        print(f"\nRMS value: {rms_value}\n")
+
+    print("\n-------- PARAM VALUES / ERRORS / Z-SCORES -----------\n")
+
+    val_errors = np.concatenate(
+        (quantiles, symmetrized_stds[None, :]),
+        axis=0
+    )
+    val_errors_df = pd.DataFrame(
+        val_errors, index=['MMAP', '16th', '50th', '84th', 'sym_sigma'], columns=par_names
+    )
+
+    max_symmetric_error = np.max(
+        symmetrized_stds[
+            len(cfg['model_cfg']['shared_par_names']):-1
+        ].reshape(-1, 2), axis=-1
+    )
+    param_diff = np.squeeze(
+        np.diff(
+            quantiles[1][len(cfg['model_cfg']['shared_par_names']):-1].reshape(-1, 2),
+            axis=1
+        )
+    )
+    param_z_scores = param_diff / max_symmetric_error
+
+    z_score_df = pd.DataFrame(
+        param_z_scores, index=['Z'], columns=(
+            cfg['model_cfg']['independent_par_names'] + host_galaxy_par_names
+        )
+    )
+
+    clearml_logger.report_table(
+        title='Medians_and_Errors',
+        series='Medians_and_Errors',
+        iteration=0,
+        table_plot=val_errors_df
+    )
+
+    clearml_logger.report_table(
+        title='Z_Scores',
+        series='Z_Scores',
+        iteration=0,
+        table_plot=z_score_df
+    )
+
+    val_errors_df.to_csv(os.path.join(path, "medians_and_errors.csv"))
+    z_score_df.to_csv(os.path.join(path, "z_scores.csv"))
 
     print("\n----------------- PLOTS ---------------------\n")
     n_shared = len(cfg['model_cfg']['shared_par_names'])
