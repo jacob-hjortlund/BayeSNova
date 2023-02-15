@@ -46,7 +46,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     # Setup results dir
     path = os.path.join(
-        cfg['emcee_cfg']['save_path'], tags[0], task_name
+        cfg['emcee_cfg']['save_path'], "-".tags, task_name
     )
     os.makedirs(path, exist_ok=True)
 
