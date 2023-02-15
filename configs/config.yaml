@@ -51,10 +51,10 @@ model_cfg:
       lower: 0.
     Rb:
       lower: 1.
-      upper: 6.
+      upper: 10.
     sig_Rb:
       lower: 0.
-      upper: 1.5
+      upper: 5.
     tau_Rb:
       lower: 0.
     gamma_Rb:
@@ -69,7 +69,7 @@ model_cfg:
       lower: 0.
     gamma_Ebv:
       lower: 1.
-      upper: 7.
+      upper: 20.
     w:
       lower: 0.12
       upper: 0.88
