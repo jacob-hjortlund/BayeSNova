@@ -86,9 +86,6 @@ def estimate_mmap(samples):
     ).x[0]
     t3 = time.time()
 
-    print(f"\nKDE took {t1-t0} seconds to run and {t3-t2} seconds to optimize.\n")
-
-
     return output
     
 def create_task_name(

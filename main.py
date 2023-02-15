@@ -46,7 +46,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     # Setup results dir
     path = os.path.join(
-        cfg['emcee_cfg']['save_path'], "-".tags, task_name
+        cfg['emcee_cfg']['save_path'], "-".join(tags), task_name
     )
     os.makedirs(path, exist_ok=True)
 
@@ -177,10 +177,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     if using_MPI_and_is_master or using_multiprocessing or no_pool:
 
-        print(using_MPI_and_is_master)
-        print(using_multiprocessing)
-        print(no_pool)
-
         host_galaxy_par_names = [
             host_gal_par_name for i in range(
                 prep.host_galaxy_observables.shape[1]
@@ -246,7 +242,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         axis=0
     )
     val_errors_df = pd.DataFrame(
-        val_errors, index=['MMAP', '16th', '50th', '84th', 'sym_sigma'], columns=par_names
+        val_errors, index=['lower', 'median', 'upper', 'sym_sigma'], columns=par_names
     )
 
     max_symmetric_error = np.max(
@@ -255,9 +251,11 @@ def main(cfg: omegaconf.DictConfig) -> None:
         ].reshape(-1, 2), axis=-1
     )
     param_diff = np.squeeze(
-        np.diff(
-            quantiles[1][len(cfg['model_cfg']['shared_par_names']):-1].reshape(-1, 2),
-            axis=1
+        np.abs(
+            np.diff(
+                quantiles[1][len(cfg['model_cfg']['shared_par_names']):-1].reshape(-1, 2),
+                axis=1
+            )
         )
     )
     param_z_scores = param_diff / max_symmetric_error
