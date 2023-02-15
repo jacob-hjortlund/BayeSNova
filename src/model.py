@@ -591,14 +591,11 @@ class Model():
                 host_galaxy_means=host_galaxy_means,
                 host_galaxy_sigmas=host_galaxy_sigs,
             )
-            host_probs = w * host_probs_1 + (1-w) * host_probs_2 
+            combined_probs = w * sn_probs_1 * host_probs_1 + (1-w) * sn_probs_2 * host_probs_2
         else:
-            host_probs = np.ones_like(sn_probs_1)
+            combined_probs = w * sn_probs_1 + (1-w) * sn_probs_2
 
-        sn_probs = w * sn_probs_1 + (1-w) * sn_probs_2
-        log_prob = np.sum(
-            np.log(sn_probs) + np.log(host_probs)
-        )
+        log_prob = np.sum(np.log(combined_probs))
         if np.isnan(log_prob):
             log_prob = -np.inf
 
