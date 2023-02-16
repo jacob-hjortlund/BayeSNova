@@ -261,7 +261,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     param_z_scores = param_diff / max_symmetric_error
 
     z_score_df = pd.DataFrame(
-        param_z_scores, index=['Z'], columns=(
+        param_z_scores[None,:], index=['Z'], columns=(
             cfg['model_cfg']['independent_par_names'] + host_galaxy_par_names
         )
     )

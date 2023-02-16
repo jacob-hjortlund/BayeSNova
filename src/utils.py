@@ -104,11 +104,15 @@ def create_task_name(
 
     changes = []
     for setting in diff_dict['values_changed'].keys():
-        if (
+
+        ignore_setting = (
             "independent_par_name" in setting or
             "clearml_cfg" in setting or
-            "data_cfg" in setting
-        ):
+            "data_cfg" in setting or
+            "continue_from_chain" in setting 
+        )
+
+        if ignore_setting:
             continue
         setting_str = '['+"[".join(setting.split('[')[2:])
         new_value = str(diff_dict['values_changed'][setting]['new_value'])
