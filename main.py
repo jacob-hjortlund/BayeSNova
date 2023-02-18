@@ -181,10 +181,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if using_MPI_and_is_master or using_multiprocessing or no_pool:
 
         host_galaxy_par_names = [
-            host_gal_par_name for i in range(
-                prep.host_galaxy_observables.shape[1]
-            )
-            for host_gal_par_name in ("mu_"+str(i), "sig_"+str(i))
+            host_gal_par_name for name in cfg['model_cfg']['host_galaxy_cfg']['properties']
+            for host_gal_par_name in ("mu_"+name, "sig_"+name)
         ]
 
         par_names = (
