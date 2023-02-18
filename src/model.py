@@ -283,7 +283,7 @@ class Model():
             
             if value_key == 'host_galaxy_means':
                 if np.any(
-                    (par_dict <= -20) | (par_dict >= 20)
+                    (par_dict[value_key] <= -20) | (par_dict[value_key] >= 20)
                 ):
                     value += -np.inf
                     break

@@ -28,9 +28,9 @@ def init_global_data(
         sn_observable_keys + sn_covariance_keys + ['CID'], axis=1, inplace=True
     )
 
-    host_property_keys = cfg['model_cfg']['host_galaxy_cfg']['properties']
+    host_property_keys = cfg['host_galaxy_cfg']['property_names']
     host_property_err_keys = [key + "_err" for key in host_property_keys]
-    use_host_properties = cfg['model_cfg']['host_galaxy_cfg']['use_properties']
+    use_host_properties = cfg['host_galaxy_cfg']['use_properties']
     can_use_host_properties = (
         len(host_property_keys) > 0 and
         set(host_property_keys) <= set(data.columns) and
