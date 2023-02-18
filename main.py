@@ -181,7 +181,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if using_MPI_and_is_master or using_multiprocessing or no_pool:
 
         host_galaxy_par_names = [
-            host_gal_par_name for name in cfg['model_cfg']['host_galaxy_cfg']['properties']
+            host_gal_par_name for name in cfg['model_cfg']['host_galaxy_cfg']['property_names']
             for host_gal_par_name in ("mu_"+name, "sig_"+name)
         ]
 
@@ -321,7 +321,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     fig_pop_1.tight_layout()
     fig_pop_1.suptitle('Corner plot', fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
     fig_pop_1.savefig(
-        os.path.join(path, cfg['emcee_cfg']['run_name']+"_corner.pdf")
+        os.path.join(path, cfg['emcee_cfg']['run_name']+"_corner.png")
     )
 
     full_chain = backend.get_chain()
@@ -343,7 +343,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     fig.subplots_adjust(top=0.1)
     fig.suptitle("Walkers" + suffix, fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
     fig.savefig(
-        os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_walkers.pdf")
+        os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_walkers.png")
     )
 
 if __name__ == "__main__":
