@@ -194,8 +194,8 @@ def prior_initialisation(
     host_init_values = []
     for host_par in host_galaxy_par_names:
         if host_par in host_galaxy_init_values.keys():
-            host_init_values.append(host_galaxy_init_values[host_par]['means'])
-            host_init_values.append(host_galaxy_init_values[host_par]['sigmas'])
+            host_init_values += host_galaxy_init_values[host_par]['means']
+            host_init_values += host_galaxy_init_values[host_par]['sigmas']
         else:
             raise ValueError(f"{host_par} not in host galaxy init values. Check your config")
         
