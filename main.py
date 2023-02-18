@@ -30,6 +30,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
     tags += [
         os.path.split(cfg['data_cfg']['path'])[1].split(".")[0]
     ]
+    if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
+        tags += cfg['model_cfg']['host_galaxy_cfg']['property_names']
     tags += cfg['clearml_cfg']['tags']
 
     using_MPI_and_is_master = cfg['emcee_cfg']['pool_type'] == 'MPI' and MPI.COMM_WORLD.rank == 0
