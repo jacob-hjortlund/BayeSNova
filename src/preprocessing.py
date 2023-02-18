@@ -28,15 +28,20 @@ def init_global_data(
         sn_observable_keys + sn_covariance_keys + ['CID'], axis=1, inplace=True
     )
 
-    if (
-        data.shape[1] == 0 or
-        not cfg['host_galaxy_cfg']['use_properties']
-    ):
+    host_property_keys = cfg['model_cfg']['host_galaxy_cfg']['properties']
+    host_property_err_keys = [key + "_err" for key in host_property_keys]
+    use_host_properties = cfg['model_cfg']['host_galaxy_cfg']['use_properties']
+    can_use_host_properties = (
+        len(host_property_keys) > 0 and
+        set(host_property_keys) <= set(data.columns) and
+        set(host_property_err_keys) <= set(data.columns)
+    )
+    if not use_host_properties:
         host_galaxy_observables = np.zeros((0,0))
         host_galaxy_covariance_values = np.zeros((0,0))
-    elif (data.shape[1] % 2) == 0:
-        host_galaxy_observables = data.to_numpy()[:, ::2]
-        host_galaxy_covariance_values = data.to_numpy()[:, 1::2]
+    elif can_use_host_properties:
+        host_galaxy_observables = data[host_property_keys].to_numpy()
+        host_galaxy_covariance_values = data[host_property_err_keys].to_numpy()
         host_galaxy_covariance_values = np.where(
             host_galaxy_covariance_values == NULL_VALUE,
             cfg['host_galaxy_cfg']['covariance_null_value'],
