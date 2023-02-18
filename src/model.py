@@ -277,15 +277,21 @@ class Model():
 
         for value_key in par_dict.keys():
             
-            skip_this_par = (
-                np.all(par_dict[value_key] == NULL_VALUE) or
-                value_key == 'host_galaxy_means'
-            )
+            skip_this_par = np.all(par_dict[value_key] == NULL_VALUE)
             if skip_this_par:
                 continue
             
+            if value_key == 'host_galaxy_means':
+                if np.any(
+                    (par_dict <= -20) | (par_dict >= 20)
+                ):
+                    value += -np.inf
+                    break
+
             if value_key == 'host_galaxy_sigs':
-                if np.any(par_dict[value_key] <= 0.):
+                if np.any(
+                    (par_dict[value_key] <= 0.) | (par_dict[value_key] >= 20.)
+                ):
                     value += -np.inf
                     break
             
