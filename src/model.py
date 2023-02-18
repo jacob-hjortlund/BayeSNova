@@ -290,7 +290,7 @@ class Model():
 
             if value_key == 'host_galaxy_sigs':
                 if np.any(
-                    (par_dict[value_key] <= 0.) | (par_dict[value_key] >= 20.)
+                    (par_dict[value_key] < 0.) | (par_dict[value_key] >= 20.)
                 ):
                     value += -np.inf
                     break
@@ -620,10 +620,14 @@ class Model():
 
     def __call__(self, theta: np.ndarray) -> float:
 
+        n_host_galaxy_observables = (
+            prep.host_galaxy_observables.shape[1] - prep.n_unused_host_properties
+        )
         param_dict = utils.theta_to_dict(
             theta=theta, shared_par_names=prep.global_model_cfg.shared_par_names,
             independent_par_names=prep.global_model_cfg.independent_par_names,
-            n_host_galaxy_observables=prep.host_galaxy_observables.shape[1],
+            n_host_galaxy_observables=n_host_galaxy_observables,
+            n_unused_host_properties=prep.n_unused_host_properties,
             ratio_par_name=prep.global_model_cfg.ratio_par_name,
         )
 

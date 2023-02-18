@@ -262,6 +262,8 @@ def theta_to_dict(
     ]
     pars = np.concatenate(par_list)
     arg_dict = {name: par for name, par in zip(par_names, pars)}
+
+    n_unused_host_properties = 2 * n_unused_host_properties
     arg_dict['host_galaxy_means'] = np.zeros(n_unused_host_properties)
     arg_dict['host_galaxy_sigs'] = np.zeros(n_unused_host_properties)
 

@@ -32,23 +32,22 @@ def init_global_data(
     host_property_keys = cfg['host_galaxy_cfg']['property_names']
     host_property_err_keys = [key + "_err" for key in host_property_keys]
 
-    if 'test_par' not in host_property_keys:
-        data.drop(['test_par', 'test_par_err'], axis=1, inplace=True)
-    n_unused_host_properties = len(data.columns) - len(host_property_keys) - len(host_property_err_keys)
-
     use_host_properties = cfg['host_galaxy_cfg']['use_properties']
     can_use_host_properties = (
-        len(host_property_keys) > 0 and
         set(host_property_keys) <= set(data.columns) and
         set(host_property_err_keys) <= set(data.columns)
     )
     if not use_host_properties:
         
+        n_unused_host_properties = 0
         host_galaxy_observables = np.zeros((0,0))
         host_galaxy_covariance_values = np.zeros((0,0))
     
     elif can_use_host_properties:
 
+        n_unused_host_properties = (
+            len(data.columns) - len(host_property_keys) - len(host_property_err_keys)
+        ) // 2
         host_galaxy_observables = data[host_property_keys].to_numpy()
         host_galaxy_observables = np.concatenate(
             (
@@ -61,7 +60,7 @@ def init_global_data(
             (
                 host_galaxy_covariance_values,
                 np.ones((host_galaxy_covariance_values.shape[0], n_unused_host_properties)) * NULL_VALUE
-            )
+            ), axis=1
         )
         host_galaxy_covariance_values = np.where(
             host_galaxy_covariance_values == NULL_VALUE,
