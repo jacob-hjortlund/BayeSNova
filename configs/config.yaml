@@ -22,7 +22,36 @@ model_cfg:
   host_galaxy_cfg:
     use_properties: False
     covariance_null_value: 1000.
-    init_values: [11.,9.,1.,1.]
+    property_names: [
+      local_u-g,
+      local_mass,
+      local_ssfr,
+      global_u-g,
+      global_mass,
+      global_ssfr
+    ]
+    init_values:
+      local_u-g:
+        means: [1., 1.5]
+        sigmas: [.25, .1]
+      local_mass:
+        means: [9.5, 8.7]
+        sigmas: [.25, .2]
+      local_ssfr:
+        means: [-11., -9.]
+        sigmas: [1., 1.]
+      global_u-g:
+        means: [1., 1.5]
+        sigmas: [.25, .1]
+      global_mass:
+        means: [11., 9.]
+        sigmas: [1., 1.]
+      global_ssfr:
+        means: [-11., -9.]
+        sigmas: [1., 1.]
+      test_par:
+        means: [0., 1.]
+        sigmas: [1., 1.]
   preset_values:
     H0: 73.0
     sig_int_1: 0.

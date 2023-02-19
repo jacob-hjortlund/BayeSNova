@@ -159,8 +159,9 @@ def extend_theta(
 
 def prior_initialisation(
     priors: dict, preset_init_values: dict, shared_par_names: list,
-    independent_par_names: list, host_galaxy_init_values: list,
-    ratio_par_name: str, use_host_galaxy_properties: bool
+    independent_par_names: list, ratio_par_name: str, 
+    use_host_galaxy_properties: bool, host_galaxy_par_names: list,
+    host_galaxy_init_values: dict,
 ):
 
     par_names = shared_par_names + independent_par_names + [ratio_par_name]
@@ -189,8 +190,17 @@ def prior_initialisation(
     init_par_list = [
         shared_init_pars, independent_init_pars, [init_values[-1]]
     ]
+
+    host_init_values = []
+    for host_par in host_galaxy_par_names:
+        if host_par in host_galaxy_init_values.keys():
+            host_init_values += host_galaxy_init_values[host_par]['means']
+            host_init_values += host_galaxy_init_values[host_par]['sigmas']
+        else:
+            raise ValueError(f"{host_par} not in host galaxy init values. Check your config")
+        
     if use_host_galaxy_properties:
-        init_par_list.insert(-1,host_galaxy_init_values)
+        init_par_list.insert(-1,host_init_values)
     init_pars = np.concatenate(init_par_list)
 
     # Check if stretch is shared and correct to account for prior
@@ -216,7 +226,7 @@ def gen_pop_par_names(par_names):
 
 def theta_to_dict(
     theta: np.ndarray, shared_par_names: list, independent_par_names: list,
-    n_host_galaxy_observables: int, ratio_par_name: str
+    n_host_galaxy_observables: int, n_unused_host_properties: int, ratio_par_name: str
 ) -> dict:
 
     extended_shared_par_names = gen_pop_par_names(shared_par_names)
@@ -252,8 +262,10 @@ def theta_to_dict(
     ]
     pars = np.concatenate(par_list)
     arg_dict = {name: par for name, par in zip(par_names, pars)}
-    arg_dict['host_galaxy_means'] = np.zeros(0)
-    arg_dict['host_galaxy_sigs'] = np.zeros(0)
+
+    n_unused_host_properties = 2 * n_unused_host_properties
+    arg_dict['host_galaxy_means'] = np.zeros(n_unused_host_properties)
+    arg_dict['host_galaxy_sigs'] = np.zeros(n_unused_host_properties)
 
     if n_host_galaxy_observables > 0:
         host_pars = np.array(
@@ -261,8 +273,12 @@ def theta_to_dict(
         )
         idx_means = np.array([True, True, False, False] * n_host_galaxy_observables)
         idx_sigs = np.array([False, False, True, True] * n_host_galaxy_observables)
-        arg_dict['host_galaxy_means'] = host_pars[idx_means]
-        arg_dict['host_galaxy_sigs'] = host_pars[idx_sigs]
+        arg_dict['host_galaxy_means'] = np.concatenate(
+            (host_pars[idx_means], np.zeros(n_unused_host_properties))
+        )
+        arg_dict['host_galaxy_sigs'] = np.concatenate(
+            (host_pars[idx_sigs], np.zeros(n_unused_host_properties))
+        )
 
     return arg_dict
 

@@ -277,15 +277,21 @@ class Model():
 
         for value_key in par_dict.keys():
             
-            skip_this_par = (
-                np.all(par_dict[value_key] == NULL_VALUE) or
-                value_key == 'host_galaxy_means'
-            )
+            skip_this_par = np.all(par_dict[value_key] == NULL_VALUE)
             if skip_this_par:
                 continue
             
+            if value_key == 'host_galaxy_means':
+                if np.any(
+                    (par_dict[value_key] <= -20) | (par_dict[value_key] >= 20)
+                ):
+                    value += -np.inf
+                    break
+
             if value_key == 'host_galaxy_sigs':
-                if np.any(par_dict[value_key] <= 0.):
+                if np.any(
+                    (par_dict[value_key] < 0.) | (par_dict[value_key] >= 20.)
+                ):
                     value += -np.inf
                     break
             
@@ -490,7 +496,16 @@ class Model():
             )
         )
 
-        cov = prep.host_galaxy_covariances + np.diag(sigmas**2)
+        sigmas = np.tile(
+            sigmas, [prep.host_galaxy_observables.shape[0], 1]
+        )
+        sigmas = np.where(
+            prep.host_galaxy_observables == NULL_VALUE,
+            0.,
+            sigmas
+        )
+        sigmas = np.eye(n_properties) * sigmas[:, None, :]
+        cov = prep.host_galaxy_covariances + sigmas**2
 
         exponent = np.squeeze(
             np.moveaxis(res, 1, 2) @ np.linalg.inv(cov) @ res
@@ -614,10 +629,14 @@ class Model():
 
     def __call__(self, theta: np.ndarray) -> float:
 
+        n_host_galaxy_observables = (
+            prep.host_galaxy_observables.shape[1] - prep.n_unused_host_properties
+        )
         param_dict = utils.theta_to_dict(
             theta=theta, shared_par_names=prep.global_model_cfg.shared_par_names,
             independent_par_names=prep.global_model_cfg.independent_par_names,
-            n_host_galaxy_observables=prep.host_galaxy_observables.shape[1],
+            n_host_galaxy_observables=n_host_galaxy_observables,
+            n_unused_host_properties=prep.n_unused_host_properties,
             ratio_par_name=prep.global_model_cfg.ratio_par_name,
         )
 
