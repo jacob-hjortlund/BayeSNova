@@ -64,7 +64,7 @@ def init_global_data(
         )
         host_galaxy_covariance_values = np.where(
             host_galaxy_covariance_values == NULL_VALUE,
-            cfg['host_galaxy_cfg']['covariance_null_value'],
+            1 / np.sqrt(2*np.pi),
             host_galaxy_covariance_values
         )
     else:
@@ -108,7 +108,7 @@ def build_covariance_matrix(
 
     cov_sn = np.zeros((sn_cov_values.shape[0], 3, 3))
     if np.any(host_cov_values):
-        cov_host = np.eye(host_cov_values.shape[1]) * host_cov_values[:, None, :]
+        cov_host = np.eye(host_cov_values.shape[1]) * host_cov_values[:, None, :] ** 2
         posdef_cov_host = utils.ensure_posdef(cov_host)
     else:
         posdef_cov_host = np.zeros((0,0))
