@@ -496,7 +496,16 @@ class Model():
             )
         )
 
-        cov = prep.host_galaxy_covariances + np.diag(sigmas**2)
+        sigmas = np.tile(
+            sigmas, [prep.host_galaxy_observables.shape[0], 1]
+        )
+        sigmas = np.where(
+            prep.host_galaxy_observables == NULL_VALUE,
+            0.,
+            sigmas
+        )
+        sigmas = np.eye(n_properties) * sigmas[:, None, :]
+        cov = prep.host_galaxy_covariances + sigmas**2
 
         exponent = np.squeeze(
             np.moveaxis(res, 1, 2) @ np.linalg.inv(cov) @ res
