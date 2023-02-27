@@ -1,5 +1,5 @@
 data_cfg:
-  path: './data/supercal_cut_w_logsSFR'
+  path: "./data/supercal_w_host_properties"
   sep: ' '
 model_cfg:
   ratio_par_name: w
@@ -49,9 +49,6 @@ model_cfg:
       global_ssfr:
         means: [-11., -9.]
         sigmas: [1., 1.]
-      test_par:
-        means: [0., 1.]
-        sigmas: [1., 1.]
   preset_values:
     H0: 73.0
     sig_int_1: 0.
@@ -88,7 +85,7 @@ model_cfg:
       lower: 0.
     gamma_Rb:
       lower: 1.
-      upper: 7.
+      upper: 20.
     shift_Rb:
       lower: 0.
     Ebv:
@@ -110,8 +107,8 @@ model_cfg:
     tau_Ebv: 0.02
     gamma_Ebv: 2.9
     Rb: 3.7
-    tau_Rb: 0.02
-    gamma_Rb: 2.9
+    tau_Rb: 0.3
+    gamma_Rb: 5.5
     shift_Rb: 1.5
   use_sigmoid: False
   sigmoid_cfg:
