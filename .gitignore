@@ -10,3 +10,4 @@ outputs/
 SLURM_Outputs/
 radek.py
 results/
+jax_stuff/
