@@ -599,7 +599,7 @@ class Model():
 
         if np.any(sn_probs_1 < 0.) | np.any(sn_probs_2 < 0.):
             print("\nOh no, someones below 0\n")
-            return -np.inf, np.ones(len(prep.sn_observables))*np.nan
+            return -np.inf, np.ones(len(prep.sn_observables))*np.nan, np.ones(len(prep.sn_observables))*np.nan
 
         if host_galaxy_means.shape[0] > 0:
             host_probs_1, host_probs_2 = self.host_galaxy_probs(
@@ -610,15 +610,23 @@ class Model():
             pop_2_probs = (1-w) * sn_probs_2 * host_probs_2
             combined_probs = pop_1_probs + pop_2_probs
         else:
+            host_probs_1 = np.ones(len(prep.sn_observables))*np.nan
+            host_probs_2 = np.ones(len(prep.sn_observables))*np.nan
             pop_1_probs = w * sn_probs_1
             pop_2_probs = (1-w) * sn_probs_2
             combined_probs = pop_1_probs + pop_2_probs
         
-        log_membership_probs = (np.log(pop_1_probs) - np.log(pop_2_probs)).flatten()
+        log_host_membership_probs = (
+            1./np.log(10) * (
+                np.log(w * host_probs_1) - np.log((1-w) * host_probs_2)
+            ).flatten()
+        )
+        log_membership_probs = 1./np.log(10) * (np.log(pop_1_probs) - np.log(pop_2_probs)).flatten()
         log_prob = np.sum(np.log(combined_probs))
         if np.isnan(log_prob):
             log_prob = -np.inf
             log_membership_probs = np.ones(len(prep.sn_observables))*np.nan
+            log_host_membership_probs = np.ones(len(prep.sn_observables))*np.nan
 
         s1, s2 = np.all(status[:, 0]), np.all(status[:, 1])
         if not s1 or not s2:
@@ -631,7 +639,7 @@ class Model():
         
         self.convolution_fn = None
 
-        return log_prob, log_membership_probs
+        return log_prob, log_membership_probs #, log_host_membership_probs
 
     def __call__(self, theta: np.ndarray) -> float:
 

@@ -15,6 +15,7 @@ import src.preprocessing as prep
 
 from time import time
 from mpi4py import MPI
+from matplotlib.colors import Normalize
 
 @hydra.main(
     version_base=None, config_path="configs", config_name="config"
@@ -143,7 +144,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     idx_max = np.argmax(sample_log_probs)
     max_sample_log_prob = sample_log_probs[idx_max]
     max_thetas = sample_thetas[idx_max]
-    nlp = lambda *args: -log_prob(*args)
+    nlp = lambda *args: -log_prob(*args)[0]
     sol = sp_opt.minimize(nlp, max_thetas)
     
     opt_pars = sol.x
@@ -350,14 +351,16 @@ def main(cfg: omegaconf.DictConfig) -> None:
     )
 
     log_membership_probs = backend.get_blobs(discard=burnin, thin=int(0.5*tau), flat=True)
-    lower, median, upper = np.quantile(
+    quantiles = np.quantile(
         log_membership_probs, [0.16, 0.50, 0.84], axis=0
     )
 
     cm = plt.cm.get_cmap("coolwarm")
-    
+    cm_norm = Normalize(vmin=min(quantiles[1,:]), vmax=max(quantiles[1,:]), clip=True)
+    mapper = plt.cm.ScalarMappable(norm=cm_norm, cmap=cm)
+
     fig, ax = plt.subplots()
-    _, bins, patches = ax.hist(median,color="r",bins=20)
+    _, bins, patches = ax.hist(quantiles[1,:],color="r",bins=20)
     bin_centers = 0.5*(bins[:-1]+bins[1:])
     col = bin_centers - min(bin_centers)
     col /= max(col)
@@ -367,6 +370,46 @@ def main(cfg: omegaconf.DictConfig) -> None:
     fig.savefig(
         os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_membership_hist.png")
     )
+
+    available_properties_names = data.keys()[::2]
+    for prop_name in available_properties_names:
+
+        host_property = data[prop_name].to_numpy()
+        idx_observed = host_property != prep.NULL_VALUE
+        host_property = host_property[idx_observed]
+        host_property_err = data[prop_name+"_err"].to_numpy()[idx_observed]
+        idx_valid = (host_property_err > 0.0) & (np.abs(host_property_err/host_property) < 0.5)
+        host_property = host_property[idx_valid]
+        host_property_err = host_property_err[idx_valid]
+
+        sn_medians = quantiles[1, idx_observed][idx_valid]
+        sn_errors = np.row_stack([
+            sn_medians - quantiles[0, idx_observed][idx_valid],
+            quantiles[2, idx_observed][idx_valid] - sn_medians
+        ])
+        errorbar_colors = np.array([(mapper.to_rgba(p)) for p in sn_medians])
+
+        fig, ax = plt.subplots()
+
+        for x,y,ex,ey,color in zip(
+            host_property, sn_medians, host_property_err, sn_errors.T, errorbar_colors
+        ):
+            
+            ey = ey.reshape(2,1)
+            ax.errorbar(x, y, xerr=ex, yerr=ey, color=color, capsize=3)
+        
+        ax.scatter(host_property, sn_medians, c=sn_medians, cmap=cm, norm=cm_norm)
+        
+        ax.set_xlabel(prop_name, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+        ax.set_ylabel(
+            r"log$_{10}\left(p_{pop 1}(SN)/p_{pop 2}(SN)\right)$",
+            fontsize=cfg['plot_cfg']['label_kwargs']['fontsize']
+        )
+
+        fig.savefig(
+            os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_"+prop_name+"_vs_membership.png")
+        )
+
 
 if __name__ == "__main__":
     main()
