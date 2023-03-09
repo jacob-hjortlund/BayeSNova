@@ -606,10 +606,15 @@ class Model():
                 host_galaxy_means=host_galaxy_means,
                 host_galaxy_sigmas=host_galaxy_sigs,
             )
-            combined_probs = w * sn_probs_1 * host_probs_1 + (1-w) * sn_probs_2 * host_probs_2
+            pop_1_probs = w * sn_probs_1 * host_probs_1
+            pop_2_probs = (1-w) * sn_probs_2 * host_probs_2
+            combined_probs = pop_1_probs + pop_2_probs
         else:
-            combined_probs = w * sn_probs_1 + (1-w) * sn_probs_2
-
+            pop_1_probs = w * sn_probs_1
+            pop_2_probs = (1-w) * sn_probs_2
+            combined_probs = pop_1_probs + pop_2_probs
+        
+        log_membership_probs = (np.log(pop_1_probs) - np.log(pop_2_probs)).flatten()
         log_prob = np.sum(np.log(combined_probs))
         if np.isnan(log_prob):
             log_prob = -np.inf
@@ -625,7 +630,7 @@ class Model():
         
         self.convolution_fn = None
 
-        return log_prob
+        return log_prob, log_membership_probs
 
     def __call__(self, theta: np.ndarray) -> float:
 
