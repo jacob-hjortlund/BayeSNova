@@ -343,10 +343,29 @@ def main(cfg: omegaconf.DictConfig) -> None:
         suffix = "_transformed"
     else:
         suffix = ""
-    fig.subplots_adjust(top=0.1)
+    #fig.subplots_adjust(top=0.1)
     fig.suptitle("Walkers" + suffix, fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
     fig.savefig(
         os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_walkers.png")
+    )
+
+    log_membership_probs = backend.get_blobs(discard=burnin, thin=int(0.5*tau), flat=True)
+    lower, median, upper = np.quantile(
+        log_membership_probs, [0.16, 0.50, 0.84], axis=0
+    )
+
+    cm = plt.cm.get_cmap("coolwarm")
+    
+    fig, ax = plt.subplots()
+    _, bins, patches = ax.hist(median,color="r",bins=20)
+    bin_centers = 0.5*(bins[:-1]+bins[1:])
+    col = bin_centers - min(bin_centers)
+    col /= max(col)
+
+    for c, p in zip(col, patches):
+        plt.setp(p, "facecolor", cm(c))
+    fig.savefig(
+        os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_membership_hist.png")
     )
 
 if __name__ == "__main__":

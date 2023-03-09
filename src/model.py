@@ -599,7 +599,7 @@ class Model():
 
         if np.any(sn_probs_1 < 0.) | np.any(sn_probs_2 < 0.):
             print("\nOh no, someones below 0\n")
-            return -np.inf
+            return -np.inf, np.ones(len(prep.sn_observables))*np.nan
 
         if host_galaxy_means.shape[0] > 0:
             host_probs_1, host_probs_2 = self.host_galaxy_probs(
@@ -618,6 +618,7 @@ class Model():
         log_prob = np.sum(np.log(combined_probs))
         if np.isnan(log_prob):
             log_prob = -np.inf
+            log_membership_probs = np.ones(len(prep.sn_observables))*np.nan
 
         s1, s2 = np.all(status[:, 0]), np.all(status[:, 1])
         if not s1 or not s2:
@@ -647,7 +648,7 @@ class Model():
 
         log_prior = self.log_prior(param_dict)
         if np.isinf(log_prior):
-            return log_prior
+            return log_prior, np.ones(len(prep.sn_observables))*np.nan
         
         if prep.global_model_cfg.use_sigmoid:
             param_dict = utils.apply_sigmoid(
@@ -659,7 +660,7 @@ class Model():
         param_dict =  {
             **prep.global_model_cfg.preset_values, **param_dict
         }
-        log_likelihood = self.log_likelihood(**param_dict)
+        log_likelihood, log_membership_probs = self.log_likelihood(**param_dict)
 
-        return log_likelihood
+        return log_likelihood, log_membership_probs
     
