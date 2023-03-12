@@ -29,7 +29,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     else:
         tags = ["all_shared"]
     tags += [
-        os.path.split(cfg['data_cfg']['path'])[1].split(".")[0]
+        os.path.split(cfg['data_cfg']['train_path'])[1].split(".")[0]
     ]
     if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
         tags += cfg['model_cfg']['host_galaxy_cfg']['property_names']
@@ -54,9 +54,17 @@ def main(cfg: omegaconf.DictConfig) -> None:
     os.makedirs(path, exist_ok=True)
 
     data = pd.read_csv(
-        filepath_or_buffer=cfg['data_cfg']['path'], sep=cfg['data_cfg']['sep']
+        filepath_or_buffer=cfg['data_cfg']['train_path'], sep=cfg['data_cfg']['sep']
     )
-    prep.init_global_data(data, cfg['model_cfg'])
+    if cfg['data_cfg']['eval_path']:
+        eval_data = pd.read_csv(
+            filepath_or_buffer=cfg['data_cfg']['eval_path'], sep=cfg['data_cfg']['sep']
+        )
+    
+    n_eval = len(eval_data)
+    data = pd.concat([data, eval_data], ignore_index=True)
+
+    prep.init_global_data(data, cfg['model_cfg'], n_eval)
 
     log_prob = model.Model()
 
@@ -350,23 +358,66 @@ def main(cfg: omegaconf.DictConfig) -> None:
         os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_walkers.png")
     )
 
-    log_membership_probs = backend.get_blobs(discard=burnin, thin=int(0.5*tau), flat=True)
-    quantiles = np.quantile(
-        log_membership_probs, [0.16, 0.50, 0.84], axis=0
+    blobs = backend.get_blobs(
+        discard=burnin, thin=int(0.5*tau), flat=True
+    )
+    log_full_membership_probs = blobs[:, 0, :]
+    log_sn_membership_probs = blobs[:, 1, :]
+    log_host_membership_probs = blobs[:, 2, :]
+    full_membership_quantiles = np.quantile(
+        log_full_membership_probs, [0.16, 0.50, 0.84], axis=0
+    )
+    sn_membership_quantiles = np.quantile(
+        log_sn_membership_probs, [0.16, 0.50, 0.84], axis=0
+    )
+    host_membership_quantiles = np.quantile(
+        log_host_membership_probs, [0.16, 0.50, 0.84], axis=0
+    )
+
+    cm_norm_min = np.min(
+        [np.min(full_membership_quantiles[1,:]), np.min(host_membership_quantiles[1,:]),
+        np.min(sn_membership_quantiles[1,:])]
+    )
+    cm_norm_max = np.max(
+        [np.max(full_membership_quantiles[1,:]), np.max(host_membership_quantiles[1,:]),
+        np.max(sn_membership_quantiles[1,:])]
     )
 
     cm = plt.cm.get_cmap("coolwarm")
-    cm_norm = Normalize(vmin=min(quantiles[1,:]), vmax=max(quantiles[1,:]), clip=True)
+    cm_norm = Normalize(vmin=cm_norm_min, vmax=cm_norm_max, clip=True)
     mapper = plt.cm.ScalarMappable(norm=cm_norm, cmap=cm)
 
-    fig, ax = plt.subplots()
-    _, bins, patches = ax.hist(quantiles[1,:],color="r",bins=20)
-    bin_centers = 0.5*(bins[:-1]+bins[1:])
-    col = bin_centers - min(bin_centers)
-    col /= max(col)
+    fig, ax = plt.subplots(ncols=3, figsize=(15, 5))
+    for i, (membership_quantiles, title) in enumerate(
+        zip(
+            [full_membership_quantiles, sn_membership_quantiles, host_membership_quantiles],
+            ["Full", "SN", "Host"]
+        )
+    ):
+        _, bins, patches = ax[i].hist(
+            membership_quantiles[1,:-prep.n_sn_to_evaluate],color="r",bins=20, density=True
+        )
+        bin_centers = 0.5*(bins[:-1]+bins[1:])
+        col = bin_centers - min(bin_centers)
+        col /= max(col)
 
-    for c, p in zip(col, patches):
-        plt.setp(p, "facecolor", cm(c))
+        for c, p in zip(col, patches):
+            plt.setp(p, "facecolor", mapper.to_rgba(c))
+        
+        for j in range(prep.n_sn_to_evaluate):
+            value = membership_quantiles[1,-prep.n_sn_to_evaluate+j]
+            ax[i].axvline(
+                value,
+                color=mapper.to_rgba(value),
+                alpha=0.5
+            )
+
+        ax[i].set_xlabel(
+            r"log$_{10}\left(p_{pop 1}(SN)/p_{pop 2}(SN)\right)$",
+            fontsize=cfg['plot_cfg']['label_kwargs']['fontsize']
+        )
+        ax[i].set_title(title, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+
     fig.savefig(
         os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_membership_hist.png")
     )
@@ -379,7 +430,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         idx_observed = host_property != prep.NULL_VALUE
         host_property = host_property[idx_observed]
         host_property_err = data[prop_name+"_err"].to_numpy()[idx_observed]
-        idx_valid = np.abs(host_property_err/host_property) < 0.25
+        idx_valid = np.abs(host_property_err/host_property) < 0.5
         host_property = host_property[idx_valid]
         host_property_err = host_property_err[idx_valid]
 

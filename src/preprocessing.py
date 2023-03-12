@@ -7,7 +7,7 @@ import src.utils as utils
 NULL_VALUE = -9999.
 
 def init_global_data(
-    data: pd.pandas.DataFrame, cfg: dict
+    data: pd.pandas.DataFrame, cfg: dict, n_evaluate: int = 0
 ) -> tuple:
 
     global sn_covariances
@@ -18,7 +18,9 @@ def init_global_data(
     global host_galaxy_observables
     global host_galaxy_covariances
     global n_unused_host_properties
+    global n_sn_to_evaluate
 
+    n_sn_to_evaluate = n_evaluate
     global_model_cfg = cfg
 
     sn_observable_keys = ['mB', 'x1', 'c', 'z']

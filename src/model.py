@@ -472,11 +472,11 @@ class Model():
         p1_nans = np.isnan(p_1)
         p2_nans = np.isnan(p_2)
 
-        if np.any(p1_nans):
+        if np.any(p1_nans[:-prep.n_sn_to_evaluate]):
             print("Pop 1 contains nan probabilities:", np.count_nonzero(p1_nans)/len(p1_nans)*100, "%")
             print("Pop 1 pars:", [Rb_1, sig_Rb_1, Ebv_1, gamma_Ebv_1])
             print("Pop 1 norm:", norm_1, "\n")
-        if np.any(p2_nans):
+        if np.any(p2_nans[:-prep.n_sn_to_evaluate]):
             print("Pop 2 contains nan probabilities:", np.count_nonzero(p2_nans)/len(p2_nans)*100, "%")
             print("Pop 1 pars:", [Rb_2, sig_Rb_2, Ebv_2, gamma_Ebv_2])
             print("Pop 2 norm:", norm_2, "\n")
@@ -599,7 +599,12 @@ class Model():
 
         if np.any(sn_probs_1 < 0.) | np.any(sn_probs_2 < 0.):
             print("\nOh no, someones below 0\n")
-            return -np.inf, np.ones(len(prep.sn_observables))*np.nan, np.ones(len(prep.sn_observables))*np.nan
+            return (
+                -np.inf,
+                np.ones(len(prep.sn_observables))*np.nan,
+                np.ones(len(prep.sn_observables))*np.nan,
+                np.ones(len(prep.sn_observables))*np.nan,
+            )
 
         if host_galaxy_means.shape[0] > 0:
             host_probs_1, host_probs_2 = self.host_galaxy_probs(
@@ -621,14 +626,20 @@ class Model():
                 np.log(w * host_probs_1) - np.log((1-w) * host_probs_2)
             ).flatten()
         )
-        log_membership_probs = 1./np.log(10) * (np.log(pop_1_probs) - np.log(pop_2_probs)).flatten()
-        log_prob = np.sum(np.log(combined_probs))
+        log_sn_membership_probs = (
+            1./np.log(10) * (
+                np.log(w * sn_probs_1) - np.log((1-w) * sn_probs_2)
+            ).flatten()
+        )
+        log_full_membership_probs = 1./np.log(10) * (np.log(pop_1_probs) - np.log(pop_2_probs)).flatten()
+        log_prob = np.sum(np.log(combined_probs[:-prep.n_sn_to_evaluate]))
         if np.isnan(log_prob):
             log_prob = -np.inf
-            log_membership_probs = np.ones(len(prep.sn_observables))*np.nan
+            log_full_membership_probs = np.ones(len(prep.sn_observables))*np.nan
             log_host_membership_probs = np.ones(len(prep.sn_observables))*np.nan
+            log_sn_membership_probs = np.ones(len(prep.sn_observables))*np.nan
 
-        s1, s2 = np.all(status[:, 0]), np.all(status[:, 1])
+        s1, s2 = np.all(status[:-prep.n_sn_to_evaluate, 0]), np.all(status[:-prep.n_sn_to_evaluate, 1])
         if not s1 or not s2:
             mean1, mean2 = np.mean(sn_probs_1), np.mean(sn_probs_2)
             std1, std2 = np.std(sn_probs_1), np.std(sn_probs_2)
@@ -639,7 +650,7 @@ class Model():
         
         self.convolution_fn = None
 
-        return log_prob, log_membership_probs #, log_host_membership_probs
+        return log_prob, log_full_membership_probs, log_sn_membership_probs, log_host_membership_probs
 
     def __call__(self, theta: np.ndarray) -> float:
 
@@ -656,7 +667,12 @@ class Model():
 
         log_prior = self.log_prior(param_dict)
         if np.isinf(log_prior):
-            return log_prior, np.ones(len(prep.sn_observables))*np.nan
+            return (
+                log_prior,
+                np.ones(len(prep.sn_observables))*np.nan,
+                np.ones(len(prep.sn_observables))*np.nan,
+                np.ones(len(prep.sn_observables))*np.nan,
+            )
         
         if prep.global_model_cfg.use_sigmoid:
             param_dict = utils.apply_sigmoid(
@@ -668,7 +684,13 @@ class Model():
         param_dict =  {
             **prep.global_model_cfg.preset_values, **param_dict
         }
-        log_likelihood, log_membership_probs = self.log_likelihood(**param_dict)
+        (
+            log_likelihood, log_full_membership_probs,
+            log_sn_membership_probs, log_host_membership_probs
+        ) = self.log_likelihood(**param_dict)
 
-        return log_likelihood, log_membership_probs
+        return (
+            log_likelihood, log_full_membership_probs,
+            log_sn_membership_probs, log_host_membership_probs
+        )
     
