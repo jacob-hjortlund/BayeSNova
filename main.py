@@ -374,11 +374,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
     available_properties_names = data.keys()[::2]
     for prop_name in available_properties_names:
 
+        print("Plotting property: ", prop_name)
         host_property = data[prop_name].to_numpy()
         idx_observed = host_property != prep.NULL_VALUE
         host_property = host_property[idx_observed]
         host_property_err = data[prop_name+"_err"].to_numpy()[idx_observed]
-        idx_valid = (host_property_err > 0.0) & (np.abs(host_property_err/host_property) < 0.5)
+        idx_valid = np.abs(host_property_err/host_property) < 0.25
         host_property = host_property[idx_valid]
         host_property_err = host_property_err[idx_valid]
 
@@ -396,10 +397,13 @@ def main(cfg: omegaconf.DictConfig) -> None:
         ):
             
             ey = ey.reshape(2,1)
-            ax.errorbar(x, y, xerr=ex, yerr=ey, color=color, capsize=3)
+            ax.errorbar(x, y, xerr=ex, yerr=ey, color=color, fmt='none', capsize=0.5, capthick=0.5, elinewidth=0.5)
         
         ax.scatter(host_property, sn_medians, c=sn_medians, cmap=cm, norm=cm_norm)
         
+        x_lower = cfg['plot_cfg']['property_ranges'][prop_name]['lower']
+        x_upper = cfg['plot_cfg']['property_ranges'][prop_name]['upper']
+        ax.set_xlim(x_lower, x_upper)
         ax.set_xlabel(prop_name, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
         ax.set_ylabel(
             r"log$_{10}\left(p_{pop 1}(SN)/p_{pop 2}(SN)\right)$",

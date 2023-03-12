@@ -146,3 +146,25 @@ plot_cfg:
   smooth1d: 1.
   label_kwargs:
     fontsize: 16
+  property_ranges:
+    local_u-g:
+      lower: 0.25
+      upper: 2.25
+    local_mass:
+      lower: 6.
+      upper: 11.
+    local_ssfr:
+      lower: -45.
+      upper: -8.
+    global_u-g:
+      lower: 0.25
+      upper: 2.
+    global_mass:
+      lower: 8.
+      upper: 12.
+    global_ssfr:
+      lower: -30.
+      upper: -8.5
+    t:
+      lower: -5.5
+      upper: 10.5
