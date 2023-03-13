@@ -309,6 +309,40 @@ def main(cfg: omegaconf.DictConfig) -> None:
     fx = sample_thetas[:, :n_shared]
     fig_pop_2 = None
 
+    blobs = backend.get_blobs(
+        discard=burnin, thin=int(0.5*tau), flat=True
+    )
+    log_full_membership_probs = blobs[:, 0, :]
+    log_sn_membership_probs = blobs[:, 1, :]
+    log_host_membership_probs = blobs[:, 2, :]
+    full_membership_quantiles = np.quantile(
+        log_full_membership_probs, [0.16, 0.50, 0.84], axis=0
+    )
+    sn_membership_quantiles = np.quantile(
+        log_sn_membership_probs, [0.16, 0.50, 0.84], axis=0
+    )
+    host_membership_quantiles = np.quantile(
+        log_host_membership_probs, [0.16, 0.50, 0.84], axis=0
+    )
+
+    idx_eval = -prep.n_sn_to_evaluate
+
+    cm_full_min, cm_full_max = np.min(full_membership_quantiles[1,:idx_eval]), np.max(full_membership_quantiles[1,:idx_eval])
+    cm_sn_min, cm_sn_max = np.min(sn_membership_quantiles[1,:idx_eval]), np.max(sn_membership_quantiles[1,:idx_eval])
+    cm_host_min, cm_host_max = np.min(host_membership_quantiles[1,:idx_eval]), np.max(host_membership_quantiles[1,:idx_eval])
+    cm_min = np.min([cm_full_min, cm_sn_min, cm_host_min])
+    cm_max = np.max([cm_full_max, cm_sn_max, cm_host_max])
+
+    cm = plt.cm.get_cmap("coolwarm")
+    cm_norm_full = Normalize(vmin=cm_min, vmax=cm_max, clip=True)
+    # cm_norm_sn = Normalize(vmin=cm_sn_min, vmax=cm_sn_max, clip=True)
+    # cm_norm_host = Normalize(vmin=cm_host_min, vmax=cm_host_max, clip=True)
+    mapper_full = plt.cm.ScalarMappable(norm=cm_norm_full, cmap=cm)
+    # mapper_sn = plt.cm.ScalarMappable(norm=cm_norm_sn, cmap=cm)
+    # mapper_host = plt.cm.ScalarMappable(norm=cm_norm_host, cmap=cm)
+    pop2_color = mapper_full.to_rgba(cm_min)
+    pop1_color = mapper_full.to_rgba(cm_max)
+
     # Handling in case of independent parameters
     if n_independent > 0:
         fx = np.concatenate(
@@ -324,12 +358,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
         ]
         sx = np.concatenate(sx_list, axis=-1)
 
-        fig_pop_2 = corner.corner(data=sx, color='r', **cfg['plot_cfg'])
+        fig_pop_2 = corner.corner(data=sx, color=pop2_color, **cfg['plot_cfg'])
     
     fx_list = [fx, sample_thetas[:,-1][:, None]]
     fx = np.concatenate(fx_list, axis=-1)
 
-    fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, labels=labels, **cfg['plot_cfg'])
+    fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, color=pop1_color, labels=labels, **cfg['plot_cfg'])
     fig_pop_1.tight_layout()
     fig_pop_1.suptitle('Corner plot', fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
     fig_pop_1.savefig(
@@ -358,57 +392,26 @@ def main(cfg: omegaconf.DictConfig) -> None:
         os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_walkers.png")
     )
 
-    blobs = backend.get_blobs(
-        discard=burnin, thin=int(0.5*tau), flat=True
-    )
-    log_full_membership_probs = blobs[:, 0, :]
-    log_sn_membership_probs = blobs[:, 1, :]
-    log_host_membership_probs = blobs[:, 2, :]
-    full_membership_quantiles = np.quantile(
-        log_full_membership_probs, [0.16, 0.50, 0.84], axis=0
-    )
-    sn_membership_quantiles = np.quantile(
-        log_sn_membership_probs, [0.16, 0.50, 0.84], axis=0
-    )
-    host_membership_quantiles = np.quantile(
-        log_host_membership_probs, [0.16, 0.50, 0.84], axis=0
-    )
-
-    cm_norm_min = np.min(
-        [np.min(full_membership_quantiles[1,:]), np.min(host_membership_quantiles[1,:]),
-        np.min(sn_membership_quantiles[1,:])]
-    )
-    cm_norm_max = np.max(
-        [np.max(full_membership_quantiles[1,:]), np.max(host_membership_quantiles[1,:]),
-        np.max(sn_membership_quantiles[1,:])]
-    )
-
-    cm = plt.cm.get_cmap("coolwarm")
-    cm_norm = Normalize(vmin=cm_norm_min, vmax=cm_norm_max, clip=True)
-    mapper = plt.cm.ScalarMappable(norm=cm_norm, cmap=cm)
-
     fig, ax = plt.subplots(ncols=3, figsize=(15, 5))
     for i, (membership_quantiles, title) in enumerate(
         zip(
             [full_membership_quantiles, sn_membership_quantiles, host_membership_quantiles],
-            ["Full", "SN", "Host"]
+            ["Full", "SN", "Host"] #[mapper_full, mapper_sn, mapper_host]
         )
     ):
         _, bins, patches = ax[i].hist(
-            membership_quantiles[1,:-prep.n_sn_to_evaluate],color="r",bins=20, density=True
+            membership_quantiles[1,:idx_eval],color="r",bins=20, density=True
         )
         bin_centers = 0.5*(bins[:-1]+bins[1:])
-        col = bin_centers - min(bin_centers)
-        col /= max(col)
 
-        for c, p in zip(col, patches):
-            plt.setp(p, "facecolor", mapper.to_rgba(c))
+        for c, p in zip(bin_centers, patches):
+            plt.setp(p, "facecolor", mapper_full.to_rgba(c))
         
         for j in range(prep.n_sn_to_evaluate):
-            value = membership_quantiles[1,-prep.n_sn_to_evaluate+j]
+            value = membership_quantiles[1,idx_eval+j]
             ax[i].axvline(
                 value,
-                color=mapper.to_rgba(value),
+                color=mapper_full.to_rgba(value),
                 alpha=0.5
             )
 
@@ -434,12 +437,13 @@ def main(cfg: omegaconf.DictConfig) -> None:
         host_property = host_property[idx_valid]
         host_property_err = host_property_err[idx_valid]
 
-        sn_medians = quantiles[1, idx_observed][idx_valid]
+        membership_quantiles = full_membership_quantiles[:, idx_observed][:, idx_valid]
+        sn_medians = membership_quantiles[1, :]
         sn_errors = np.row_stack([
-            sn_medians - quantiles[0, idx_observed][idx_valid],
-            quantiles[2, idx_observed][idx_valid] - sn_medians
+            sn_medians - membership_quantiles[0, :],
+            membership_quantiles[2, :] - sn_medians
         ])
-        errorbar_colors = np.array([(mapper.to_rgba(p)) for p in sn_medians])
+        errorbar_colors = np.array([(mapper_full.to_rgba(p)) for p in sn_medians])
 
         fig, ax = plt.subplots()
 
@@ -450,7 +454,11 @@ def main(cfg: omegaconf.DictConfig) -> None:
             ey = ey.reshape(2,1)
             ax.errorbar(x, y, xerr=ex, yerr=ey, color=color, fmt='none', capsize=0.5, capthick=0.5, elinewidth=0.5)
         
-        ax.scatter(host_property, sn_medians, c=sn_medians, cmap=cm, norm=cm_norm)
+        ax.scatter(host_property[:idx_eval], sn_medians[:idx_eval], c=sn_medians[:idx_eval], cmap=cm, norm=cm_norm_full)
+        ax.scatter(
+            host_property[idx_eval:], sn_medians[idx_eval:], c=sn_medians[idx_eval:], cmap=cm, norm=cm_norm_full,
+            edgecolors="k"
+        )
         
         x_lower = cfg['plot_cfg']['property_ranges'][prop_name]['lower']
         x_upper = cfg['plot_cfg']['property_ranges'][prop_name]['upper']
