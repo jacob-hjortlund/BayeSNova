@@ -335,11 +335,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     cm = plt.cm.get_cmap("coolwarm")
     cm_norm_full = Normalize(vmin=cm_min, vmax=cm_max, clip=True)
-    # cm_norm_sn = Normalize(vmin=cm_sn_min, vmax=cm_sn_max, clip=True)
-    # cm_norm_host = Normalize(vmin=cm_host_min, vmax=cm_host_max, clip=True)
     mapper_full = plt.cm.ScalarMappable(norm=cm_norm_full, cmap=cm)
-    # mapper_sn = plt.cm.ScalarMappable(norm=cm_norm_sn, cmap=cm)
-    # mapper_host = plt.cm.ScalarMappable(norm=cm_norm_host, cmap=cm)
     pop2_color = mapper_full.to_rgba(cm_min)
     pop1_color = mapper_full.to_rgba(cm_max)
 
@@ -396,7 +392,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     for i, (membership_quantiles, title) in enumerate(
         zip(
             [full_membership_quantiles, sn_membership_quantiles, host_membership_quantiles],
-            ["Full", "SN", "Host"] #[mapper_full, mapper_sn, mapper_host]
+            ["Full", "SN", "Host"]
         )
     ):
         _, bins, patches = ax[i].hist(
@@ -412,7 +408,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
             ax[i].axvline(
                 value,
                 color=mapper_full.to_rgba(value),
-                alpha=0.5
+                linestyle="--",
+                gapcolor="k"
             )
 
         ax[i].set_xlabel(
@@ -428,37 +425,65 @@ def main(cfg: omegaconf.DictConfig) -> None:
     available_properties_names = data.keys()[::2]
     for prop_name in available_properties_names:
 
-        print("Plotting property: ", prop_name)
+        print("\nPlotting property: ", prop_name)
         host_property = data[prop_name].to_numpy()
-        idx_observed = host_property != prep.NULL_VALUE
-        host_property = host_property[idx_observed]
-        host_property_err = data[prop_name+"_err"].to_numpy()[idx_observed]
-        idx_valid = np.abs(host_property_err/host_property) < 0.5
-        host_property = host_property[idx_valid]
-        host_property_err = host_property_err[idx_valid]
+        hubble_flow_host, calibration_host = host_property[:idx_eval], host_property[idx_eval:]
+        idx_hubble_flow_observed = hubble_flow_host != prep.NULL_VALUE
+        idx_calibration_observed = calibration_host != prep.NULL_VALUE
+        hubble_flow_host = hubble_flow_host[idx_hubble_flow_observed]
+        calibration_host = calibration_host[idx_calibration_observed]
 
-        membership_quantiles = full_membership_quantiles[:, idx_observed][:, idx_valid]
-        sn_medians = membership_quantiles[1, :]
-        sn_errors = np.row_stack([
-            sn_medians - membership_quantiles[0, :],
-            membership_quantiles[2, :] - sn_medians
+        hubble_flow_host_err, calibration_host_err = (
+            data[prop_name+"_err"].to_numpy()[:idx_eval][idx_hubble_flow_observed],
+            data[prop_name+"_err"].to_numpy()[idx_eval:][idx_calibration_observed]
+        )
+        idx_hubble_flow_valid = np.abs(hubble_flow_host_err/hubble_flow_host) < 0.5
+        idx_calibration_valid = np.abs(calibration_host_err/calibration_host) < 0.5
+        hubble_flow_host, hubble_flow_host_err = hubble_flow_host[idx_hubble_flow_valid], hubble_flow_host_err[idx_hubble_flow_valid]
+        calibration_host, calibration_host_err = calibration_host[idx_calibration_valid], calibration_host_err[idx_calibration_valid]
+        print("No. of Hubble flow hosts: ", len(hubble_flow_host))
+        print("No. of calibration hosts: ", len(calibration_host), "\n")
+
+        hubble_flow_membership_quantiles = full_membership_quantiles[:, :idx_eval][:, idx_hubble_flow_observed][:, idx_hubble_flow_valid]
+        calibration_membership_quantiles = full_membership_quantiles[:, idx_eval:][:, idx_calibration_observed][:, idx_calibration_valid]
+        hubble_flow_medians = hubble_flow_membership_quantiles[1, :]
+        calibration_medians = calibration_membership_quantiles[1, :]
+        hubble_flow_errors = np.row_stack([
+            hubble_flow_medians - hubble_flow_membership_quantiles[0, :],
+            hubble_flow_membership_quantiles[2, :] - hubble_flow_medians
         ])
-        errorbar_colors = np.array([(mapper_full.to_rgba(p)) for p in sn_medians])
+        calibration_errors = np.row_stack([
+            calibration_medians - calibration_membership_quantiles[0, :],
+            calibration_membership_quantiles[2, :] - calibration_medians
+        ])
+
+        hubble_flow_errorbar_colors = np.array([(mapper_full.to_rgba(p)) for p in hubble_flow_medians])
+        calibration_errorbar_colors = np.array([(mapper_full.to_rgba(p)) for p in calibration_medians])
 
         fig, ax = plt.subplots()
 
         for x,y,ex,ey,color in zip(
-            host_property, sn_medians, host_property_err, sn_errors.T, errorbar_colors
+            hubble_flow_host, hubble_flow_medians,
+            hubble_flow_host_err, hubble_flow_errors.T, hubble_flow_errorbar_colors
         ):
             
             ey = ey.reshape(2,1)
             ax.errorbar(x, y, xerr=ex, yerr=ey, color=color, fmt='none', capsize=0.5, capthick=0.5, elinewidth=0.5)
         
-        ax.scatter(host_property[:idx_eval], sn_medians[:idx_eval], c=sn_medians[:idx_eval], cmap=cm, norm=cm_norm_full)
-        ax.scatter(
-            host_property[idx_eval:], sn_medians[idx_eval:], c=sn_medians[idx_eval:], cmap=cm, norm=cm_norm_full,
-            edgecolors="k"
-        )
+        for x,y,ex,ey,color in zip(
+            calibration_host, calibration_medians,
+            calibration_host_err, calibration_errors.T, calibration_errorbar_colors
+        ):
+            
+            ey = ey.reshape(2,1)
+            ax.errorbar(x, y, xerr=ex, yerr=ey, color=color, fmt='none', capsize=0.5, capthick=0.5, elinewidth=0.5)
+        
+        ax.scatter(hubble_flow_host, hubble_flow_medians, c=hubble_flow_medians, cmap=cm, norm=cm_norm_full)
+        if len(calibration_host) > 0:
+            ax.scatter(
+                calibration_host, calibration_medians, c=calibration_medians, cmap=cm, norm=cm_norm_full,
+                edgecolors="k", zorder=1000
+            )
         
         x_lower = cfg['plot_cfg']['property_ranges'][prop_name]['lower']
         x_upper = cfg['plot_cfg']['property_ranges'][prop_name]['upper']
