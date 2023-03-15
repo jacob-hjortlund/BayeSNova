@@ -437,8 +437,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
             data[prop_name+"_err"].to_numpy()[:idx_eval][idx_hubble_flow_observed],
             data[prop_name+"_err"].to_numpy()[idx_eval:][idx_calibration_observed]
         )
-        idx_hubble_flow_valid = np.abs(hubble_flow_host_err/hubble_flow_host) < 0.5
-        idx_calibration_valid = np.abs(calibration_host_err/calibration_host) < 0.5
+        idx_hubble_flow_valid = np.abs(hubble_flow_host_err/hubble_flow_host) < 0.25
+        idx_calibration_valid = np.abs(calibration_host_err/calibration_host) < 0.25
         hubble_flow_host, hubble_flow_host_err = hubble_flow_host[idx_hubble_flow_valid], hubble_flow_host_err[idx_hubble_flow_valid]
         calibration_host, calibration_host_err = calibration_host[idx_calibration_valid], calibration_host_err[idx_calibration_valid]
         print("No. of Hubble flow hosts: ", len(hubble_flow_host))
