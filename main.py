@@ -59,10 +59,11 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if cfg['data_cfg']['eval_path']:
         eval_data = pd.read_csv(
             filepath_or_buffer=cfg['data_cfg']['eval_path'], sep=cfg['data_cfg']['sep']
-        )
-    
-    n_eval = len(eval_data)
-    data = pd.concat([data, eval_data], ignore_index=True)
+        )    
+        n_eval = len(eval_data)
+        data = pd.concat([data, eval_data], ignore_index=True)
+    else:
+        n_eval = 0
 
     prep.init_global_data(data, cfg['model_cfg'], n_eval)
 
