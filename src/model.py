@@ -472,11 +472,11 @@ class Model():
         p1_nans = np.isnan(p_1)
         p2_nans = np.isnan(p_2)
 
-        if np.any(p1_nans[:-prep.n_sn_to_evaluate]):
+        if np.any(p1_nans[:prep.idx_sn_to_evaluate]):
             print("Pop 1 contains nan probabilities:", np.count_nonzero(p1_nans)/len(p1_nans)*100, "%")
             print("Pop 1 pars:", [Rb_1, sig_Rb_1, Ebv_1, gamma_Ebv_1])
             print("Pop 1 norm:", norm_1, "\n")
-        if np.any(p2_nans[:-prep.n_sn_to_evaluate]):
+        if np.any(p2_nans[:prep.idx_sn_to_evaluate]):
             print("Pop 2 contains nan probabilities:", np.count_nonzero(p2_nans)/len(p2_nans)*100, "%")
             print("Pop 1 pars:", [Rb_2, sig_Rb_2, Ebv_2, gamma_Ebv_2])
             print("Pop 2 norm:", norm_2, "\n")
@@ -632,14 +632,14 @@ class Model():
             ).flatten()
         )
         log_full_membership_probs = 1./np.log(10) * (np.log(pop_1_probs) - np.log(pop_2_probs)).flatten()
-        log_prob = np.sum(np.log(combined_probs[:-prep.n_sn_to_evaluate]))
+        log_prob = np.sum(np.log(combined_probs[:prep.idx_sn_to_evaluate]))
         if np.isnan(log_prob):
             log_prob = -np.inf
             log_full_membership_probs = np.ones(len(prep.sn_observables))*np.nan
             log_host_membership_probs = np.ones(len(prep.sn_observables))*np.nan
             log_sn_membership_probs = np.ones(len(prep.sn_observables))*np.nan
 
-        s1, s2 = np.all(status[:-prep.n_sn_to_evaluate, 0]), np.all(status[:-prep.n_sn_to_evaluate, 1])
+        s1, s2 = np.all(status[:prep.idx_sn_to_evaluate, 0]), np.all(status[:prep.idx_sn_to_evaluate, 1])
         if not s1 or not s2:
             mean1, mean2 = np.mean(sn_probs_1), np.mean(sn_probs_2)
             std1, std2 = np.std(sn_probs_1), np.std(sn_probs_2)
