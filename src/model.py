@@ -108,7 +108,6 @@ def _Ebv_prior_convolution(
     n_sn = len(cov_1)
     probs = np.zeros((n_sn, 2))
     status = np.ones((n_sn, 2), dtype='bool')
-    iers = np.zeros((n_sn, 2))
     params_1 = np.array([Rb_1, sig_Rb_1, Ebv_1, tau_Ebv_1, gamma_Ebv_1])
     params_2 = np.array([Rb_2, sig_Rb_2, Ebv_2, tau_Ebv_2, gamma_Ebv_2])
 
@@ -122,11 +121,11 @@ def _Ebv_prior_convolution(
         )).copy()
         tmp_params_2.astype(np.float64)
         
-        prob_1, _, s1, ier1 = dqags(
+        prob_1, _, s1 = dqags(
             Ebv_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
         )
 
-        prob_2, _, s2, ier2 = dqags(
+        prob_2, _, s2 = dqags(
             Ebv_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
         )
 
@@ -134,10 +133,8 @@ def _Ebv_prior_convolution(
         probs[i, 1] = prob_2
         status[i, 0] = s1
         status[i, 1] = s2
-        iers[i, 0] = ier1
-        iers[i, 1] = ier2
 
-    return probs, status, iers
+    return probs, status
 
 # ---------- RB/E(B-V) PRIOR DOUBLE INTEGRAL ------------
 
@@ -217,7 +214,7 @@ def Ebv_Rb_integral(y, data):
         (_data, np.array([y]))
     )
 
-    inner_value, _, _ , _= dqags(
+    inner_value, _, _  = dqags(
         Rb_integral_ptr, _data[-2], _data[-1], _new_data
     )
 
@@ -266,11 +263,11 @@ def _Ebv_Rb_prior_convolution(
         )).copy()
         tmp_params_2.astype(np.float64)
 
-        prob_1, _, s1, _ = dqags(
+        prob_1, _, s1 = dqags(
             Ebv_Rb_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
         )
 
-        prob_2, _, s2, _ = dqags(
+        prob_2, _, s2 = dqags(
             Ebv_Rb_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
         )
 
@@ -471,7 +468,7 @@ class Model():
         if gamma_Rb_2 != NULL_VALUE:
             norm_2 *= sp_special.gammainc(gamma_Rb_2, upper_bound_Rb_2) * sp_special.gamma(gamma_Rb_2)
 
-        probs, status, iers = self.convolution_fn(
+        probs, status = self.convolution_fn(
             cov_1=covs_1, cov_2=covs_2, res_1=residuals_1, res_2=residuals_2,
             Rb_1=Rb_1, Rb_2=Rb_2,
             sig_Rb_1=sig_Rb_1, sig_Rb_2=sig_Rb_2,
