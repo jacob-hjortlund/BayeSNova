@@ -18,9 +18,9 @@ def init_global_data(
     global host_galaxy_observables
     global host_galaxy_covariances
     global n_unused_host_properties
-    global n_sn_to_evaluate
+    global idx_sn_to_evaluate
 
-    n_sn_to_evaluate = n_evaluate
+    idx_sn_to_evaluate = data.shape[0]-n_evaluate
     global_model_cfg = cfg
 
     sn_observable_keys = ['mB', 'x1', 'c', 'z']

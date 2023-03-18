@@ -326,11 +326,18 @@ def main(cfg: omegaconf.DictConfig) -> None:
         log_host_membership_probs, [0.16, 0.50, 0.84], axis=0
     )
 
-    idx_eval = -prep.n_sn_to_evaluate
-
-    cm_full_min, cm_full_max = np.min(full_membership_quantiles[1,:idx_eval]), np.max(full_membership_quantiles[1,:idx_eval])
-    cm_sn_min, cm_sn_max = np.min(sn_membership_quantiles[1,:idx_eval]), np.max(sn_membership_quantiles[1,:idx_eval])
-    cm_host_min, cm_host_max = np.min(host_membership_quantiles[1,:idx_eval]), np.max(host_membership_quantiles[1,:idx_eval])
+    cm_full_min, cm_full_max = (
+        np.min(full_membership_quantiles[1,:prep.idx_sn_to_evaluate]),
+        np.max(full_membership_quantiles[1,:prep.idx_sn_to_evaluate])
+    )
+    cm_sn_min, cm_sn_max = (
+        np.min(sn_membership_quantiles[1,:prep.idx_sn_to_evaluate]),
+        np.max(sn_membership_quantiles[1,:prep.idx_sn_to_evaluate])
+    )
+    cm_host_min, cm_host_max = (
+        np.min(host_membership_quantiles[1,:prep.idx_sn_to_evaluate]),
+        np.max(host_membership_quantiles[1,:prep.idx_sn_to_evaluate])
+    )
     cm_min = np.min([cm_full_min, cm_sn_min, cm_host_min])
     cm_max = np.max([cm_full_max, cm_sn_max, cm_host_max])
 
@@ -389,23 +396,37 @@ def main(cfg: omegaconf.DictConfig) -> None:
         os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_walkers.png")
     )
 
-    fig, ax = plt.subplots(ncols=3, figsize=(15, 5))
+    quantiles_list = [
+        full_membership_quantiles,
+        sn_membership_quantiles,
+    ]
+    titles_list = [
+        "Full",
+        "SN",
+    ]
+    if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
+        quantiles_list.append(host_membership_quantiles)
+        titles_list.append("Host")
+
+    n_hists = len(quantiles_list)
+    fig, ax = plt.subplots(
+        ncols=n_hists, figsize=(15/3*n_hists, 5/3*n_hists)
+    )
     for i, (membership_quantiles, title) in enumerate(
-        zip(
-            [full_membership_quantiles, sn_membership_quantiles, host_membership_quantiles],
-            ["Full", "SN", "Host"]
-        )
+        zip(quantiles_list, titles_list)
     ):
         _, bins, patches = ax[i].hist(
-            membership_quantiles[1,:idx_eval],color="r",bins=20, density=True
+            membership_quantiles[1,:prep.idx_sn_to_evaluate],color="r",bins=20, density=True
         )
         bin_centers = 0.5*(bins[:-1]+bins[1:])
 
         for c, p in zip(bin_centers, patches):
             plt.setp(p, "facecolor", mapper_full.to_rgba(c))
         
-        for j in range(prep.n_sn_to_evaluate):
-            value = membership_quantiles[1,idx_eval+j]
+        for j in range(
+            len(data) - prep.idx_sn_to_evaluate
+        ):
+            value = membership_quantiles[1,prep.idx_sn_to_evaluate+j]
             ax[i].axvline(
                 value,
                 color=mapper_full.to_rgba(value),
@@ -428,15 +449,17 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         print("\nPlotting property: ", prop_name)
         host_property = data[prop_name].to_numpy()
-        hubble_flow_host, calibration_host = host_property[:idx_eval], host_property[idx_eval:]
+        hubble_flow_host, calibration_host = (
+            host_property[:prep.idx_sn_to_evaluate], host_property[prep.idx_sn_to_evaluate:]
+        )
         idx_hubble_flow_observed = hubble_flow_host != prep.NULL_VALUE
         idx_calibration_observed = calibration_host != prep.NULL_VALUE
         hubble_flow_host = hubble_flow_host[idx_hubble_flow_observed]
         calibration_host = calibration_host[idx_calibration_observed]
 
         hubble_flow_host_err, calibration_host_err = (
-            data[prop_name+"_err"].to_numpy()[:idx_eval][idx_hubble_flow_observed],
-            data[prop_name+"_err"].to_numpy()[idx_eval:][idx_calibration_observed]
+            data[prop_name+"_err"].to_numpy()[:prep.idx_sn_to_evaluate][idx_hubble_flow_observed],
+            data[prop_name+"_err"].to_numpy()[prep.idx_sn_to_evaluate:][idx_calibration_observed]
         )
         idx_hubble_flow_valid = np.abs(hubble_flow_host_err/hubble_flow_host) < 0.25
         idx_calibration_valid = np.abs(calibration_host_err/calibration_host) < 0.25
@@ -445,8 +468,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print("No. of Hubble flow hosts: ", len(hubble_flow_host))
         print("No. of calibration hosts: ", len(calibration_host), "\n")
 
-        hubble_flow_membership_quantiles = full_membership_quantiles[:, :idx_eval][:, idx_hubble_flow_observed][:, idx_hubble_flow_valid]
-        calibration_membership_quantiles = full_membership_quantiles[:, idx_eval:][:, idx_calibration_observed][:, idx_calibration_valid]
+        hubble_flow_membership_quantiles = full_membership_quantiles[:, :prep.idx_sn_to_evaluate][:, idx_hubble_flow_observed][:, idx_hubble_flow_valid]
+        calibration_membership_quantiles = full_membership_quantiles[:, prep.idx_sn_to_evaluate:][:, idx_calibration_observed][:, idx_calibration_valid]
         hubble_flow_medians = hubble_flow_membership_quantiles[1, :]
         calibration_medians = calibration_membership_quantiles[1, :]
         hubble_flow_errors = np.row_stack([
