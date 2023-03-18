@@ -15,8 +15,8 @@ NULL_VALUE = -9999.0
 
 @nb.jit
 def Ebv_integral_body(
-    x, i1, i2, i3, i5,
-    i6, i9, r1, r2, r3,
+    x, i1, i2, i3, i4, i5,
+    i6, i7, i8, i9, r1, r2, r3,
     rb, sig_rb, Ebv, tau_Ebv, gamma_Ebv
 ):  
 
@@ -38,6 +38,23 @@ def Ebv_integral_body(
     A9 = i1 * i5 - i2 * i2
     det_m1 = 1. / (i1 * A1 + i2 * A2 + i3 * A3)
 
+    if det_m1 < 0:
+        cov = np.array([
+            [i1, i2, i3],
+            [i4, i5, i6],
+            [i7, i8, i9]
+        ])
+        eigvals = np.linalg.eigvalsh(cov)
+        cov += np.eye(3) * np.abs(np.min(eigvals)) * (1 + 1e-2)
+        i1, i2, i3, i4, i5, i6, i7, i8, i9 = cov.flatten()
+        A1 = i5 * i9 - i6 * i6
+        A2 = i6 * i3 - i2 * i9
+        A3 = i2 * i6 - i5 * i3
+        A5 = i1 * i9 - i3 * i3
+        A6 = i2 * i3 - i1 * i6
+        A9 = i1 * i5 - i2 * i2
+        det_m1 = 1. / (i1 * A1 + i2 * A2 + i3 * A3)
+
     # # calculate prob
     r_inv_cov_r = det_m1 * (r1 * r1 * A1 + r2 * r2 * A5 + r3 * r3 * A9 + 2 * (r1 * r2 * A2 + r1 * r3 * A3 + r2 * r3 * A6))
     value = np.exp(-0.5 * r_inv_cov_r - x) * x**exponent * det_m1**0.5
@@ -50,8 +67,11 @@ def Ebv_integral(x, data):
     i1 = _data[0]
     i2 = _data[1]
     i3 = _data[2]
+    i4 = _data[3]
     i5 = _data[4]
     i6 = _data[5]
+    i7 = _data[6]
+    i8 = _data[7]
     i9 = _data[8]
     r1 = _data[9]
     r2 = _data[10]
@@ -62,7 +82,7 @@ def Ebv_integral(x, data):
     tau_Ebv = _data[15]
     gamma_Ebv = _data[16]
     return Ebv_integral_body(
-        x, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
+        x, i1, i2, i3, i4, i5, i6, i7, i8, i9, r1, r2, r3, 
         rb, sig_rb, Ebv, tau_Ebv, gamma_Ebv
     )
 Ebv_integral_ptr = Ebv_integral.address
@@ -194,7 +214,7 @@ def Ebv_Rb_integral(y, data):
         (_data, np.array([y]))
     )
 
-    inner_value, _, _ = dqags(
+    inner_value, _, _  = dqags(
         Rb_integral_ptr, _data[-2], _data[-1], _new_data
     )
 
