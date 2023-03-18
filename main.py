@@ -461,8 +461,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
             data[prop_name+"_err"].to_numpy()[:prep.idx_sn_to_evaluate][idx_hubble_flow_observed],
             data[prop_name+"_err"].to_numpy()[prep.idx_sn_to_evaluate:][idx_calibration_observed]
         )
-        idx_hubble_flow_valid = np.abs(hubble_flow_host_err/hubble_flow_host) < 0.25
-        idx_calibration_valid = np.abs(calibration_host_err/calibration_host) < 0.25
+        idx_hubble_flow_valid = np.ones_like(hubble_flow_host, dtype='bool')#np.abs(hubble_flow_host_err/hubble_flow_host) < 10.#0.25
+        idx_calibration_valid = np.ones_like(calibration_host, dtype='bool')#np.abs(calibration_host_err/calibration_host) < 10.#0.25
         hubble_flow_host, hubble_flow_host_err = hubble_flow_host[idx_hubble_flow_valid], hubble_flow_host_err[idx_hubble_flow_valid]
         calibration_host, calibration_host_err = calibration_host[idx_calibration_valid], calibration_host_err[idx_calibration_valid]
         print("No. of Hubble flow hosts: ", len(hubble_flow_host))
@@ -511,6 +511,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
         
         x_lower = cfg['plot_cfg']['property_ranges'][prop_name]['lower']
         x_upper = cfg['plot_cfg']['property_ranges'][prop_name]['upper']
+        if prop_name == "global_mass":
+            ax.set_ylim(-5, 2.5)
         ax.set_xlim(x_lower, x_upper)
         ax.set_xlabel(prop_name, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
         ax.set_ylabel(

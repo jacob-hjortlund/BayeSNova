@@ -15,8 +15,8 @@ NULL_VALUE = -9999.0
 
 @nb.jit
 def Ebv_integral_body(
-    x, i1, i2, i3, i5,
-    i6, i9, r1, r2, r3,
+    x, i1, i2, i3, i4, i5,
+    i6, i7, i8, i9, r1, r2, r3,
     rb, sig_rb, Ebv, tau_Ebv, gamma_Ebv
 ):  
 
@@ -38,6 +38,23 @@ def Ebv_integral_body(
     A9 = i1 * i5 - i2 * i2
     det_m1 = 1. / (i1 * A1 + i2 * A2 + i3 * A3)
 
+    if det_m1 < 0:
+        cov = np.array([
+            [i1, i2, i3],
+            [i4, i5, i6],
+            [i7, i8, i9]
+        ])
+        eigvals = np.linalg.eigvalsh(cov)
+        cov += np.eye(3) * np.abs(np.min(eigvals)) * (1 + 1e-2)
+        i1, i2, i3, i4, i5, i6, i7, i8, i9 = cov.flatten()
+        A1 = i5 * i9 - i6 * i6
+        A2 = i6 * i3 - i2 * i9
+        A3 = i2 * i6 - i5 * i3
+        A5 = i1 * i9 - i3 * i3
+        A6 = i2 * i3 - i1 * i6
+        A9 = i1 * i5 - i2 * i2
+        det_m1 = 1. / (i1 * A1 + i2 * A2 + i3 * A3)
+
     # # calculate prob
     r_inv_cov_r = det_m1 * (r1 * r1 * A1 + r2 * r2 * A5 + r3 * r3 * A9 + 2 * (r1 * r2 * A2 + r1 * r3 * A3 + r2 * r3 * A6))
     value = np.exp(-0.5 * r_inv_cov_r - x) * x**exponent * det_m1**0.5
@@ -50,8 +67,11 @@ def Ebv_integral(x, data):
     i1 = _data[0]
     i2 = _data[1]
     i3 = _data[2]
+    i4 = _data[3]
     i5 = _data[4]
     i6 = _data[5]
+    i7 = _data[6]
+    i8 = _data[7]
     i9 = _data[8]
     r1 = _data[9]
     r2 = _data[10]
@@ -62,7 +82,7 @@ def Ebv_integral(x, data):
     tau_Ebv = _data[15]
     gamma_Ebv = _data[16]
     return Ebv_integral_body(
-        x, i1, i2, i3, i5, i6, i9, r1, r2, r3, 
+        x, i1, i2, i3, i4, i5, i6, i7, i8, i9, r1, r2, r3, 
         rb, sig_rb, Ebv, tau_Ebv, gamma_Ebv
     )
 Ebv_integral_ptr = Ebv_integral.address
@@ -88,6 +108,7 @@ def _Ebv_prior_convolution(
     n_sn = len(cov_1)
     probs = np.zeros((n_sn, 2))
     status = np.ones((n_sn, 2), dtype='bool')
+    iers = np.zeros((n_sn, 2))
     params_1 = np.array([Rb_1, sig_Rb_1, Ebv_1, tau_Ebv_1, gamma_Ebv_1])
     params_2 = np.array([Rb_2, sig_Rb_2, Ebv_2, tau_Ebv_2, gamma_Ebv_2])
 
@@ -101,11 +122,11 @@ def _Ebv_prior_convolution(
         )).copy()
         tmp_params_2.astype(np.float64)
         
-        prob_1, _, s1 = dqags(
+        prob_1, _, s1, ier1 = dqags(
             Ebv_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
         )
 
-        prob_2, _, s2 = dqags(
+        prob_2, _, s2, ier2 = dqags(
             Ebv_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
         )
 
@@ -113,8 +134,10 @@ def _Ebv_prior_convolution(
         probs[i, 1] = prob_2
         status[i, 0] = s1
         status[i, 1] = s2
+        iers[i, 0] = ier1
+        iers[i, 1] = ier2
 
-    return probs, status
+    return probs, status, iers
 
 # ---------- RB/E(B-V) PRIOR DOUBLE INTEGRAL ------------
 
@@ -194,7 +217,7 @@ def Ebv_Rb_integral(y, data):
         (_data, np.array([y]))
     )
 
-    inner_value, _, _ = dqags(
+    inner_value, _, _ , _= dqags(
         Rb_integral_ptr, _data[-2], _data[-1], _new_data
     )
 
@@ -243,11 +266,11 @@ def _Ebv_Rb_prior_convolution(
         )).copy()
         tmp_params_2.astype(np.float64)
 
-        prob_1, _, s1 = dqags(
+        prob_1, _, s1, _ = dqags(
             Ebv_Rb_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
         )
 
-        prob_2, _, s2 = dqags(
+        prob_2, _, s2, _ = dqags(
             Ebv_Rb_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
         )
 
@@ -448,7 +471,7 @@ class Model():
         if gamma_Rb_2 != NULL_VALUE:
             norm_2 *= sp_special.gammainc(gamma_Rb_2, upper_bound_Rb_2) * sp_special.gamma(gamma_Rb_2)
 
-        probs, status = self.convolution_fn(
+        probs, status, iers = self.convolution_fn(
             cov_1=covs_1, cov_2=covs_2, res_1=residuals_1, res_2=residuals_2,
             Rb_1=Rb_1, Rb_2=Rb_2,
             sig_Rb_1=sig_Rb_1, sig_Rb_2=sig_Rb_2,
