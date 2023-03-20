@@ -6,9 +6,9 @@ import jax.numpy as jnp
 import src.utils as utils
 import scipy.stats as stats
 import scipy.special as sp_special
+import astropy.cosmology as apy_cosmo
 
 from NumbaQuadpack import quadpack_sig, dqags
-from astropy.cosmology import Planck18 as cosmo
 from diffrax import diffeqsolve, Tsit5, ODETerm, SaveAt, PIDController
 
 import src.preprocessing as prep
@@ -585,7 +585,8 @@ class Model():
         c_1: float, c_2: float,
         alpha_1: float, alpha_2: float,
         beta_1: float, beta_2: float,
-        H0: float
+        cosmo: apy_cosmo.Cosmology
+        #H0: float, Om0: float, w0: float, wa: float
     ) -> np.ndarray:
         
         #global sn_observables
@@ -597,7 +598,7 @@ class Model():
         residuals = np.zeros((2, len(mb), 3))
         distance_moduli = np.tile(
             cosmo.distmod(z).value, (2, 1)
-        ) + np.log10(cosmo.H0.value / H0)
+        ) #+ np.log10(cosmo.H0.value / H0)
 
         residuals[:, :, 0] = np.tile(mb, (2, 1)) - np.array([
             [Mb_1 + alpha_1 * s_1 + beta_1 * c_1],
@@ -763,11 +764,13 @@ class Model():
         gamma_Ebv_1: float, gamma_Ebv_2: float,
         host_galaxy_means: np.ndarray,
         host_galaxy_sigs: np.ndarray,
-        w: float, H0: float, Om: float,
+        w: float, H0: float, Om0: float,
         w0: float, wa: float, eta_prompt: float,
         eta_delayed: float
     ) -> float:
         
+        cosmo = apy_cosmo.Flatw0waCDM(H0=H0, Om0=Om0, w0=w0, wa=wa)
+
         sn_cov_1, sn_cov_2 = self.population_covariances(
             alpha_1=alpha_1, alpha_2=alpha_2,
             beta_1=beta_1, beta_2=beta_2,
@@ -781,7 +784,8 @@ class Model():
             c_1=c_1, c_2=c_2,
             alpha_1=alpha_1, alpha_2=alpha_2,
             beta_1=beta_1, beta_2=beta_2,
-            H0=H0
+            cosmo=cosmo
+            #H0=H0, Om0=Om0, w0=w0, wa=wa
         )
 
         use_gaussian_Rb = (
@@ -817,30 +821,41 @@ class Model():
                 np.ones(len(prep.sn_observables))*np.nan,
                 np.ones(len(prep.sn_observables))*np.nan,
             )
+        
+        use_physical_population_fraction = (
+            eta_delayed != NULL_VALUE and
+            eta_prompt != NULL_VALUE and
+            w == NULL_VALUE
+        )
+
+        if use_physical_population_fraction:
+            print('blaaaaaaah')
+        else:
+            w_vector = np.ones_like(sn_probs_1) * w
 
         if host_galaxy_means.shape[0] > 0:
             host_probs_1, host_probs_2 = self.host_galaxy_probs(
                 host_galaxy_means=host_galaxy_means,
                 host_galaxy_sigmas=host_galaxy_sigs,
             )
-            pop_1_probs = w * sn_probs_1 * host_probs_1
-            pop_2_probs = (1-w) * sn_probs_2 * host_probs_2
+            pop_1_probs = w_vector * sn_probs_1 * host_probs_1
+            pop_2_probs = (1-w_vector) * sn_probs_2 * host_probs_2
             combined_probs = pop_1_probs + pop_2_probs
         else:
             host_probs_1 = np.ones(len(prep.sn_observables))*np.nan
             host_probs_2 = np.ones(len(prep.sn_observables))*np.nan
-            pop_1_probs = w * sn_probs_1
-            pop_2_probs = (1-w) * sn_probs_2
+            pop_1_probs = w_vector * sn_probs_1
+            pop_2_probs = (1-w_vector) * sn_probs_2
             combined_probs = pop_1_probs + pop_2_probs
         
         log_host_membership_probs = (
             1./np.log(10) * (
-                np.log(w * host_probs_1) - np.log((1-w) * host_probs_2)
+                np.log(w_vector * host_probs_1) - np.log((1-w_vector) * host_probs_2)
             ).flatten()
         )
         log_sn_membership_probs = (
             1./np.log(10) * (
-                np.log(w * sn_probs_1) - np.log((1-w) * sn_probs_2)
+                np.log(w_vector * sn_probs_1) - np.log((1-w_vector) * sn_probs_2)
             ).flatten()
         )
         log_full_membership_probs = 1./np.log(10) * (np.log(pop_1_probs) - np.log(pop_2_probs)).flatten()
