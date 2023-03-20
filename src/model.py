@@ -8,6 +8,7 @@ import scipy.stats as stats
 import scipy.special as sp_special
 import astropy.cosmology as apy_cosmo
 
+from astropy.units import Gyr
 from NumbaQuadpack import quadpack_sig, dqags
 from diffrax import diffeqsolve, Tsit5, ODETerm, SaveAt, PIDController
 
@@ -286,8 +287,9 @@ def _Ebv_Rb_prior_convolution(
 # ---------- z(T) ODE ------------
 
 def E(z, args):
-    _, Om, Ode, w0, wa = args
+    _, Om, w0, wa = args
     zp1 = 1+z
+    Ode = 1. - Om
     mass_term = Om * zp1**3.
     de_term = Ode * zp1**(3.*(1.+w0+wa)) * jnp.exp(-3. * wa * z/zp1)
     Ez = jnp.sqrt(mass_term + de_term)
@@ -295,8 +297,8 @@ def E(z, args):
     return Ez
 
 def convolution_limits(cosmo, z, T0, T1):
-    times_z0_lower = (cosmo.age(z) - T0).value
-    times_z0_upper = (cosmo.age(z) - T1).value
+    times_z0_lower = cosmo.age(z).value - T0
+    times_z0_upper = cosmo.age(z).value - T1
 
     return jnp.concatenate((times_z0_lower, times_z0_upper))
 
@@ -829,7 +831,25 @@ class Model():
         )
 
         if use_physical_population_fraction:
-            print('blaaaaaaah')
+            dtd_t0 = prep.global_model_cfg['dtd_cfg']['t0']
+            dtd_t1 = prep.global_model_cfg['dtd_cfg']['t1']
+            z = prep.sn_observables[:, 3]
+            convolution_time_limits = convolution_limits(
+                cosmo, z, dtd_t0, dtd_t1
+            )
+            minimum_convolution_time = np.min(convolution_time_limits)
+            z0 = apy_cosmo.z_at_value(cosmo.lookback_time, minimum_convolution_time * Gyr)
+            H0_gyrm1 = cosmo.H0.to(1/Gyr).value
+            cosmo_args = (H0_gyrm1, Om0, w0, wa)
+            ts, zs, _ = redshift_at_times(
+                convolution_time_limits, minimum_convolution_time, z0, cosmo_args
+            )
+            integral_limits = np.array(zs.tolist(), dtype=np.float64)
+            sn_rates = volumetric_rates(
+                z, integral_limits, cosmo.H0.value, Om0, w0, wa,
+                eta_prompt, eta_delayed, zinf=20.
+            )
+            w_vector = sn_rates[:, -1] / sn_rates[:, 0]
         else:
             w_vector = np.ones_like(sn_probs_1) * w
 
