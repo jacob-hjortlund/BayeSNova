@@ -226,7 +226,8 @@ def gen_pop_par_names(par_names):
 
 def theta_to_dict(
     theta: np.ndarray, shared_par_names: list, independent_par_names: list,
-    n_host_galaxy_observables: int, n_unused_host_properties: int, ratio_par_name: str
+    n_host_galaxy_observables: int, n_unused_host_properties: int, ratio_par_name: str,
+    cosmology_par_names: list
 ) -> dict:
 
     extended_shared_par_names = gen_pop_par_names(shared_par_names)
@@ -237,14 +238,18 @@ def theta_to_dict(
         ]) -
         set(shared_par_names + independent_par_names)
     )
-    extended_missing_par_names = gen_pop_par_names(missing_par_names)
+    missing_cosmology_par_names = list(
+        set(['eta_prompt', 'eta_delayed']) - set(cosmology_par_names)
+    )
+    extended_missing_par_names = gen_pop_par_names(missing_par_names) + missing_cosmology_par_names
     par_names = (
         extended_shared_par_names + extended_independent_par_names +
-        extended_missing_par_names + [ratio_par_name]
+        extended_missing_par_names + cosmology_par_names + [ratio_par_name]
     )
 
     n_shared_pars = len(shared_par_names)
     n_independent_pars = 2 * len(independent_par_names) + 4 * n_host_galaxy_observables
+    n_cosmology_pars = len(cosmology_par_names)
 
     no_pars = n_shared_pars + n_independent_pars + 1
     if len(theta) != no_pars:
@@ -279,6 +284,10 @@ def theta_to_dict(
         arg_dict['host_galaxy_sigs'] = np.concatenate(
             (host_pars[idx_sigs], np.zeros(n_unused_host_properties))
         )
+    
+    for i in range(n_cosmology_pars):
+        idx = -1 - n_cosmology_pars + i
+        arg_dict[cosmology_par_names[i]] = theta[idx]
 
     return arg_dict
 

@@ -763,7 +763,9 @@ class Model():
         gamma_Ebv_1: float, gamma_Ebv_2: float,
         host_galaxy_means: np.ndarray,
         host_galaxy_sigs: np.ndarray,
-        w: float, H0: float
+        w: float, H0: float, Om: float,
+        w0: float, wa: float, eta_prompt: float,
+        eta_delayed: float
     ) -> float:
         
         sn_cov_1, sn_cov_2 = self.population_covariances(
@@ -873,6 +875,7 @@ class Model():
             n_host_galaxy_observables=n_host_galaxy_observables,
             n_unused_host_properties=prep.n_unused_host_properties,
             ratio_par_name=prep.global_model_cfg.ratio_par_name,
+            cosmology_par_anmes=prep.global_model_cfg.cosmology_par_names,
         )
 
         log_prior = self.log_prior(param_dict)
