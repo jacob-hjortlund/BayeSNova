@@ -910,7 +910,7 @@ class Model():
             n_host_galaxy_observables=n_host_galaxy_observables,
             n_unused_host_properties=prep.n_unused_host_properties,
             ratio_par_name=prep.global_model_cfg.ratio_par_name,
-            cosmology_par_anmes=prep.global_model_cfg.cosmology_par_names,
+            cosmology_par_names=prep.global_model_cfg.cosmology_par_names,
         )
 
         log_prior = self.log_prior(param_dict)
