@@ -5,6 +5,7 @@ data_cfg:
 model_cfg:
   ratio_par_name: w
   stretch_par_name: s
+  cosmology_par_names: []
   shared_par_names: [
     alpha,
     beta,
@@ -52,6 +53,9 @@ model_cfg:
         sigmas: [1., 1.]
   preset_values:
     H0: 73.0
+    Om0: 0.3
+    w0: -1.
+    wa: 0.
     sig_int_1: 0.
     sig_int_2: 0.
     shift_Rb: 0.
@@ -100,6 +104,24 @@ model_cfg:
     w:
       lower: 0.12
       upper: 0.88
+    H0:
+      lower: 50.
+      upper: 90.
+    Om0:
+      lower: 0.1
+      upper: 0.5
+    w0:
+      lower: -2.
+      upper: 2.
+    wa:
+      lower: -2.
+      upper: 2.
+    eta_prompt:
+      lower: -6.
+      upper: 2.
+    eta_delay:
+      lower: -6.
+      upper: 2.
   init_values:
     Mb: -19.3
     sig_c: 0.05

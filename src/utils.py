@@ -287,7 +287,11 @@ def theta_to_dict(
     
     for i in range(n_cosmology_pars):
         idx = -1 - n_cosmology_pars + i
-        arg_dict[cosmology_par_names[i]] = theta[idx]
+        cosmo_par_name = cosmology_par_names[i]
+        if "eta" in cosmo_par_name:
+            arg_dict[cosmo_par_name] = 10**(theta[idx])
+        else:
+            arg_dict[cosmo_par_name] = theta[idx]
 
     return arg_dict
 

@@ -895,7 +895,7 @@ class Model():
             )
         
         param_dict =  {
-            **prep.global_model_cfg.preset_values, **param_dict
+            **param_dict, **prep.global_model_cfg.preset_values,
         }
         (
             log_likelihood, log_full_membership_probs,
