@@ -82,7 +82,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print("\n----------------- SETUP ---------------------\n")
         init_theta = utils.prior_initialisation(
             cfg['model_cfg']['prior_bounds'], cfg['model_cfg']['init_values'], cfg['model_cfg']['shared_par_names'],
-            cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name'],
+            cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name'], cfg['model_cfg']['cosmology_par_names'],
             cfg['model_cfg']['host_galaxy_cfg']['use_properties'], cfg['model_cfg']['host_galaxy_cfg']['property_names'],
             cfg['model_cfg']['host_galaxy_cfg']['init_values']
         )
