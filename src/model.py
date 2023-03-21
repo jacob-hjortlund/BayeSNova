@@ -16,6 +16,7 @@ import src.preprocessing as prep
 
 NULL_VALUE = -9999.0
 H0_CONVERSION_FACTOR = 0.001022
+DH_70 = 4282.7494
 
 # ---------- E(B-V) PRIOR INTEGRAL ------------
 
@@ -347,6 +348,48 @@ def redshift_at_times(
 
     return ts, zs, num_steps
 
+# ---------- mu(z) via ODE ------------
+
+def dc_ode(
+    z, D, args
+):
+    Ez = E(z, args)
+
+    return  1. / Ez
+
+@jax.jit
+def distance_modulus_at_redshift(
+    z, cosmo_args
+):
+    z0 = 0.
+    dc0 = 0.
+    idx_sort = jnp.argsort(z)
+    idx_unsort = jnp.argsort(idx_sort)
+    sorted_z = z[idx_sort]
+    z1 = sorted_z[-1]
+
+    term = ODETerm(dc_ode)
+    solver = Tsit5()
+    saveat = SaveAt(ts=sorted_z)
+    stepsize_controller = PIDController(rtol=1e-8, atol=1e-8)
+
+    sol = diffeqsolve(
+        term, solver, t0=z0, t1=z1, y0=dc0, dt0=None,
+        saveat=saveat, stepsize_controller=stepsize_controller,
+        args=cosmo_args
+    )
+
+    H0, _, _, _, _ = cosmo_args
+    DH = DH_70 * 70./H0
+    zs = sol.ts[idx_unsort]
+    dcs = sol.ys[idx_unsort] * DH
+    dls = (1+z) * dcs
+    mus = 5.0 * jnp.log10(dls) + 25.0
+    
+    num_steps = sol.stats['num_steps']
+
+    return zs, dcs, dls, mus, num_steps
+
 # ---------- N(z) integral ------------
 
 @nb.jit
@@ -587,8 +630,8 @@ class Model():
         c_1: float, c_2: float,
         alpha_1: float, alpha_2: float,
         beta_1: float, beta_2: float,
-        cosmo: apy_cosmo.Cosmology
-        #H0: float, Om0: float, w0: float, wa: float
+        #cosmo: apy_cosmo.Cosmology
+        H0: float, Om0: float, w0: float, wa: float
     ) -> np.ndarray:
         
         #global sn_observables
@@ -596,11 +639,17 @@ class Model():
         s = prep.sn_observables[:, 1]
         c = prep.sn_observables[:, 2]
         z = prep.sn_observables[:, 3]
+        cosmo_params = (H0, Om0, 1.-Om0, w0, wa)
 
         residuals = np.zeros((2, len(mb), 3))
+        distmod_values = np.array(
+            distance_modulus_at_redshift(z, cosmo_params).tolist()
+        )
         distance_moduli = np.tile(
-            cosmo.distmod(z).value, (2, 1)
-        ) #+ np.log10(cosmo.H0.value / H0)
+            distmod_values, (2, 1)
+        )
+        #     cosmo.distmod(z).value, (2, 1)
+        # ) #+ np.log10(cosmo.H0.value / H0)
 
         residuals[:, :, 0] = np.tile(mb, (2, 1)) - np.array([
             [Mb_1 + alpha_1 * s_1 + beta_1 * c_1],
@@ -786,8 +835,8 @@ class Model():
             c_1=c_1, c_2=c_2,
             alpha_1=alpha_1, alpha_2=alpha_2,
             beta_1=beta_1, beta_2=beta_2,
-            cosmo=cosmo
-            #H0=H0, Om0=Om0, w0=w0, wa=wa
+            #cosmo=cosmo
+            H0=H0, Om0=Om0, w0=w0, wa=wa
         )
 
         use_gaussian_Rb = (
