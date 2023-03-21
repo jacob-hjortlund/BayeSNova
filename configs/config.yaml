@@ -5,6 +5,7 @@ data_cfg:
 model_cfg:
   ratio_par_name: w
   stretch_par_name: s
+  use_physical_ratio: False
   cosmology_par_names: []
   shared_par_names: [
     alpha,

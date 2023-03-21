@@ -288,9 +288,9 @@ def _Ebv_Rb_prior_convolution(
 # ---------- z(T) ODE ------------
 
 def E(z, args):
-    _, Om, w0, wa = args
+    _, Om, Ode, w0, wa = args
     zp1 = 1+z
-    Ode = 1. - Om
+    #Ode = 1. - Om
     mass_term = Om * zp1**3.
     de_term = Ode * zp1**(3.*(1.+w0+wa)) * jnp.exp(-3. * wa * z/zp1)
     Ez = jnp.sqrt(mass_term + de_term)
@@ -388,7 +388,7 @@ def distance_modulus_at_redshift(
     
     num_steps = sol.stats['num_steps']
 
-    return zs, dcs, dls, mus, num_steps
+    return mus
 
 # ---------- N(z) integral ------------
 
@@ -557,14 +557,17 @@ class Model():
                     value_key == stretch_1_par or value_key == stretch_2_par
                 ) and stretch_independent
             )
+
             is_not_ratio_par_name = value_key != prep.global_model_cfg.ratio_par_name
+            is_not_cosmology_par_name = not value_key in prep.global_model_cfg.cosmology_par_names
+            split_value_key = is_not_ratio_par_name and is_not_cosmology_par_name
 
             if is_independent_stretch:
                 if not par_dict[stretch_1_par] < par_dict[stretch_2_par]:
                     value += -np.inf
                     break
             
-            if is_not_ratio_par_name:
+            if split_value_key:
                 bounds_key = "_".join(value_key.split("_")[:-1])
             else:
                 bounds_key = value_key
@@ -642,6 +645,7 @@ class Model():
         cosmo_params = (H0, Om0, 1.-Om0, w0, wa)
 
         residuals = np.zeros((2, len(mb), 3))
+
         distmod_values = np.array(
             distance_modulus_at_redshift(z, cosmo_params).tolist()
         )
@@ -835,7 +839,6 @@ class Model():
             c_1=c_1, c_2=c_2,
             alpha_1=alpha_1, alpha_2=alpha_2,
             beta_1=beta_1, beta_2=beta_2,
-            #cosmo=cosmo
             H0=H0, Om0=Om0, w0=w0, wa=wa
         )
 

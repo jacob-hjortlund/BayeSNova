@@ -149,22 +149,28 @@ def uniform(value: float, lower: float = -np.inf, upper: float = np.inf):
         return 0.
 
 def extend_theta(
-    theta: np.ndarray, n_shared_pars: int
+    theta: np.ndarray, n_shared_pars: int, n_cosmology_pars: int, use_physical_ratio: bool,
 ) -> tuple:
 
     shared_pars = np.repeat(theta[:n_shared_pars], 2)
-    independent_pars = theta[n_shared_pars:-1]
+    if use_physical_ratio:
+        independent_pars = theta[n_shared_pars:-1*n_cosmology_pars]
+    else:
+        independent_pars = theta[n_shared_pars:-1 - n_cosmology_pars]
 
     return shared_pars, independent_pars
 
 def prior_initialisation(
     priors: dict, preset_init_values: dict, shared_par_names: list,
     independent_par_names: list, ratio_par_name: str,
-    cosmology_par_names: list, use_host_galaxy_properties: bool,
-    host_galaxy_par_names: list, host_galaxy_init_values: dict,
+    cosmology_par_names: list, use_physical_ratio: bool,
+    use_host_galaxy_properties: bool, host_galaxy_par_names: list,
+    host_galaxy_init_values: dict,
 ):
 
-    par_names = shared_par_names + independent_par_names + cosmology_par_names + [ratio_par_name]
+    par_names = shared_par_names + independent_par_names + cosmology_par_names
+    if not use_physical_ratio:
+        par_names.append(ratio_par_name)
     init_values = []
     # 3-deep conditional bleeeh
     for par in par_names:
@@ -227,7 +233,7 @@ def gen_pop_par_names(par_names):
 def theta_to_dict(
     theta: np.ndarray, shared_par_names: list, independent_par_names: list,
     n_host_galaxy_observables: int, n_unused_host_properties: int, ratio_par_name: str,
-    cosmology_par_names: list
+    cosmology_par_names: list, use_physical_ratio: bool,
 ) -> dict:
 
     extended_shared_par_names = gen_pop_par_names(shared_par_names)
@@ -242,10 +248,14 @@ def theta_to_dict(
         set(['eta_prompt', 'eta_delayed']) - set(cosmology_par_names)
     )
     extended_missing_par_names = gen_pop_par_names(missing_par_names) + missing_cosmology_par_names
-    par_names = (
+    par_names = [
         extended_shared_par_names + extended_independent_par_names +
         extended_missing_par_names + cosmology_par_names + [ratio_par_name]
-    )
+    ]
+    if not use_physical_ratio:
+        par_names.append(['physical_ratio'])
+    else:
+        extended_missing_par_names.append(ratio_par_name)
 
     n_shared_pars = len(shared_par_names)
     n_independent_pars = 2 * len(independent_par_names) + 4 * n_host_galaxy_observables
@@ -257,14 +267,15 @@ def theta_to_dict(
             "MCMC parameter dimensions does not match no. of shared and independent parameters."
         )
 
-    shared_pars, independent_pars = extend_theta(theta, n_shared_pars)
+    shared_pars, independent_pars = extend_theta(theta, n_shared_pars, n_cosmology_pars, use_physical_ratio)
     missing_pars = [NULL_VALUE] * len(extended_missing_par_names)
     par_list = [
         shared_pars,
         independent_pars[:n_independent_pars - 4 * n_host_galaxy_observables],
         missing_pars,
-        [theta[-1]]
     ]
+    if not use_physical_ratio:
+        par_list.append([theta[-1]])
     pars = np.concatenate(par_list)
     arg_dict = {name: par for name, par in zip(par_names, pars)}
 
@@ -285,8 +296,11 @@ def theta_to_dict(
             (host_pars[idx_sigs], np.zeros(n_unused_host_properties))
         )
     
+    factor = 1
+    if use_physical_ratio:
+        factor = 0
     for i in range(n_cosmology_pars):
-        idx = -1 - n_cosmology_pars + i
+        idx = -1 * factor - n_cosmology_pars + i
         cosmo_par_name = cosmology_par_names[i]
         if "eta" in cosmo_par_name:
             arg_dict[cosmo_par_name] = 10**(theta[idx])
