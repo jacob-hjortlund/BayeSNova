@@ -153,10 +153,8 @@ def extend_theta(
 ) -> tuple:
 
     shared_pars = np.repeat(theta[:n_shared_pars], 2)
-    if use_physical_ratio:
-        independent_pars = theta[n_shared_pars:-1*n_cosmology_pars]
-    else:
-        independent_pars = theta[n_shared_pars:-1 - n_cosmology_pars]
+    idx_independent = len(theta) -1*n_cosmology_pars - (not use_physical_ratio)
+    independent_pars = theta[n_shared_pars:idx_independent]
 
     return shared_pars, independent_pars
 
@@ -249,24 +247,24 @@ def theta_to_dict(
         ]) -
         set(shared_par_names + independent_par_names)
     )
-    missing_cosmology_par_names = list(
+    missing_cosmology_par_names = (not use_physical_ratio) * list(
         set(['eta_prompt', 'eta_delayed']) - set(cosmology_par_names)
     )
-    extended_missing_par_names = gen_pop_par_names(missing_par_names) + missing_cosmology_par_names
-    par_names = [
+    extended_missing_par_names = (
+        gen_pop_par_names(missing_par_names) +
+        missing_cosmology_par_names +
+        use_physical_ratio * [ratio_par_name] 
+    )
+    par_names = (
         extended_shared_par_names + extended_independent_par_names +
-        extended_missing_par_names + cosmology_par_names + [ratio_par_name]
-    ]
-    if not use_physical_ratio:
-        par_names.append(['physical_ratio'])
-    else:
-        extended_missing_par_names.append(ratio_par_name)
+        extended_missing_par_names + cosmology_par_names + (not use_physical_ratio) * [ratio_par_name]
+    )
 
     n_shared_pars = len(shared_par_names)
     n_independent_pars = 2 * len(independent_par_names) + 4 * n_host_galaxy_observables
     n_cosmology_pars = len(cosmology_par_names)
 
-    no_pars = n_shared_pars + n_independent_pars + 1
+    no_pars = n_shared_pars + n_independent_pars + n_cosmology_pars + (not use_physical_ratio) 
     if len(theta) != no_pars:
         raise ValueError(
             "MCMC parameter dimensions does not match no. of shared and independent parameters."
@@ -301,11 +299,8 @@ def theta_to_dict(
             (host_pars[idx_sigs], np.zeros(n_unused_host_properties))
         )
     
-    factor = 1
-    if use_physical_ratio:
-        factor = 0
     for i in range(n_cosmology_pars):
-        idx = -1 * factor - n_cosmology_pars + i
+        idx = -1 * (not use_physical_ratio) - n_cosmology_pars + i
         cosmo_par_name = cosmology_par_names[i]
         if "eta" in cosmo_par_name:
             arg_dict[cosmo_par_name] = 10**(theta[idx])

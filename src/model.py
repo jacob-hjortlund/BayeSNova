@@ -963,6 +963,7 @@ class Model():
             n_unused_host_properties=prep.n_unused_host_properties,
             ratio_par_name=prep.global_model_cfg.ratio_par_name,
             cosmology_par_names=prep.global_model_cfg.cosmology_par_names,
+            use_physical_ratio=prep.global_model_cfg.use_physical_ratio,
         )
 
         log_prior = self.log_prior(param_dict)
@@ -982,7 +983,7 @@ class Model():
             )
         
         param_dict =  {
-            **param_dict, **prep.global_model_cfg.preset_values,
+            **prep.global_model_cfg.preset_values, **param_dict
         }
         (
             log_likelihood, log_full_membership_probs,
