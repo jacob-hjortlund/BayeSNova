@@ -191,10 +191,12 @@ def prior_initialisation(
     init_values = np.array(init_values)
     idx_shared = len(shared_par_names)
     idx_independent = len(init_values) - len(cosmology_par_names) - (not use_physical_ratio)
+    idx_cosmology = len(init_values) - (not use_physical_ratio)
     shared_init_pars = init_values[:idx_shared]
     independent_init_pars = np.repeat(init_values[idx_shared:idx_independent], 2)
+    cosmology_init_pars = init_values[idx_independent:idx_cosmology]
     init_par_list = [
-        shared_init_pars, independent_init_pars,
+        shared_init_pars, independent_init_pars, cosmology_init_pars
     ]
     if not use_physical_ratio:
         init_par_list.append([init_values[-1]])

@@ -28,6 +28,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
         tags = ["-".join(cfg['model_cfg']['independent_par_names'])]
     else:
         tags = ["all_shared"]
+    if len(cfg['model_cfg']['cosmology_par_names']) > 0:
+        tags += ["-".join(cfg['model_cfg']['cosmology_par_names'])]
     tags += [
         os.path.split(cfg['data_cfg']['train_path'])[1].split(".")[0]
     ]
@@ -303,7 +305,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     n_shared = len(cfg['model_cfg']['shared_par_names'])
     n_independent = len(cfg['model_cfg']['independent_par_names'])
     idx_end_independent = sample_thetas.shape[1] - len(cfg['model_cfg']['cosmology_par_names']) - (not cfg['model_cfg']['use_physical_ratio'])
-    extra_params_present = idx_end_independent > sample_thetas.shape[1]
+    extra_params_present = idx_end_independent != sample_thetas.shape[1]
     labels = (
         cfg['model_cfg']['shared_par_names'] +
         cfg['model_cfg']['independent_par_names'] +

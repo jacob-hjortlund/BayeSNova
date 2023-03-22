@@ -111,14 +111,14 @@ model_cfg:
       lower: 50.
       upper: 90.
     Om0:
-      lower: 0.1
-      upper: 0.5
+      lower: 0.01
+      upper: 0.99
     w0:
-      lower: -2.
-      upper: 2.
+      lower: -5.
+      upper: 5.
     wa:
-      lower: -2.
-      upper: 2.
+      lower: -5.
+      upper: 5.
     eta_prompt:
       lower: -6.
       upper: 2.
@@ -136,6 +136,11 @@ model_cfg:
     tau_Rb: 0.3
     gamma_Rb: 5.5
     shift_Rb: 1.5
+    Om0: 0.3
+    w0: -1.
+    wa: 0.
+    eta_prompt: -2.9
+    eta_delayed: -3.99
   use_sigmoid: False
   sigmoid_cfg:
     scale: 750.
