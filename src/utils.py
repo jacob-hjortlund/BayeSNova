@@ -191,11 +191,15 @@ def prior_initialisation(
         init_values.append(init_par)
 
     init_values = np.array(init_values)
-    shared_init_pars = init_values[:len(shared_par_names)]
-    independent_init_pars = np.repeat(init_values[len(shared_par_names):-1], 2)
+    idx_shared = len(shared_par_names)
+    idx_independent = len(init_values) - len(cosmology_par_names) - (not use_physical_ratio)
+    shared_init_pars = init_values[:idx_shared]
+    independent_init_pars = np.repeat(init_values[idx_shared:idx_independent], 2)
     init_par_list = [
-        shared_init_pars, independent_init_pars, [init_values[-1]]
+        shared_init_pars, independent_init_pars,
     ]
+    if not use_physical_ratio:
+        init_par_list.append([init_values[-1]])
 
     host_init_values = []
     for host_par in host_galaxy_par_names:
@@ -206,14 +210,15 @@ def prior_initialisation(
             raise ValueError(f"{host_par} not in host galaxy init values. Check your config")
         
     if use_host_galaxy_properties:
-        init_par_list.insert(-1-len(cosmology_par_names),host_init_values)
+            insert_idx = len(init_par_list)-len(cosmology_par_names) - (not use_physical_ratio)
+            init_par_list.insert(insert_idx,host_init_values)
     init_pars = np.concatenate(init_par_list)
 
     # Check if stretch is shared and correct to account for prior
     try:
         stretch_par_name = "s"
         idx = np.repeat(independent_par_names,2).tolist().index(stretch_par_name)
-        idx += len(shared_par_names)
+        idx += idx_shared
         init_pars[idx] = init_pars[idx+1]-1.
     except Exception:
         pass
