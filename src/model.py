@@ -876,11 +876,7 @@ class Model():
                 np.ones(len(prep.sn_observables))*np.nan,
             )
         
-        use_physical_population_fraction = (
-            eta_delayed != NULL_VALUE and
-            eta_prompt != NULL_VALUE and
-            w == NULL_VALUE
-        )
+        use_physical_population_fraction = prep.global_model_cfg["use_physical_ratio"]
 
         if use_physical_population_fraction:
             dtd_t0 = prep.global_model_cfg['dtd_cfg']['t0']
@@ -890,9 +886,9 @@ class Model():
                 cosmo, z, dtd_t0, dtd_t1
             )
             minimum_convolution_time = np.min(convolution_time_limits)
-            z0 = apy_cosmo.z_at_value(cosmo.lookback_time, minimum_convolution_time * Gyr)
+            z0 = apy_cosmo.z_at_value(cosmo.age, minimum_convolution_time * Gyr, method='Bounded')
             H0_gyrm1 = cosmo.H0.to(1/Gyr).value
-            cosmo_args = (H0_gyrm1, Om0, w0, wa)
+            cosmo_args = (H0_gyrm1, Om0, 1.-Om0, w0, wa)
             ts, zs, _ = redshift_at_times(
                 convolution_time_limits, minimum_convolution_time, z0, cosmo_args
             )

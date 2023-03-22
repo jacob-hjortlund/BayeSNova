@@ -140,6 +140,9 @@ model_cfg:
   sigmoid_cfg:
     scale: 750.
     shift: 0.99
+  dtd_cfg:
+    t0: 0.04
+    t1: 0.5
   Ebv_integral_lower_bound: 0.
   Ebv_integral_upper_bound: -9999.
   Rb_integral_lower_bound: 0.
