@@ -24,6 +24,7 @@ DH_70 = 4282.7494
 def Ebv_integral_body(
     x, i1, i2, i3, i4, i5,
     i6, i7, i8, i9, r1, r2, r3,
+    selection_bias_correction,
     rb, sig_rb, Ebv, tau_Ebv, gamma_Ebv
 ):  
 
@@ -34,6 +35,7 @@ def Ebv_integral_body(
     r1 -= rb * tau_Ebv * x
     r3 -= tau_Ebv * x
     i1 += sig_rb * sig_rb * tau_Ebv * tau_Ebv * x * x
+    i1 *= selection_bias_correction
 
     # precalcs
     exponent = gamma_Ebv - 1
@@ -70,7 +72,7 @@ def Ebv_integral_body(
 
 @nb.cfunc(quadpack_sig)
 def Ebv_integral(x, data):
-    _data = nb.carray(data, (17,))
+    _data = nb.carray(data, (18,))
     i1 = _data[0]
     i2 = _data[1]
     i3 = _data[2]
@@ -83,13 +85,15 @@ def Ebv_integral(x, data):
     r1 = _data[9]
     r2 = _data[10]
     r3 = _data[11]
-    rb = _data[12]
-    sig_rb = _data[13]
-    Ebv = _data[14]
-    tau_Ebv = _data[15]
-    gamma_Ebv = _data[16]
+    selection_bias_correction = _data[12]
+    rb = _data[13]
+    sig_rb = _data[14]
+    Ebv = _data[15]
+    tau_Ebv = _data[16]
+    gamma_Ebv = _data[17]
     return Ebv_integral_body(
-        x, i1, i2, i3, i4, i5, i6, i7, i8, i9, r1, r2, r3, 
+        x, i1, i2, i3, i4, i5, i6, i7, i8, i9, r1, r2, r3,
+        selection_bias_correction,
         rb, sig_rb, Ebv, tau_Ebv, gamma_Ebv
     )
 Ebv_integral_ptr = Ebv_integral.address
@@ -109,7 +113,7 @@ def _Ebv_prior_convolution(
     upper_bound_Rb_1: float, upper_bound_Rb_2: float,
     lower_bound_Ebv_1: float, lower_bound_Ebv_2: float,
     upper_bound_Ebv_1: float, upper_bound_Ebv_2: float,
-    shift_Rb: float
+    shift_Rb: float, selection_bias_correction: np.ndarray,
 ):
 
     n_sn = len(cov_1)
@@ -119,12 +123,15 @@ def _Ebv_prior_convolution(
     params_2 = np.array([Rb_2, sig_Rb_2, Ebv_2, tau_Ebv_2, gamma_Ebv_2])
 
     for i in range(n_sn):
+        bias_corr = np.array([selection_bias_correction[i]])
         tmp_params_1 = np.concatenate((
-            cov_1[i].ravel(), res_1[i].ravel(), params_1
+            cov_1[i].ravel(), res_1[i].ravel(),
+            bias_corr, params_1
         )).copy()
         tmp_params_1.astype(np.float64)
         tmp_params_2 = np.concatenate((
-            cov_2[i].ravel(), res_2[i].ravel(), params_2
+            cov_2[i].ravel(), res_2[i].ravel(),
+            bias_corr, params_2
         )).copy()
         tmp_params_2.astype(np.float64)
         
@@ -728,7 +735,7 @@ class Model():
             lower_bound_Ebv_1=prep.global_model_cfg.Ebv_integral_lower_bound,
             lower_bound_Ebv_2=prep.global_model_cfg.Ebv_integral_lower_bound,
             upper_bound_Ebv_1=upper_bound_Ebv_1, upper_bound_Ebv_2=upper_bound_Ebv_2,
-            shift_Rb=shift_Rb
+            shift_Rb=shift_Rb, selection_bias_correction=prep.selection_bias_correction,
         )
 
         p_1 = probs[:, 0] / norm_1

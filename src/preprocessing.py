@@ -19,10 +19,12 @@ def init_global_data(
     global host_galaxy_covariances
     global n_unused_host_properties
     global idx_sn_to_evaluate
+    global selection_bias_correction
 
     idx_sn_to_evaluate = data.shape[0]-n_evaluate
     global_model_cfg = cfg
 
+    selection_bias_correction_key = 'bias_corr_factor'
     sn_observable_keys = ['mB', 'x1', 'c', 'z']
     sn_covariance_keys = ['x0', 'mBErr', 'x1Err', 'cErr', 'cov_x1_c', 'cov_x1_x0', 'cov_c_x0']
     sn_observables = data[sn_observable_keys].copy().to_numpy()
@@ -30,6 +32,12 @@ def init_global_data(
     data.drop(
         sn_observable_keys + sn_covariance_keys + ['CID'], axis=1, inplace=True
     )
+
+    if selection_bias_correction_key in data.columns:
+        selection_bias_correction = data[selection_bias_correction_key].copy().to_numpy()
+        data.drop(selection_bias_correction_key, axis=1, inplace=True)
+    else:
+        selection_bias_correction = np.ones((data.shape[0],))
 
     host_property_keys = cfg['host_galaxy_cfg']['property_names']
     host_property_err_keys = [key + "_err" for key in host_property_keys]
