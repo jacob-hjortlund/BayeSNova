@@ -633,8 +633,8 @@ class Model():
         c_1: float, c_2: float,
         alpha_1: float, alpha_2: float,
         beta_1: float, beta_2: float,
-        #cosmo: apy_cosmo.Cosmology
-        H0: float, Om0: float, w0: float, wa: float
+        cosmo: apy_cosmo.Cosmology
+        #H0: float, Om0: float, w0: float, wa: float
     ) -> np.ndarray:
         
         #global sn_observables
@@ -642,17 +642,16 @@ class Model():
         s = prep.sn_observables[:, 1]
         c = prep.sn_observables[:, 2]
         z = prep.sn_observables[:, 3]
-        cosmo_params = (H0, Om0, 1.-Om0, w0, wa)
+        #cosmo_params = (H0, Om0, 1.-Om0, w0, wa)
 
         residuals = np.zeros((2, len(mb), 3))
 
-        distmod_values = np.array(
-            distance_modulus_at_redshift(z, cosmo_params).tolist()
-        )
+        # distmod_values = np.array(
+        #     distance_modulus_at_redshift(z, cosmo_params).tolist()
+        # )
         distance_moduli = np.tile(
-            distmod_values, (2, 1)
+            cosmo.distmod(z).value, (2, 1)
         )
-        #     cosmo.distmod(z).value, (2, 1)
         # ) #+ np.log10(cosmo.H0.value / H0)
 
         residuals[:, :, 0] = np.tile(mb, (2, 1)) - np.array([
@@ -839,7 +838,8 @@ class Model():
             c_1=c_1, c_2=c_2,
             alpha_1=alpha_1, alpha_2=alpha_2,
             beta_1=beta_1, beta_2=beta_2,
-            H0=H0, Om0=Om0, w0=w0, wa=wa
+            cosmo=cosmo
+            #H0=H0, Om0=Om0, w0=w0, wa=wa
         )
 
         use_gaussian_Rb = (
