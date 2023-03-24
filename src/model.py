@@ -310,6 +310,24 @@ def convolution_limits(cosmo, z, T0, T1):
 
     return jnp.concatenate((times_z0_lower, times_z0_upper))
 
+def initial_value(cosmo, time, init_limit=1000):
+
+    if init_limit > 1e10:
+        raise ValueError(
+            'Upper limit for initial age to redshift ODE ' +
+            'is above 1e10, something is wrong.'
+        )
+
+    try:
+        z0 = apy_cosmo.z_at_value(
+            cosmo.age, time * Gyr, zmax=init_limit,
+            method='Bounded'
+        )
+    except:
+        z0 = initial_value(cosmo, time, init_limit=init_limit*10)
+
+    return z0
+
 def ode(
     t, z, args
 ):
@@ -893,7 +911,8 @@ class Model():
                 cosmo, z, dtd_t0, dtd_t1
             )
             minimum_convolution_time = np.min(convolution_time_limits)
-            z0 = apy_cosmo.z_at_value(cosmo.age, minimum_convolution_time * Gyr, method='Bounded')
+            #z0 = apy_cosmo.z_at_value(cosmo.age, minimum_convolution_time * Gyr, method='Bounded')
+            z0 = initial_value(cosmo, minimum_convolution_time)
             H0_gyrm1 = cosmo.H0.to(1/Gyr).value
             cosmo_args = (H0_gyrm1, Om0, 1.-Om0, w0, wa)
             ts, zs, _ = redshift_at_times(
