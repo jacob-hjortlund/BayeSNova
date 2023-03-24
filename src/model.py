@@ -356,7 +356,7 @@ def redshift_at_times(
     sol = diffeqsolve(
         term, solver, t0=t0, t1=t1, y0=z0, dt0=None,
         saveat=saveat, stepsize_controller=stepsize_controller,
-        args=cosmo_args
+        args=cosmo_args, max_steps=4096*16
     )
 
     ts = jnp.column_stack(

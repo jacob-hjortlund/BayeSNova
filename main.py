@@ -98,10 +98,15 @@ def main(cfg: omegaconf.DictConfig) -> None:
         )
         backend = em.backends.HDFBackend(filename, name=cfg['emcee_cfg']['run_name'])
         if not cfg['emcee_cfg']['continue_from_chain']:
-            print("Resetting backend with name", cfg['emcee_cfg']['run_name'])
+            n_steps = cfg['emcee_cfg']['n_steps']
+            print(
+                "Resetting backend with name", cfg['emcee_cfg']['run_name']
+            )
             backend.reset(nwalkers, ndim)
         else:
+            n_steps = cfg['emcee_cfg']['n_steps'] - backend.iteration
             print("Continuing from backend with name", cfg['emcee_cfg']['run_name'])
+            print(f"Running for {n_steps}")
 
         print("\n----------------- SAMPLING ---------------------\n")
         sampler = em.EnsembleSampler(
@@ -110,12 +115,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
         # Set progress bar if pool is None
         use_progress_bar = wrapped_pool.pool == None
         sampler.run_mcmc(
-            init_theta, cfg['emcee_cfg']['n_steps'], progress=use_progress_bar
+            init_theta, n_steps, progress=use_progress_bar
         )
     
     t1 = time()
     total_time = t1-t0
-    avg_eval_time = (total_time) / (cfg['emcee_cfg']['n_walkers'] * cfg['emcee_cfg']['n_steps'])
+    avg_eval_time = (total_time) / (cfg['emcee_cfg']['n_walkers'] * n_steps)
     print(f"\nTotal MCMC time:", total_time)
     print(f"Avg. time pr. step: {avg_eval_time} s\n")
 
