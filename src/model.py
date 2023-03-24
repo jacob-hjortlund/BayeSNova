@@ -1,5 +1,6 @@
 import jax
 jax.config.update("jax_enable_x64", True)
+import warnings
 import numpy as np
 import numba as nb
 import jax.numpy as jnp
@@ -319,6 +320,7 @@ def initial_value(cosmo, time, init_limit=1000):
         )
 
     try:
+    
         z0 = apy_cosmo.z_at_value(
             cosmo.age, time * Gyr, zmax=init_limit,
             method='Bounded'
@@ -823,6 +825,18 @@ class Model():
 
         return prob_1, prob_2
 
+    def volumetric_rate_probs(
+        self, predicted_volumetric_rates: np.ndarray,
+    ):
+        
+        obs_volumetric_rates = prep.observed_volumetric_rates
+        obs_volumetric_rate_errors = prep.observed_volumetric_rate_errors
+
+        normalization = -0.5 * np.log(2 * np.pi) + np.log(obs_volumetric_rate_errors)
+        exponent = -0.5 * (obs_volumetric_rates - predicted_volumetric_rates)**2 / obs_volumetric_rate_errors**2
+
+        return normalization + exponent
+
     def log_likelihood(
         self,
         Mb_1: float, Mb_2: float,
@@ -912,7 +926,17 @@ class Model():
             )
             minimum_convolution_time = np.min(convolution_time_limits)
             #z0 = apy_cosmo.z_at_value(cosmo.age, minimum_convolution_time * Gyr, method='Bounded')
-            z0 = initial_value(cosmo, minimum_convolution_time)
+            warnings.filterwarnings("error")
+            try:
+                z0 = initial_value(cosmo, minimum_convolution_time)
+            except RuntimeWarning:
+                return (
+                    -np.inf,
+                    np.ones(len(prep.sn_observables))*np.nan,
+                    np.ones(len(prep.sn_observables))*np.nan,
+                    np.ones(len(prep.sn_observables))*np.nan,
+                )
+            warnings.resetwarnings()
             H0_gyrm1 = cosmo.H0.to(1/Gyr).value
             cosmo_args = (H0_gyrm1, Om0, 1.-Om0, w0, wa)
             ts, zs, _ = redshift_at_times(
