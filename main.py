@@ -66,8 +66,15 @@ def main(cfg: omegaconf.DictConfig) -> None:
         data = pd.concat([data, eval_data], ignore_index=True)
     else:
         n_eval = 0
+    
+    if cfg['data_cfg']['volumetric_rates_path'] and cfg['model_cfg']['use_volumetric_rates']:
+        volumetric_rates = pd.read_csv(
+            filepath_or_buffer=cfg['data_cfg']['volumetric_rates_path'], sep=cfg['data_cfg']['sep']
+        )
+    else:
+        volumetric_rates = None
 
-    prep.init_global_data(data, cfg['model_cfg'], n_eval)
+    prep.init_global_data(data, volumetric_rates, cfg['model_cfg'], n_eval)
 
     log_prob = model.Model()
 

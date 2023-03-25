@@ -825,17 +825,70 @@ class Model():
 
         return prob_1, prob_2
 
+    def volumetric_sn_rates(
+        self, observed_redshifts: np.ndarray,
+        cosmo: apy_cosmo.Cosmology,
+        eta_prompt: float, eta_delayed: float
+    ):
+
+        dtd_t0 = prep.global_model_cfg['dtd_cfg']['t0']
+        dtd_t1 = prep.global_model_cfg['dtd_cfg']['t1']
+
+        H0 = cosmo.H0.value
+        H0_gyrm1 = H0.to(1/Gyr).value
+        Om0 = cosmo.Om0
+        w0 = cosmo.w0
+        wa = cosmo.wa
+        cosmo_args = (H0_gyrm1,Om0,1.-Om0,w0, wa)
+
+        convolution_time_limits = convolution_limits(
+            cosmo, observed_redshifts, dtd_t0, dtd_t1
+        )
+        minimum_convolution_time = np.min(convolution_time_limits)
+        
+        warnings.filterwarnings("error")
+        try:
+            #z0 = initial_value(cosmo, minimum_convolution_time)
+            z0 = apy_cosmo.z_at_value(
+                cosmo.age, minimum_convolution_time * Gyr,
+                method='Bounded'
+            )
+        except:
+            return np.ones_like(observed_redshifts) * -np.inf
+        _, zs, _ = redshift_at_times(
+            convolution_time_limits, minimum_convolution_time, z0, cosmo_args
+        )
+        integral_limits = np.array(zs.tolist(), dtype=np.float64)
+        sn_rates = volumetric_rates(
+            observed_redshifts, integral_limits, H0, Om0,
+            w0, wa, eta_prompt, eta_delayed, zinf=20.
+        )
+
+        return sn_rates
+
     def volumetric_rate_probs(
-        self, predicted_volumetric_rates: np.ndarray,
+        self, cosmo: apy_cosmo.Cosmology,
+        eta_prompt: float, eta_delayed: float
     ):
         
+        sn_rates = self.volumetric_sn_rates(
+            prep.volumetric_rate_redshifts, cosmo,
+            eta_prompt, eta_delayed
+        )
+
+        is_inf = np.any(np.isinf(sn_rates))
+        if is_inf:
+            return -np.inf
+
         obs_volumetric_rates = prep.observed_volumetric_rates
         obs_volumetric_rate_errors = prep.observed_volumetric_rate_errors
 
         normalization = -0.5 * np.log(2 * np.pi) + np.log(obs_volumetric_rate_errors)
-        exponent = -0.5 * (obs_volumetric_rates - predicted_volumetric_rates)**2 / obs_volumetric_rate_errors**2
+        exponent = -0.5 * (obs_volumetric_rates - sn_rates[:,0])**2 / obs_volumetric_rate_errors**2
+        log_probs = normalization + exponent
+        log_prob = np.sum(log_probs)
 
-        return normalization + exponent
+        return log_prob
 
     def log_likelihood(
         self,
@@ -918,35 +971,22 @@ class Model():
         use_physical_population_fraction = prep.global_model_cfg["use_physical_ratio"]
 
         if use_physical_population_fraction:
-            dtd_t0 = prep.global_model_cfg['dtd_cfg']['t0']
-            dtd_t1 = prep.global_model_cfg['dtd_cfg']['t1']
-            z = prep.sn_observables[:, 3]
-            convolution_time_limits = convolution_limits(
-                cosmo, z, dtd_t0, dtd_t1
+            sn_redshifts = prep.sn_observables[:,-1]
+            sn_rates = self.volumetric_sn_rates(
+                observed_redshifts=sn_redshifts,
+                cosmo=cosmo, eta_prompt=eta_prompt,
+                eta_delayed=eta_delayed
             )
-            minimum_convolution_time = np.min(convolution_time_limits)
-            #z0 = apy_cosmo.z_at_value(cosmo.age, minimum_convolution_time * Gyr, method='Bounded')
-            warnings.filterwarnings("error")
-            try:
-                z0 = initial_value(cosmo, minimum_convolution_time)
-            except RuntimeWarning:
+
+            is_inf = np.any(np.isinf(sn_rates))
+            if is_inf:
                 return (
                     -np.inf,
                     np.ones(len(prep.sn_observables))*np.nan,
                     np.ones(len(prep.sn_observables))*np.nan,
                     np.ones(len(prep.sn_observables))*np.nan,
                 )
-            warnings.resetwarnings()
-            H0_gyrm1 = cosmo.H0.to(1/Gyr).value
-            cosmo_args = (H0_gyrm1, Om0, 1.-Om0, w0, wa)
-            ts, zs, _ = redshift_at_times(
-                convolution_time_limits, minimum_convolution_time, z0, cosmo_args
-            )
-            integral_limits = np.array(zs.tolist(), dtype=np.float64)
-            sn_rates = volumetric_rates(
-                z, integral_limits, cosmo.H0.value, Om0, w0, wa,
-                eta_prompt, eta_delayed, zinf=20.
-            )
+
             w_vector = sn_rates[:, -1] / sn_rates[:, 0]
         else:
             w_vector = np.ones_like(sn_probs_1) * w
@@ -965,6 +1005,7 @@ class Model():
             pop_1_probs = w_vector * sn_probs_1
             pop_2_probs = (1-w_vector) * sn_probs_2
             combined_probs = pop_1_probs + pop_2_probs
+
         
         log_host_membership_probs = (
             1./np.log(10) * (
@@ -977,7 +1018,16 @@ class Model():
             ).flatten()
         )
         log_full_membership_probs = 1./np.log(10) * (np.log(pop_1_probs) - np.log(pop_2_probs)).flatten()
-        log_prob = np.sum(np.log(combined_probs[:prep.idx_sn_to_evaluate]))
+
+        use_volumetric_rates = prep.global_model_cfg["use_volumetric_rates"]
+        if use_volumetric_rates and use_physical_population_fraction:
+            log_volumetric_prob = self.volumetric_rate_probs(
+                cosmo, eta_prompt=eta_prompt, eta_delayed=eta_delayed
+            )
+            log_prob = np.sum(np.log(combined_probs[:prep.idx_sn_to_evaluate])) + log_volumetric_prob
+        else:
+            log_prob = np.sum(np.log(combined_probs[:prep.idx_sn_to_evaluate]))
+
         if np.isnan(log_prob):
             log_prob = -np.inf
             log_full_membership_probs = np.ones(len(prep.sn_observables))*np.nan
