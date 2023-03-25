@@ -66,8 +66,15 @@ def main(cfg: omegaconf.DictConfig) -> None:
         data = pd.concat([data, eval_data], ignore_index=True)
     else:
         n_eval = 0
+    
+    if cfg['data_cfg']['volumetric_rates_path'] and cfg['model_cfg']['use_volumetric_rates']:
+        volumetric_rates = pd.read_csv(
+            filepath_or_buffer=cfg['data_cfg']['volumetric_rates_path'], sep=cfg['data_cfg']['sep']
+        )
+    else:
+        volumetric_rates = None
 
-    prep.init_global_data(data, cfg['model_cfg'], n_eval)
+    prep.init_global_data(data, volumetric_rates, cfg['model_cfg'], n_eval)
 
     log_prob = model.Model()
 
@@ -503,15 +510,19 @@ def main(cfg: omegaconf.DictConfig) -> None:
         calibration_membership_quantiles = full_membership_quantiles[:, prep.idx_sn_to_evaluate:][:, idx_calibration_observed][:, idx_calibration_valid]
         hubble_flow_medians = hubble_flow_membership_quantiles[1, :]
         calibration_medians = calibration_membership_quantiles[1, :]
-        hubble_flow_errors = np.row_stack([
-            hubble_flow_membership_quantiles[0, :],
-            hubble_flow_membership_quantiles[2, :]
-        ])
-        calibration_errors = np.row_stack([
-            calibration_membership_quantiles[0, :],
-            calibration_membership_quantiles[2, :]
-        ])
-
+        hubble_flow_errors = np.abs(
+            np.row_stack([
+                hubble_flow_membership_quantiles[0, :],
+                hubble_flow_membership_quantiles[2, :]
+            ])
+        )
+        calibration_errors = np.abs(
+            np.row_stack([
+                calibration_membership_quantiles[0, :],
+                calibration_membership_quantiles[2, :]
+            ])
+        )
+        
         hubble_flow_errorbar_colors = np.array([(mapper_full.to_rgba(p)) for p in hubble_flow_medians])
         calibration_errorbar_colors = np.array([(mapper_full.to_rgba(p)) for p in calibration_medians])
 
