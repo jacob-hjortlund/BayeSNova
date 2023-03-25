@@ -510,15 +510,19 @@ def main(cfg: omegaconf.DictConfig) -> None:
         calibration_membership_quantiles = full_membership_quantiles[:, prep.idx_sn_to_evaluate:][:, idx_calibration_observed][:, idx_calibration_valid]
         hubble_flow_medians = hubble_flow_membership_quantiles[1, :]
         calibration_medians = calibration_membership_quantiles[1, :]
-        hubble_flow_errors = np.row_stack([
-            hubble_flow_membership_quantiles[0, :],
-            hubble_flow_membership_quantiles[2, :]
-        ])
-        calibration_errors = np.row_stack([
-            calibration_membership_quantiles[0, :],
-            calibration_membership_quantiles[2, :]
-        ])
-
+        hubble_flow_errors = np.abs(
+            np.row_stack([
+                hubble_flow_membership_quantiles[0, :],
+                hubble_flow_membership_quantiles[2, :]
+            ])
+        )
+        calibration_errors = np.abs(
+            np.row_stack([
+                calibration_membership_quantiles[0, :],
+                calibration_membership_quantiles[2, :]
+            ])
+        )
+        
         hubble_flow_errorbar_colors = np.array([(mapper_full.to_rgba(p)) for p in hubble_flow_medians])
         calibration_errorbar_colors = np.array([(mapper_full.to_rgba(p)) for p in calibration_medians])
 

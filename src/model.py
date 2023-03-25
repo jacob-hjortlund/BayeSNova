@@ -835,7 +835,7 @@ class Model():
         dtd_t1 = prep.global_model_cfg['dtd_cfg']['t1']
 
         H0 = cosmo.H0.value
-        H0_gyrm1 = H0.to(1/Gyr).value
+        H0_gyrm1 = cosmo.H0.to(1/Gyr).value
         Om0 = cosmo.Om0
         w0 = cosmo.w0
         wa = cosmo.wa
@@ -855,6 +855,7 @@ class Model():
             )
         except:
             return np.ones_like(observed_redshifts) * -np.inf
+        warnings.resetwarnings()
         _, zs, _ = redshift_at_times(
             convolution_time_limits, minimum_convolution_time, z0, cosmo_args
         )
@@ -872,7 +873,7 @@ class Model():
     ):
         
         sn_rates = self.volumetric_sn_rates(
-            prep.volumetric_rate_redshifts, cosmo,
+            prep.observed_volumetric_rate_redshifts, cosmo,
             eta_prompt, eta_delayed
         )
 
