@@ -43,7 +43,7 @@ def init_global_data(
     else:
         selection_bias_correction = np.ones((data.shape[0],))
 
-    if cfg['use_volumetric_rates']:
+    if cfg.get('use_volumetric_rates', False):
         observed_volumetric_rates = volumetric_rates['rate'].to_numpy()
         observed_volumetric_rate_errors = volumetric_rates['symm'].to_numpy()
         observed_volumetric_rate_redshifts = volumetric_rates['z'].to_numpy()
@@ -51,10 +51,11 @@ def init_global_data(
         observed_volumetric_rates = np.zeros((0,))
         observed_volumetric_rate_errors = np.zeros((0,))
 
-    host_property_keys = cfg['host_galaxy_cfg']['property_names']
+    host_galaxy_cfg = cfg.get('host_galaxy_cfg', {})
+    host_property_keys = host_galaxy_cfg.get('property_names', [])
     host_property_err_keys = [key + "_err" for key in host_property_keys]
 
-    use_host_properties = cfg['host_galaxy_cfg']['use_properties']
+    use_host_properties = host_galaxy_cfg.get('use_properties', False)
     can_use_host_properties = (
         set(host_property_keys) <= set(data.columns) and
         set(host_property_err_keys) <= set(data.columns)
@@ -95,8 +96,10 @@ def init_global_data(
     sn_covariances, host_galaxy_covariances = build_covariance_matrix(
         sn_covariance_values, host_galaxy_covariance_values
     )
-    gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
-    gEbv_quantiles = set_gamma_quantiles(cfg, 'Ebv')
+
+    if "prior_bounds" in cfg.keys():
+        gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
+        gEbv_quantiles = set_gamma_quantiles(cfg, 'Ebv')
 
 def set_gamma_quantiles(cfg: dict, par: str) -> np.ndarray:
 

@@ -34,7 +34,7 @@ def sample_batch_mvn(
     L = np.linalg.cholesky(cov)
     return (L @ X).reshape(shape) + mean
 
-class SNModel():
+class SNGenerator():
 
     def __init__(
         self, model_cfg: dict
@@ -80,8 +80,8 @@ class SNModel():
         c = 300000. # km / s
         
         cov[:,:,0,0] += np.array([
-            [sig_int_1**2 + alpha_1**2 * sig_s_1**2 + beta_1**2 * sig_c_1**2 + sig_Rb_1**2 * Ebv_1**2],
-            [sig_int_2**2 + alpha_2**2 * sig_s_2**2 + beta_2**2 * sig_c_2**2 + sig_Rb_2**2 * Ebv_2**2]
+            sig_int_1**2 + alpha_1**2 * sig_s_1**2 + beta_1**2 * sig_c_1**2 + sig_Rb_1**2 * Ebv_1**2,
+            sig_int_2**2 + alpha_2**2 * sig_s_2**2 + beta_2**2 * sig_c_2**2 + sig_Rb_2**2 * Ebv_2**2
         ])
         cov[:,:,0,0] += np.tile(
             z**(-2) * (
@@ -181,18 +181,21 @@ class SNModel():
 
         pop_1_means = self.population_mean(
             z=z, Mb=self.cfg['pars']['pop_1']['Mb'],
-            s=self.cfg['pars']['pop_1']['s'], c_int=self.cfg['pars']['pop_1']['c_int'],
+            s=self.cfg['pars']['pop_1']['s'], c_int=self.cfg['pars']['pop_1']['c'],
             alpha=self.cfg['pars']['pop_1']['alpha'], beta=self.cfg['pars']['pop_1']['beta'],
             Rb=self.cfg['pars']['pop_1']['Rb'], Ebv=Ebv_1
         )
 
         pop_2_means = self.population_mean(
             z=z, Mb=self.cfg['pars']['pop_2']['Mb'],
-            s=self.cfg['pars']['pop_2']['s'], c_int=self.cfg['pars']['pop_2']['c_int'],
+            s=self.cfg['pars']['pop_2']['s'], c_int=self.cfg['pars']['pop_2']['c'],
             alpha=self.cfg['pars']['pop_2']['alpha'], beta=self.cfg['pars']['pop_2']['beta'],
             Rb=self.cfg['pars']['pop_2']['Rb'], Ebv=Ebv_2
         )
-        means = np.column_stack((pop_1_means, pop_2_means))
+
+        pop_1_means = pop_1_means.reshape((n_sn, 1, 3))
+        pop_2_means = pop_2_means.reshape((n_sn, 1, 3))
+        means = np.concatenate((pop_1_means, pop_2_means), axis=1)
 
         covs = self.population_covarainces(
             z=z, obs_covariance=obs_covariance,
@@ -205,12 +208,15 @@ class SNModel():
             sig_s_1=self.cfg['pars']['pop_1']['sig_s'],
             sig_s_2=self.cfg['pars']['pop_2']['sig_s'],
             sig_c_1=self.cfg['pars']['pop_1']['sig_c'],
-            sig_c_2=self.cfg['pars']['pop_2']['sig_c']
+            sig_c_2=self.cfg['pars']['pop_2']['sig_c'],
+            sig_Rb_1=self.cfg['pars']['pop_1']['sig_Rb'],
+            sig_Rb_2=self.cfg['pars']['pop_2']['sig_Rb'],
+            Ebv_1=Ebv_1, Ebv_2=Ebv_2
         )
         
         if self.cfg['use_physical_ratio']:
-            eta_prompt = self.cfg['dtd_cfg']['eta_prompt']
-            eta_delayed = self.cfg['dtd_cfg']['eta_delayed']
+            eta_prompt = self.cfg['pars']['cosmology']['eta_prompt']
+            eta_delayed = self.cfg['pars']['cosmology']['eta_delayed']
             sn_rates = self.volumetric_sn_rates(
                 z=z, eta_prompt=eta_prompt, eta_delayed=eta_delayed
             )
@@ -218,6 +224,7 @@ class SNModel():
             pop_1_probability = sn_rates[:,-1] / sn_rates[:, 0]
         else:
             pop_1_probability = np.ones_like(z) * self.cfg['pars']['w']
+            sn_rates = None
         
         pop_2_probability = 1. - pop_1_probability
         true_population = stats.binom.rvs(n=1, p=pop_2_probability)
