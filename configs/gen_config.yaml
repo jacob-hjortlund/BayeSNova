@@ -1,0 +1,33 @@
+model_cfg:
+  use_physical_ratio: False
+  pars:
+    w: 0.384
+    cosmology:
+      H0: 70.
+      Om0: 0.3
+      w0: -1.
+      wa: 0.
+    pop_1:
+      Mb: -19.49
+      s: -1.34
+      sig_s: 0.69
+      c: -0.037
+      sig_c: 0.076
+      tau_Ebv: 0.017
+      alpha: -0.186
+      beta: 3.100
+      Rb: 4.077
+      sig_Rb: 0.970
+      gamma_Ebv: 3.282
+    pop_2:
+      Mb: -19.40
+      s: 0.39
+      sig_s: 0.65
+      c: -0.113
+      sig_c: 0.043
+      tau_Ebv: 0.034
+      alpha: -0.186
+      beta: 3.100
+      Rb: 4.077
+      sig_Rb: 0.970
+      gamma_Ebv: 3.282
