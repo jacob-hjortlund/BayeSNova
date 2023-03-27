@@ -6,6 +6,34 @@ import src.cosmology_utils as cosmo_utils
 
 from astropy.units import Gyr
 
+def sample_batch_mvn(
+    mean: np.ndarray,
+    cov: np.ndarray,
+    size: "tuple | int" = (),
+) -> np.ndarray:
+    """
+    Batch sample multivariate normal distribution.
+
+    Arguments:
+
+        mean: expected values of shape (…M, D)
+        cov: covariance matrices of shape (…M, D, D)
+        size: additional batch shape (…B)
+
+    Returns: samples from the multivariate normal distributions
+             shape: (…B, …M, D)
+
+    It is not required that ``mean`` and ``cov`` have the same shape
+    prefix, only that they are broadcastable against each other.
+    """
+    mean = np.asarray(mean)
+    cov = np.asarray(cov)
+    size = (size, ) if isinstance(size, int) else tuple(size)
+    shape = size + np.broadcast_shapes(mean.shape, cov.shape[:-1])
+    X = np.random.standard_normal((*shape, 1))
+    L = np.linalg.cholesky(cov)
+    return (L @ X).reshape(shape) + mean
+
 class SNModel():
 
     def __init__(
@@ -75,6 +103,8 @@ class SNModel():
         cov[:,:,1,0] = cov[:,:,0,1]
         cov[:,:,2,0] = cov[:,:,0,2]
 
+        cov = np.swapaxes(cov, 0, 1)
+
         return cov
 
     def population_mean(
@@ -94,7 +124,6 @@ class SNModel():
         means[:,2] = c_int + Ebv
 
         return means
-        pass
 
     def volumetric_sn_rates(
         self, z: np.ndarray,
@@ -170,7 +199,6 @@ class SNModel():
             sig_c_1=self.cfg['pop_1']['sig_c'],
             sig_c_2=self.cfg['pop_2']['sig_c']
         )
-        covs = covs.T
         
         eta_prompt = self.cfg['dtd_cfg']['eta_prompt']
         eta_delayed = self.cfg['dtd_cfg']['eta_delayed']
@@ -180,9 +208,15 @@ class SNModel():
 
         pop_1_probability = sn_rates[:,-1] / sn_rates[:, 0]
         pop_2_probability = 1. - pop_1_probability
-        sample_idx = stats.binom.rvs(n=1, p=pop_2_probability)
+        true_population = stats.binom.rvs(n=1, p=pop_2_probability)
+        sample_idx = np.column_stack([
+            true_population.astype(bool),
+            ~true_population.astype(bool)
+        ])
 
         sample_means = means[sample_idx]
         sample_covs = covs[sample_idx]
 
-        pass
+        observable_samples = sample_batch_mvn(sample_means, sample_covs)
+
+        return observable_samples, true_population, sn_rates
