@@ -229,8 +229,8 @@ class SNGenerator():
         pop_2_probability = 1. - pop_1_probability
         true_population = stats.binom.rvs(n=1, p=pop_2_probability)
         sample_idx = np.column_stack([
-            true_population.astype(bool),
-            ~true_population.astype(bool)
+            np.zeros(n_sn) == true_population,
+            np.ones(n_sn) == true_population
         ])
         true_population += 1
 

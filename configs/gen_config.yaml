@@ -1,7 +1,7 @@
 data_cfg:
   path: ./data/pantheon+_zcut
 model_cfg:
-  use_physical_ratio: False
+  use_physical_ratio: True
   pars:
     w: 0.384
     cosmology:
@@ -43,3 +43,13 @@ model_cfg:
 simulation_cfg:
   seed: 42
   n_sne: 2000
+  n_max: 10000
+  z_cut: 0.01
+  s_cut: 3.
+  c_cut: 0.3
+  use_physical_ratio: True
+  prompt_fraction_lower: 0.01
+  prompt_fraction_upper: 0.99
+  n_fraction_steps: 5
+  w: 0.384
+  save_path: ./data/simulated_data
