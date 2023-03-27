@@ -50,6 +50,6 @@ simulation_cfg:
   use_physical_ratio: True
   prompt_fraction_lower: 0.01
   prompt_fraction_upper: 0.99
-  n_fraction_steps: 5
+  n_fraction_steps: 100
   w: 0.384
   save_path: ./data/simulated_data

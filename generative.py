@@ -140,5 +140,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         df.to_csv(path + "/observables.csv", index=False)
         np.save(path + "/covariance.npy", mean_observable_covariance)
 
+        plt.close('all')
+
 if __name__ == "__main__":
     main()
