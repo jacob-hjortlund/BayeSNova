@@ -121,15 +121,24 @@ def main(cfg: omegaconf.DictConfig) -> None:
             axis=1
         )
 
-        idx_zcut = observables[:, 0] >= cfg['simulation_cfg']['z_cut']
+        idx_zcut_lower = observables[:, 0] >= cfg['simulation_cfg']['z_cut_lower']
+        idx_zcut_upper = observables[:, 0] <= cfg['simulation_cfg']['z_cut_upper']
         idx_scut = np.abs(observables[:, 2] < cfg['simulation_cfg']['s_cut'])
         idx_ccut = np.abs(observables[:, 3] < cfg['simulation_cfg']['c_cut'])
-        idx_cut = idx_zcut & idx_scut & idx_ccut
+        idx_cut = idx_zcut_lower & idx_zcut_upper & idx_scut & idx_ccut
 
-        observables = observables[idx_cut]
-        observables = observables[:cfg['simulation_cfg']['n_sne']]
+        partial_observables = observables[idx_cut]
+        partial_observables = partial_observables[:cfg['simulation_cfg']['n_sne']]
 
-        df = pd.DataFrame(
+        partial_df = pd.DataFrame(
+            partial_observables,
+            columns=[
+                'z', 'mb', 'x1', 'c', 'true_class', 'total_rate',
+                'prompt_rate', 'delayed_rate'
+            ]
+        )
+
+        full_df = pd.DataFrame(
             observables,
             columns=[
                 'z', 'mb', 'x1', 'c', 'true_class', 'total_rate',
@@ -137,7 +146,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
             ]
         )
 
-        df.to_csv(path + "/observables.csv", index=False)
+        partial_df.to_csv(path + "/partial_sample.csv", index=False)
+        full_df.to_csv(path + "/full_sample.csv", index=False)
         np.save(path + "/covariance.npy", mean_observable_covariance)
 
         plt.close('all')
