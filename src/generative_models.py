@@ -224,7 +224,7 @@ class SNGenerator():
             pop_1_probability = sn_rates[:,-1] / sn_rates[:, 0]
         else:
             pop_1_probability = np.ones_like(z) * self.cfg['pars']['w']
-            sn_rates = None
+            sn_rates = np.ones((n_sn, 3)) * np.nan
         
         pop_2_probability = 1. - pop_1_probability
         true_population = stats.binom.rvs(n=1, p=pop_2_probability)

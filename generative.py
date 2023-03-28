@@ -68,9 +68,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
         )
 
         observables, true_classes, sn_rates = sn_observables_generator(z, mean_observable_covariance)
-        prompt_probability = (sn_rates[:, 1] / sn_rates[:, 0])[idx_argsort]
-        delayed_probability = (sn_rates[:, 2] / sn_rates[:, 0])[idx_argsort]
-        sorted_sn_rates = sn_rates[idx_argsort]
+        if cfg['simulation_cfg']['use_physical_ratio']:
+            prompt_probability = (sn_rates[:, 1] / sn_rates[:, 0])[idx_argsort]
+            delayed_probability = (sn_rates[:, 2] / sn_rates[:, 0])[idx_argsort]
+            sorted_sn_rates = sn_rates[idx_argsort]
 
         fig, ax = plt.subplots(ncols=4, figsize=(20, 5))
         fig.suptitle(title, fontsize=16)
@@ -97,24 +98,25 @@ def main(cfg: omegaconf.DictConfig) -> None:
         fig.tight_layout()
         fig.savefig(path + "/comparison_to_obs.png")
 
-        fig, ax = plt.subplots(ncols=2, figsize=(10, 5))
-        fig.suptitle(title, fontsize=16)
-        ax[0].plot(sorted_z, sorted_sn_rates[:, 0], label='Total')
-        ax[0].plot(sorted_z, sorted_sn_rates[:, 1], label='Prompt')
-        ax[0].plot(sorted_z, sorted_sn_rates[:, 2], label='Delayed')
-        ax[0].set_xlabel('z', fontsize=14)
-        ax[0].set_ylabel(r'N$_{Ia}$ [yr$^{-1}$ Mpc$^{-3}$]', fontsize=14)
-        ax[0].set_yscale('log')
-        ax[0].legend(fontsize=14)
+        if cfg['simulation_cfg']['use_physical_ratio']:
+            fig, ax = plt.subplots(ncols=2, figsize=(10, 5))
+            fig.suptitle(title, fontsize=16)
+            ax[0].plot(sorted_z, sorted_sn_rates[:, 0], label='Total')
+            ax[0].plot(sorted_z, sorted_sn_rates[:, 1], label='Prompt')
+            ax[0].plot(sorted_z, sorted_sn_rates[:, 2], label='Delayed')
+            ax[0].set_xlabel('z', fontsize=14)
+            ax[0].set_ylabel(r'N$_{Ia}$ [yr$^{-1}$ Mpc$^{-3}$]', fontsize=14)
+            ax[0].set_yscale('log')
+            ax[0].legend(fontsize=14)
 
-        ax[1].plot(sorted_z, prompt_probability, label='Prompt')
-        ax[1].plot(sorted_z, delayed_probability, label='Delayed')
-        ax[1].set_xlabel('z', fontsize=14)
-        ax[1].set_ylabel('Probability', fontsize=14)
-        ax[1].legend(fontsize=14)
+            ax[1].plot(sorted_z, prompt_probability, label='Prompt')
+            ax[1].plot(sorted_z, delayed_probability, label='Delayed')
+            ax[1].set_xlabel('z', fontsize=14)
+            ax[1].set_ylabel('Probability', fontsize=14)
+            ax[1].legend(fontsize=14)
 
-        fig.tight_layout()
-        fig.savefig(path + "/rates.png")
+            fig.tight_layout()
+            fig.savefig(path + "/rates.png")
 
         observables = np.concatenate(
             (z[:, None], observables, true_classes[:, None], sn_rates),

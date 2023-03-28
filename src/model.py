@@ -853,6 +853,21 @@ class TrippModel():
         self.cfg = model_cfg
         pass
     
+    def logprior(self, par_dict: dict) -> float:
+            
+        log_prior = 0.0
+        for par in par_dict.keys():
+            par_value = par_dict[par]
+            is_in_priors = par in self.cfg["prior_bounds"].keys()
+            if is_in_priors:
+                log_prior += utils.uniform(
+                    par_value, **self.cfg["prior_bounds"][par]
+                )
+            if np.isinf(log_prior):
+                break
+        
+        return log_prior
+
     def input_to_dict(self, theta: np.ndarray) -> dict:
         
         pars_to_fit = self.cfg["pars"]
@@ -891,11 +906,15 @@ class TrippModel():
         if len(covs.shape) == 2:
             covs = np.tile(covs, [len(z), 1, 1])
 
-        var = np.sum(np.diagonal(covs, axis1=1, axis2=2), axis=1)
+        var_tmp = np.diagonal(covs, axis1=1, axis2=2)
+        var = var_tmp.copy()
+        var[:,1] = var_tmp[:,1] * alpha**2
+        var[:,2] = var_tmp[:,2] * beta**2
+        var = np.sum(var, axis=1)
         var += (5 / np.log(10))**2 * (disp_v_pec / (c * z))**2
         var -= 2 * beta * covs[:, 0, 2]
-        var -= 2 * alpha * covs[:, 0, 1]
-        var += 2 * alpha * beta * covs[:, 1, 2]
+        var += 2 * alpha * covs[:, 0, 1]
+        var -= 2 * alpha * beta * covs[:, 1, 2]
         var += sig_int**2
 
         return var
@@ -911,6 +930,9 @@ class TrippModel():
         residuals = self.residuals(observables, Mb, alpha, beta, cosmo)
         var = self.variance(observables, covariances, alpha, beta, sig_int)
 
+        if np.any(var <= 0):
+            return -np.inf
+
         log_likelihood = -0.5 * np.sum(residuals**2 / var + np.log(var))
 
         return log_likelihood
@@ -919,7 +941,10 @@ class TrippModel():
         self, theta: np.ndarray, observables: np.ndarray, covariances: np.ndarray
     ) -> float:
 
-        input_dict = self.input_to_dict(theta)
-        log_likelihood = self.log_likelihood(observables, covariances, **input_dict)
+        par_dict = self.input_to_dict(theta)
+        log_prior = self.logprior(par_dict)
+        if np.isinf(log_prior):
+            return -np.inf
+        log_likelihood = self.log_likelihood(observables, covariances, **par_dict)
 
-        return -1. * log_likelihood
+        return log_likelihood
