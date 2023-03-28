@@ -1,0 +1,56 @@
+data_cfg:
+  path: ./data/pantheon+_zcut
+model_cfg:
+  use_physical_ratio: True
+  pars:
+    w: 0.384
+    cosmology:
+      H0: 70.
+      Om0: 0.3
+      w0: -1.
+      wa: 0.
+      eta_prompt: 0.0012408258
+      eta_delayed: 0.000102
+    pop_1:
+      Mb: -19.49
+      s: -1.34
+      sig_s: 0.69
+      c: -0.037
+      sig_c: 0.076
+      tau_Ebv: 0.017
+      alpha: -0.186
+      beta: 3.100
+      Rb: 4.077
+      sig_Rb: 0.970
+      gamma_Ebv: 3.282
+      sig_int: 0.
+    pop_2:
+      Mb: -19.40
+      s: 0.39
+      sig_s: 0.65
+      c: -0.113
+      sig_c: 0.043
+      tau_Ebv: 0.034
+      alpha: -0.186
+      beta: 3.100
+      Rb: 4.077
+      sig_Rb: 0.970
+      gamma_Ebv: 3.282
+      sig_int: 0.
+  dtd_cfg:
+    t0: 0.04
+    t1: 0.5
+simulation_cfg:
+  seed: 42
+  n_sne: 2000
+  n_max: 100000
+  z_cut_lower: 0.01
+  z_cut_upper: 2.5
+  s_cut: 3.
+  c_cut: 0.3
+  use_physical_ratio: True
+  prompt_fraction_lower: 0.01
+  prompt_fraction_upper: 0.99
+  n_fraction_steps: 100
+  w: 0.384
+  save_path: ./data/simulated_data

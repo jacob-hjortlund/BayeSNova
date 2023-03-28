@@ -6,17 +6,45 @@ import src.cosmology_utils as cosmo_utils
 
 from astropy.units import Gyr
 
-class SNModel():
+def sample_batch_mvn(
+    mean: np.ndarray,
+    cov: np.ndarray,
+    size: "tuple | int" = (),
+) -> np.ndarray:
+    """
+    Batch sample multivariate normal distribution.
+
+    Arguments:
+
+        mean: expected values of shape (…M, D)
+        cov: covariance matrices of shape (…M, D, D)
+        size: additional batch shape (…B)
+
+    Returns: samples from the multivariate normal distributions
+             shape: (…B, …M, D)
+
+    It is not required that ``mean`` and ``cov`` have the same shape
+    prefix, only that they are broadcastable against each other.
+    """
+    mean = np.asarray(mean)
+    cov = np.asarray(cov)
+    size = (size, ) if isinstance(size, int) else tuple(size)
+    shape = size + np.broadcast_shapes(mean.shape, cov.shape[:-1])
+    X = np.random.standard_normal((*shape, 1))
+    L = np.linalg.cholesky(cov)
+    return (L @ X).reshape(shape) + mean
+
+class SNGenerator():
 
     def __init__(
         self, model_cfg: dict
     ):
         self.cfg = model_cfg
         self.init_cosmology(
-            H0=model_cfg["cosmology"]["H0"],
-            Om0=model_cfg["cosmology"]["Om0"],
-            w0=model_cfg["cosmology"]["w0"],
-            wa=model_cfg["cosmology"]["wa"]
+            H0=model_cfg["pars"]["cosmology"]["H0"],
+            Om0=model_cfg["pars"]["cosmology"]["Om0"],
+            w0=model_cfg["pars"]["cosmology"]["w0"],
+            wa=model_cfg["pars"]["cosmology"]["wa"]
         )
 
     def init_cosmology(
@@ -42,6 +70,8 @@ class SNModel():
         sig_int_1: float, sig_int_2: float,
         sig_s_1: float, sig_s_2: float,
         sig_c_1: float, sig_c_2: float,
+        sig_Rb_1: float, sig_Rb_2: float,
+        Ebv_1: float, Ebv_2: float
     ) -> np.ndarray:
 
         n_sn = len(z)
@@ -50,8 +80,8 @@ class SNModel():
         c = 300000. # km / s
         
         cov[:,:,0,0] += np.array([
-            [sig_int_1**2 + alpha_1**2 * sig_s_1**2 + beta_1**2 * sig_c_1**2],
-            [sig_int_2**2 + alpha_2**2 * sig_s_2**2 + beta_2**2 * sig_c_2**2]
+            sig_int_1**2 + alpha_1**2 * sig_s_1**2 + beta_1**2 * sig_c_1**2 + sig_Rb_1**2 * Ebv_1**2,
+            sig_int_2**2 + alpha_2**2 * sig_s_2**2 + beta_2**2 * sig_c_2**2 + sig_Rb_2**2 * Ebv_2**2
         ])
         cov[:,:,0,0] += np.tile(
             z**(-2) * (
@@ -75,6 +105,8 @@ class SNModel():
         cov[:,:,1,0] = cov[:,:,0,1]
         cov[:,:,2,0] = cov[:,:,0,2]
 
+        cov = np.swapaxes(cov, 0, 1)
+
         return cov
 
     def population_mean(
@@ -94,7 +126,6 @@ class SNModel():
         means[:,2] = c_int + Ebv
 
         return means
-        pass
 
     def volumetric_sn_rates(
         self, z: np.ndarray,
@@ -136,53 +167,76 @@ class SNModel():
         
         n_sn = len(z)
         
-        Ebv = self.sample_reddening(
+        Ebv_1 = self.sample_reddening(
             n_sn=n_sn,
-            gamma_Ebv=self.cfg['reddening']['gamma_Ebv'],
-            tau_Ebv=self.cfg['reddening']['tau_Ebv']
+            gamma_Ebv=self.cfg['pars']['pop_1']['gamma_Ebv'],
+            tau_Ebv=self.cfg['pars']['pop_1']['tau_Ebv']
+        )
+
+        Ebv_2 = self.sample_reddening(
+            n_sn=n_sn,
+            gamma_Ebv=self.cfg['pars']['pop_2']['gamma_Ebv'],
+            tau_Ebv=self.cfg['pars']['pop_2']['tau_Ebv']
         )
 
         pop_1_means = self.population_mean(
-            z=z, Mb=self.cfg['pop_1']['Mb'],
-            s=self.cfg['pop_1']['s'], c_int=self.cfg['pop_1']['c_int'],
-            alpha=self.cfg['pop_1']['alpha'], beta=self.cfg['pop_1']['beta'],
-            Rb=self.cfg['pop_1']['Rb'], Ebv=Ebv
+            z=z, Mb=self.cfg['pars']['pop_1']['Mb'],
+            s=self.cfg['pars']['pop_1']['s'], c_int=self.cfg['pars']['pop_1']['c'],
+            alpha=self.cfg['pars']['pop_1']['alpha'], beta=self.cfg['pars']['pop_1']['beta'],
+            Rb=self.cfg['pars']['pop_1']['Rb'], Ebv=Ebv_1
         )
 
         pop_2_means = self.population_mean(
-            z=z, Mb=self.cfg['pop_2']['Mb'],
-            s=self.cfg['pop_2']['s'], c_int=self.cfg['pop_2']['c_int'],
-            alpha=self.cfg['pop_2']['alpha'], beta=self.cfg['pop_2']['beta'],
-            Rb=self.cfg['pop_2']['Rb'], Ebv=Ebv
+            z=z, Mb=self.cfg['pars']['pop_2']['Mb'],
+            s=self.cfg['pars']['pop_2']['s'], c_int=self.cfg['pars']['pop_2']['c'],
+            alpha=self.cfg['pars']['pop_2']['alpha'], beta=self.cfg['pars']['pop_2']['beta'],
+            Rb=self.cfg['pars']['pop_2']['Rb'], Ebv=Ebv_2
         )
-        means = np.column_stack((pop_1_means, pop_2_means))
+
+        pop_1_means = pop_1_means.reshape((n_sn, 1, 3))
+        pop_2_means = pop_2_means.reshape((n_sn, 1, 3))
+        means = np.concatenate((pop_1_means, pop_2_means), axis=1)
 
         covs = self.population_covarainces(
             z=z, obs_covariance=obs_covariance,
-            alpha_1=self.cfg['pop_1']['alpha'],
-            alpha_2=self.cfg['pop_2']['alpha'],
-            beta_1=self.cfg['pop_1']['beta'],
-            beta_2=self.cfg['pop_2']['beta'],
-            sig_int_1=self.cfg['pop_1']['sig_int'],
-            sig_int_2=self.cfg['pop_2']['sig_int'],
-            sig_s_1=self.cfg['pop_1']['sig_s'],
-            sig_s_2=self.cfg['pop_2']['sig_s'],
-            sig_c_1=self.cfg['pop_1']['sig_c'],
-            sig_c_2=self.cfg['pop_2']['sig_c']
+            alpha_1=self.cfg['pars']['pop_1']['alpha'],
+            alpha_2=self.cfg['pars']['pop_2']['alpha'],
+            beta_1=self.cfg['pars']['pop_1']['beta'],
+            beta_2=self.cfg['pars']['pop_2']['beta'],
+            sig_int_1=self.cfg['pars']['pop_1']['sig_int'],
+            sig_int_2=self.cfg['pars']['pop_2']['sig_int'],
+            sig_s_1=self.cfg['pars']['pop_1']['sig_s'],
+            sig_s_2=self.cfg['pars']['pop_2']['sig_s'],
+            sig_c_1=self.cfg['pars']['pop_1']['sig_c'],
+            sig_c_2=self.cfg['pars']['pop_2']['sig_c'],
+            sig_Rb_1=self.cfg['pars']['pop_1']['sig_Rb'],
+            sig_Rb_2=self.cfg['pars']['pop_2']['sig_Rb'],
+            Ebv_1=Ebv_1, Ebv_2=Ebv_2
         )
-        covs = covs.T
         
-        eta_prompt = self.cfg['dtd_cfg']['eta_prompt']
-        eta_delayed = self.cfg['dtd_cfg']['eta_delayed']
-        sn_rates = self.volumetric_sn_rates(
-            z=z, eta_prompt=eta_prompt, eta_delayed=eta_delayed
-        )
+        if self.cfg['use_physical_ratio']:
+            eta_prompt = self.cfg['pars']['cosmology']['eta_prompt']
+            eta_delayed = self.cfg['pars']['cosmology']['eta_delayed']
+            sn_rates = self.volumetric_sn_rates(
+                z=z, eta_prompt=eta_prompt, eta_delayed=eta_delayed
+            )
 
-        pop_1_probability = sn_rates[:,-1] / sn_rates[:, 0]
+            pop_1_probability = sn_rates[:,-1] / sn_rates[:, 0]
+        else:
+            pop_1_probability = np.ones_like(z) * self.cfg['pars']['w']
+            sn_rates = np.ones((n_sn, 3)) * np.nan
+        
         pop_2_probability = 1. - pop_1_probability
-        sample_idx = stats.binom.rvs(n=1, p=pop_2_probability)
+        true_population = stats.binom.rvs(n=1, p=pop_2_probability)
+        sample_idx = np.column_stack([
+            np.zeros(n_sn) == true_population,
+            np.ones(n_sn) == true_population
+        ])
+        true_population += 1
 
         sample_means = means[sample_idx]
         sample_covs = covs[sample_idx]
 
-        pass
+        observable_samples = sample_batch_mvn(sample_means, sample_covs)
+
+        return observable_samples, true_population, sn_rates

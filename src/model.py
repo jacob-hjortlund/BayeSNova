@@ -844,4 +844,107 @@ class Model():
             log_likelihood, log_full_membership_probs,
             log_sn_membership_probs, log_host_membership_probs
         )
+
+class TrippModel():
+
+    def __init__(
+        self, model_cfg: dict
+    ):
+        self.cfg = model_cfg
+        pass
     
+    def logprior(self, par_dict: dict) -> float:
+            
+        log_prior = 0.0
+        for par in par_dict.keys():
+            par_value = par_dict[par]
+            is_in_priors = par in self.cfg["prior_bounds"].keys()
+            if is_in_priors:
+                log_prior += utils.uniform(
+                    par_value, **self.cfg["prior_bounds"][par]
+                )
+            if np.isinf(log_prior):
+                break
+        
+        return log_prior
+
+    def input_to_dict(self, theta: np.ndarray) -> dict:
+        
+        pars_to_fit = self.cfg["pars"]
+        input_dict = {par: value for par, value in zip(pars_to_fit, theta)}
+        input_dict = {**self.cfg["preset_values"], **input_dict}
+
+        return input_dict
+
+    def residuals(
+        self, observables: np.ndarray,
+        Mb: float, alpha: float, beta: float,
+        cosmo: apy_cosmo.Cosmology
+    ):
+        
+        mb = observables[:, 0]
+        x1 = observables[:, 1]
+        c = observables[:, 2]
+        z = observables[:, 3]
+
+        distance_moduli = cosmo.distmod(z).value
+        residuals = mb - Mb - distance_moduli + alpha * x1 - beta * c
+
+        return residuals
+    
+    def variance(
+        self, observables: np.ndarray,
+        covariances: np.ndarray, 
+        alpha: float, beta: float, sig_int: float
+    ):
+        
+        disp_v_pec = 200. # km / s
+        c = 300000. # km / s
+
+        z = observables[:, 3]
+        covs = covariances
+        if len(covs.shape) == 2:
+            covs = np.tile(covs, [len(z), 1, 1])
+
+        var_tmp = np.diagonal(covs, axis1=1, axis2=2)
+        var = var_tmp.copy()
+        var[:,1] = var_tmp[:,1] * alpha**2
+        var[:,2] = var_tmp[:,2] * beta**2
+        var = np.sum(var, axis=1)
+        var += (5 / np.log(10))**2 * (disp_v_pec / (c * z))**2
+        var -= 2 * beta * covs[:, 0, 2]
+        var += 2 * alpha * covs[:, 0, 1]
+        var -= 2 * alpha * beta * covs[:, 1, 2]
+        var += sig_int**2
+
+        return var
+
+    def log_likelihood(
+        self, observables: np.ndarray,
+        covariances: np.ndarray, 
+        Mb: float, alpha: float, beta: float, sig_int: float,
+        H0: float, Om0: float, w0: float, wa: float
+    ):
+        
+        cosmo = apy_cosmo.Flatw0waCDM(H0=H0, Om0=Om0, w0=w0, wa=wa)
+        residuals = self.residuals(observables, Mb, alpha, beta, cosmo)
+        var = self.variance(observables, covariances, alpha, beta, sig_int)
+
+        if np.any(var <= 0):
+            return -np.inf
+
+        log_likelihood = -0.5 * np.sum(residuals**2 / var + np.log(var))
+
+        return log_likelihood
+
+    def __call__(
+        self, theta: np.ndarray, observables: np.ndarray, covariances: np.ndarray
+    ) -> float:
+
+        par_dict = self.input_to_dict(theta)
+        log_prior = self.logprior(par_dict)
+        if np.isinf(log_prior):
+            return -np.inf
+        log_likelihood = self.log_likelihood(observables, covariances, **par_dict)
+
+        return log_likelihood

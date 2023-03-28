@@ -16,19 +16,6 @@ from mpi4py import MPI
 
 NULL_VALUE = -9999.
 
-class _FunctionWrapper:
-    """
-    Object to wrap user's function, allowing picklability
-    """
-    def __init__(self, f, args=()):
-        self.f = f
-        if not isinstance(args, tuple):
-            args = (args,)
-        self.args = [] if args is None else args
-
-    def __call__(self, x):
-        return self.f(x, *self.args)
-
 class PoolWrapper():
 
     def __init__(self, pool_type: str) -> None:

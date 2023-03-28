@@ -138,6 +138,19 @@ def distance_modulus_at_redshift(
 
 # ---------- N(z) integral ------------
 
+def prompt_frac_to_prompt_rate(
+    prompt_frac, delayed_rate,
+    t_max, t0 = 0.04, t1 = 0.5
+):
+    
+    prompt_rate = (
+        delayed_rate *
+        prompt_frac / (1. - prompt_frac) *
+        (np.log(t_max) - np.log(t1)) / (t1 - t0)
+    )
+
+    return prompt_rate
+
 @nb.jit
 def lookback_time_integrand(
     z, args
