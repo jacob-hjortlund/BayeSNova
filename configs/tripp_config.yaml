@@ -15,6 +15,7 @@ model_cfg:
         sig_int: 0.12
         Om0: 0.3
         w0: -1.
+        wa: 0.
     prior_bounds: 
         Mb: 
             lower: -23.
@@ -34,10 +35,14 @@ model_cfg:
         w0: 
             lower: -3.
             upper: 1.
+        wa: 
+            lower: -5.
+            upper: 5.
 emcee_cfg:
     n_walkers: 60
     n_steps: 100
     save_path: ./results/simulated_data
+    extra_path: ''
     use_full_sample: True
     init_idx: 43
     n_runs: 2
