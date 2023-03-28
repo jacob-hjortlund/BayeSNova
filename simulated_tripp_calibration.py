@@ -15,6 +15,7 @@ import astropy.cosmology as cosmopy
 
 import src.model as models
 import src.preprocessing as prep
+import src.utils as utils
 
 def dist_mod(observables, Mb, alpha, beta):
     mb = observables[:, 0]
@@ -119,25 +120,33 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         observables_keys = ['mb', 'x1', 'c', 'z']
         observables = data[observables_keys].to_numpy()
-        init_values = np.array([
-            cfg['model_cfg']['init_values'][par] for par in cfg['model_cfg']['pars']
-        ])
 
         mb = observables[:, 0]
         x1 = observables[:, 1]
         c = observables[:, 2]
         z = observables[:, 3]
 
-        # Init model and sample
-        n_dim = len(cfg['model_cfg']['pars'])
-        n_walkers = cfg['emcee_cfg']['n_walkers']
-        tripp_model = models.TrippModel(cfg['model_cfg'])
-        init_values = init_values[None, :] + 3e-2 * np.random.normal(size=(
-            n_walkers, n_dim
-        ))
-        log_prob = lambda theta: tripp_model(theta, observables, covariance)
-        sampler = em.EnsembleSampler(n_walkers, n_dim, log_prob)
-        sampler.run_mcmc(init_values, cfg['emcee_cfg']['n_steps'], progress=True)
+        with utils.PoolWrapper(cfg['emcee_cfg']['pool_type']) as wrapped_pool:
+
+            if wrapped_pool.is_mpi:
+                wrapped_pool.check_if_master()
+            
+            init_values = np.array([
+                cfg['model_cfg']['init_values'][par] for par in cfg['model_cfg']['pars']
+            ])
+
+            # Init model and sample
+            n_dim = len(cfg['model_cfg']['pars'])
+            n_walkers = cfg['emcee_cfg']['n_walkers']
+            tripp_model = models.TrippModel(cfg['model_cfg'])
+            init_values = init_values[None, :] + 3e-2 * np.random.normal(size=(
+                n_walkers, n_dim
+            ))
+            log_prob = lambda theta: tripp_model(theta, observables, covariance)
+            sampler = em.EnsembleSampler(
+                n_walkers, n_dim, log_prob, pool=wrapped_pool.pool
+            )
+            sampler.run_mcmc(init_values, cfg['emcee_cfg']['n_steps'], progress=True)
 
         accept_frac = np.mean(sampler.acceptance_fraction)
         print("\nMean accepance fraction:", accept_frac, "\n")

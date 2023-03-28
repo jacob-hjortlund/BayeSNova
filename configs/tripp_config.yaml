@@ -41,3 +41,4 @@ emcee_cfg:
     use_full_sample: True
     init_idx: 43
     n_runs: 2
+    pool_type: ''
