@@ -1,5 +1,5 @@
 data_cfg:
-    train_path: ./data/simulated_data/prompt_fraction_0.01
+    train_path: ./data/simulated_data/
     sep: ','
 model_cfg:
     pars: [Mb,alpha,beta,sig_int,Om0,w0]
@@ -39,3 +39,5 @@ emcee_cfg:
     n_steps: 100
     save_path: ./results/simulated_data
     use_full_sample: True
+    init_idx: 43
+    n_runs: 2
