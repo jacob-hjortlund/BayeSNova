@@ -10,6 +10,7 @@ def sample_batch_mvn(
     mean: np.ndarray,
     cov: np.ndarray,
     size: "tuple | int" = (),
+    seed: int = None
 ) -> np.ndarray:
     """
     Batch sample multivariate normal distribution.
@@ -26,6 +27,7 @@ def sample_batch_mvn(
     It is not required that ``mean`` and ``cov`` have the same shape
     prefix, only that they are broadcastable against each other.
     """
+    np.random.seed(seed)
     mean = np.asarray(mean)
     cov = np.asarray(cov)
     size = (size, ) if isinstance(size, int) else tuple(size)
@@ -227,7 +229,9 @@ class SNGenerator():
             sn_rates = np.ones((n_sn, 3)) * np.nan
         
         pop_2_probability = 1. - pop_1_probability
-        true_population = stats.binom.rvs(n=1, p=pop_2_probability)
+        true_population = stats.binom.rvs(
+            n=1, p=pop_2_probability, random_state=self.cfg['seed']
+        )
         sample_idx = np.column_stack([
             np.zeros(n_sn) == true_population,
             np.ones(n_sn) == true_population
@@ -237,6 +241,6 @@ class SNGenerator():
         sample_means = means[sample_idx]
         sample_covs = covs[sample_idx]
 
-        observable_samples = sample_batch_mvn(sample_means, sample_covs)
+        observable_samples = sample_batch_mvn(sample_means, sample_covs, seed=self.cfg['seed'])
 
         return observable_samples, true_population, sn_rates

@@ -16,6 +16,11 @@ import src.cosmology_utils as cosmo_utils
 )
 def main(cfg: omegaconf.DictConfig) -> None:
 
+    init_seed = cfg['simulation_cfg']['init_seed'] + cfg['simulation_cfg']['run_number']
+    np.random.seed(init_seed)
+    seed = np.random.randint(1, 2**32 - 1, size=1)[0]
+    np.random.seed(seed)
+    print(f"Seed: {seed}")
     base_data = pd.read_csv(
         cfg['data_cfg']['path'], sep=" "
     )
@@ -27,7 +32,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     log10_z = np.log10(prep.sn_observables[:,-1])
     kde = stats.gaussian_kde(log10_z)
     kde_samples = kde.resample(
-        cfg['simulation_cfg']['n_max'], cfg['simulation_cfg']['seed']
+        cfg['simulation_cfg']['n_max'], seed
     )
     z = 10**kde_samples[0]
     idx_argsort = np.argsort(z)
@@ -37,17 +42,21 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     cfg['model_cfg']['use_physical_ratio'] = cfg['simulation_cfg']['use_physical_ratio']
     if cfg['simulation_cfg']['use_physical_ratio']:
+        idx_init = cfg['simulation_cfg']['idx_init']
+        idx_final = idx_init + cfg['simulation_cfg']['number_of_fractions']
         prompt_fractions = np.linspace(
             cfg['simulation_cfg']['prompt_fraction_lower'],
             cfg['simulation_cfg']['prompt_fraction_upper'],
             cfg['simulation_cfg']['n_fraction_steps']
         )
+        prompt_fractions = prompt_fractions[idx_init:idx_final]
     else:
         prompt_fractions = [cfg['simulation_cfg']['w']]
         cfg['model_cfg']['pars']['w'] = cfg['simulation_cfg']['w']
 
     # Generate observables
     model_cfg = omegaconf.OmegaConf.to_container(cfg['model_cfg'], resolve=True)
+    model_cfg['seed'] = seed
     sn_observables_generator = gen.SNGenerator(model_cfg)
     t_max = sn_observables_generator.cosmo.age(0).value
 
@@ -59,7 +68,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
             name = f"constant_ratio_{cfg['simulation_cfg']['w']:.2f}"
             title = f"Constant ratio: {cfg['simulation_cfg']['w']:.2f}"
         path = os.path.join(
-            cfg['simulation_cfg']['save_path'], name
+            cfg['simulation_cfg']['save_path'],
+            str(cfg['simulation_cfg']['run_number']),
+            name
         )
         os.makedirs(path, exist_ok=True)
 
