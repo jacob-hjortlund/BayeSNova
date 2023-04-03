@@ -9,8 +9,8 @@ model_cfg:
       Om0: 0.3
       w0: -1.
       wa: 0.
-      eta_prompt: 0.0012408258
-      eta_delayed: 0.000102
+      prompt_fraction: 0.63
+      eta: 0.000102
     pop_1:
       Mb: -19.49
       s: -1.34

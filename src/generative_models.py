@@ -64,7 +64,7 @@ class SNGenerator():
         samples = gamma.rvs(size=n_sn)
         return samples
     
-    def population_covarainces(
+    def population_covariances(
         self,
         z: np.ndarray, obs_covariance: np.ndarray,
         alpha_1: float, alpha_2: float,
@@ -131,7 +131,7 @@ class SNGenerator():
 
     def volumetric_sn_rates(
         self, z: np.ndarray,
-        eta_prompt: float, eta_delayed: float
+        eta: float, prompt_fraction: float,
     ):
 
         dtd_t0 = self.cfg['dtd_cfg']['t0']
@@ -152,13 +152,16 @@ class SNGenerator():
             self.cosmo.age, minimum_convolution_time * Gyr,
             method='Bounded'
         )
+        zinf = 20.
+        age_of_universe = self.cosmo.age(0).value - self.cosmo.age(zinf).value
         _, zs, _ = cosmo_utils.redshift_at_times(
             convolution_time_limits, minimum_convolution_time, z0, cosmo_args
         )
         integral_limits = np.array(zs.tolist(), dtype=np.float64)
         sn_rates = cosmo_utils.volumetric_rates(
             z, integral_limits, H0, Om0,
-            w0, wa, eta_prompt, eta_delayed, zinf=20.
+            w0, wa, eta, prompt_fraction, zinf=zinf,
+            age=age_of_universe
         )
 
         return sn_rates
@@ -199,7 +202,7 @@ class SNGenerator():
         pop_2_means = pop_2_means.reshape((n_sn, 1, 3))
         means = np.concatenate((pop_1_means, pop_2_means), axis=1)
 
-        covs = self.population_covarainces(
+        covs = self.population_covariances(
             z=z, obs_covariance=obs_covariance,
             alpha_1=self.cfg['pars']['pop_1']['alpha'],
             alpha_2=self.cfg['pars']['pop_2']['alpha'],
@@ -217,10 +220,10 @@ class SNGenerator():
         )
         
         if self.cfg['use_physical_ratio']:
-            eta_prompt = self.cfg['pars']['cosmology']['eta_prompt']
-            eta_delayed = self.cfg['pars']['cosmology']['eta_delayed']
+            eta = self.cfg['pars']['cosmology']['eta']
+            prompt_fraction = self.cfg['pars']['cosmology']['prompt_fraction']
             sn_rates = self.volumetric_sn_rates(
-                z=z, eta_prompt=eta_prompt, eta_delayed=eta_delayed
+                z=z, eta=eta, prompt_fraction=prompt_fraction
             )
 
             pop_1_probability = sn_rates[:,-1] / sn_rates[:, 0]
