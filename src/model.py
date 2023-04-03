@@ -949,4 +949,6 @@ class TrippModel():
             return -np.inf
         log_likelihood = self.log_likelihood(observables, covariances, **par_dict)
 
+        # Test chang
+
         return log_likelihood
