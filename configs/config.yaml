@@ -59,8 +59,8 @@ model_cfg:
     Om0: 0.3
     w0: -1.
     wa: 0.
-    eta_prompt: 0.0012408258
-    eta_delayed: 0.000102
+    prompt_fraction: 0.63
+    eta: 0.000102
     sig_int_1: 0.
     sig_int_2: 0.
     shift_Rb: 0.
@@ -121,12 +121,12 @@ model_cfg:
     wa:
       lower: -5.
       upper: 5.
-    eta_prompt:
+    eta:
       lower: -6.
       upper: 2.
-    eta_delayed:
-      lower: -6.
-      upper: 2.
+    prompt_fraction:
+      lower: 0.
+      upper: 1.
   init_values:
     Mb: -19.3
     sig_c: 0.05
@@ -141,8 +141,8 @@ model_cfg:
     Om0: 0.3
     w0: -1.
     wa: 0.
-    eta_prompt: -2.9
-    eta_delayed: -3.99
+    prompt_fraction: 0.63
+    eta: -3.99
   use_sigmoid: False
   sigmoid_cfg:
     scale: 750.

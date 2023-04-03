@@ -237,7 +237,7 @@ def theta_to_dict(
         set(shared_par_names + independent_par_names)
     )
     missing_cosmology_par_names = (not use_physical_ratio) * list(
-        set(['eta_prompt', 'eta_delayed']) - set(cosmology_par_names)
+        set(['eta', 'prompt_fraction']) - set(cosmology_par_names)
     )
     extended_missing_par_names = (
         gen_pop_par_names(missing_par_names) +
@@ -291,7 +291,7 @@ def theta_to_dict(
     for i in range(n_cosmology_pars):
         idx = -1 * (not use_physical_ratio) - n_cosmology_pars + i
         cosmo_par_name = cosmology_par_names[i]
-        if "eta" in cosmo_par_name:
+        if "eta" == cosmo_par_name:
             arg_dict[cosmo_par_name] = 10**(theta[idx])
         else:
             arg_dict[cosmo_par_name] = theta[idx]

@@ -138,6 +138,7 @@ def distance_modulus_at_redshift(
 
 # ---------- N(z) integral ------------
 
+@nb.jit
 def prompt_frac_to_prompt_rate(
     prompt_frac, delayed_rate,
     t_max, t0 = 0.04, t1 = 0.5
@@ -245,11 +246,13 @@ N_delayed_integral_ptr = N_delayed_integral.address
 def volumetric_rates(
     z, integral_limits,
     H0, Om0, w0, wa,
-    eta_prompt, eta_delayed,
-    zinf=20.
+    eta, prompt_fraction,
+    zinf, age
 ):
     
-    
+    eta_prompt = prompt_frac_to_prompt_rate(
+        prompt_fraction, eta, age
+    )
     rates = np.zeros((len(z), 3), dtype=np.float64)
     for i in range(len(z)):
 
@@ -257,7 +260,7 @@ def volumetric_rates(
         z0 = integral_limits[i, 0]
         z1 = integral_limits[i, 1]
         prompt_args = np.array([zi, eta_prompt, H0, Om0, w0, wa], dtype=np.float64)
-        delayed_args = np.array([zi, eta_delayed, H0, Om0, w0, wa], dtype=np.float64)
+        delayed_args = np.array([zi, eta, H0, Om0, w0, wa], dtype=np.float64)
 
         N_prompt, _, _ = dqags(
             N_prompt_integral_ptr, z0, z1, prompt_args
