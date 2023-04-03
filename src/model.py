@@ -351,8 +351,8 @@ class Model():
             is_in_priors = bounds_key in prep.global_model_cfg.prior_bounds.keys()
             if is_in_priors:
                 par_value = par_dict[value_key]
-                is_dtd_par = ("prompt" in bounds_key) or ("delayed" in bounds_key)
-                if is_dtd_par:
+                is_dtd_rate = bounds_key == 'eta'
+                if is_dtd_rate:
                     par_value = np.log10(par_value)
                 value += utils.uniform(
                     par_value, **prep.global_model_cfg.prior_bounds[bounds_key]
@@ -581,7 +581,7 @@ class Model():
     def volumetric_sn_rates(
         self, observed_redshifts: np.ndarray,
         cosmo: apy_cosmo.Cosmology,
-        eta_prompt: float, eta_delayed: float
+        eta: float, prompt_fraction: float,
     ):
 
         dtd_t0 = prep.global_model_cfg['dtd_cfg']['t0']
@@ -601,7 +601,6 @@ class Model():
         
         warnings.filterwarnings("error")
         try:
-            #z0 = initial_value(cosmo, minimum_convolution_time)
             z0 = apy_cosmo.z_at_value(
                 cosmo.age, minimum_convolution_time * Gyr,
                 method='Bounded'
@@ -609,25 +608,28 @@ class Model():
         except:
             return np.ones_like(observed_redshifts) * -np.inf
         warnings.resetwarnings()
+        zinf = 20.
+        age_of_universe = cosmo.age(0).value - cosmo.age(zinf).value
         _, zs, _ = cosmo_utils.redshift_at_times(
             convolution_time_limits, minimum_convolution_time, z0, cosmo_args
         )
         integral_limits = np.array(zs.tolist(), dtype=np.float64)
         sn_rates = cosmo_utils.volumetric_rates(
             observed_redshifts, integral_limits, H0, Om0,
-            w0, wa, eta_prompt, eta_delayed, zinf=20.
+            w0, wa, eta, prompt_fraction, zinf=zinf,
+            age=age_of_universe
         )
 
         return sn_rates
 
     def volumetric_rate_probs(
         self, cosmo: apy_cosmo.Cosmology,
-        eta_prompt: float, eta_delayed: float
+        eta: float, prompt_fraction: float,
     ):
         
         sn_rates = self.volumetric_sn_rates(
             prep.observed_volumetric_rate_redshifts, cosmo,
-            eta_prompt, eta_delayed
+            eta, prompt_fraction
         )
 
         is_inf = np.any(np.isinf(sn_rates))
@@ -665,8 +667,8 @@ class Model():
         host_galaxy_means: np.ndarray,
         host_galaxy_sigs: np.ndarray,
         w: float, H0: float, Om0: float,
-        w0: float, wa: float, eta_prompt: float,
-        eta_delayed: float
+        w0: float, wa: float, eta: float,
+        prompt_fraction: float
     ) -> float:
         
         cosmo = apy_cosmo.Flatw0waCDM(H0=H0, Om0=Om0, w0=w0, wa=wa)
@@ -685,7 +687,6 @@ class Model():
             alpha_1=alpha_1, alpha_2=alpha_2,
             beta_1=beta_1, beta_2=beta_2,
             cosmo=cosmo
-            #H0=H0, Om0=Om0, w0=w0, wa=wa
         )
 
         use_gaussian_Rb = (
@@ -728,8 +729,8 @@ class Model():
             sn_redshifts = prep.sn_observables[:,-1]
             sn_rates = self.volumetric_sn_rates(
                 observed_redshifts=sn_redshifts,
-                cosmo=cosmo, eta_prompt=eta_prompt,
-                eta_delayed=eta_delayed
+                cosmo=cosmo, eta=eta,
+                prompt_fraction=prompt_fraction
             )
 
             is_inf = np.any(np.isinf(sn_rates))
@@ -776,7 +777,7 @@ class Model():
         use_volumetric_rates = prep.global_model_cfg["use_volumetric_rates"]
         if use_volumetric_rates and use_physical_population_fraction:
             log_volumetric_prob = self.volumetric_rate_probs(
-                cosmo, eta_prompt=eta_prompt, eta_delayed=eta_delayed
+                cosmo, eta=eta, prompt_fraction=prompt_fraction
             )
             log_prob = np.sum(np.log(combined_probs[:prep.idx_sn_to_evaluate])) + log_volumetric_prob
         else:
@@ -825,6 +826,7 @@ class Model():
                 np.ones(len(prep.sn_observables))*np.nan,
             )
         
+        # TODO: Update to handle cosmology
         if prep.global_model_cfg.use_sigmoid:
             param_dict = utils.apply_sigmoid(
                 param_dict, sigmoid_cfg=prep.global_model_cfg.sigmoid_cfg,
