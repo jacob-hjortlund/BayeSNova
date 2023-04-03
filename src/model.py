@@ -950,6 +950,6 @@ class TrippModel():
         log_likelihood = self.log_likelihood(observables, covariances, **par_dict)
 
         # Test chang
-        # Test change 4
+        # Test change 5
 
         return log_likelihood
