@@ -73,6 +73,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     path = os.path.join(
         cfg['emcee_cfg']['save_path'],
+        str(cfg['emcee_cfg']['sim_number']),
         cfg['emcee_cfg']['extra_path'],
         f"{init_idx}-{init_idx + n_runs}"
     )
@@ -89,6 +90,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
             prompt_fraction = prompt_fractions[init_idx+i]
             train_path = os.path.join(
                 cfg['data_cfg']['train_path'],
+                str(cfg['emcee_cfg']['sim_number']),
                 f"prompt_fraction_{prompt_fraction:.2f}"
             )
 
