@@ -61,6 +61,29 @@ model_cfg:
     wa: 0.
     prompt_fraction: 0.63
     eta: 0.000102
+    Mb_1: -19.49
+    Mb_2: -19.40
+    s_1: -1.34
+    s_2: 0.39
+    sig_s_1: 0.69
+    sig_s_2: 0.65
+    c_1: -0.037
+    c_2: 0.043
+    sig_c_1: 0.076
+    sig_c_2: 0.043
+    tau_Ebv_1: 0.017
+    tau_Ebv_2: 0.034
+    alpha_1: -0.186
+    alpha_2: -0.186
+    beta_1: 3.1
+    beta_2: 3.1
+    Rb_1: 4.077
+    Rb_2: 4.077
+    sig_Rb_1: 0.970
+    sig_Rb_2: 0.970
+    gamma_Ebv_1: 3.282
+    gamma_Ebv_2: 3.282
+    w: 0.384
     sig_int_1: 0.
     sig_int_2: 0.
     shift_Rb: 0.
