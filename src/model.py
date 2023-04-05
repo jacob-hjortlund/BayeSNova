@@ -834,9 +834,19 @@ class Model():
                 ratio_par_name=prep.global_model_cfg.ratio_par_name
             )
         
-        param_dict =  {
-            **prep.global_model_cfg.preset_values, **param_dict
-        }
+        # param_dict =  {
+        #     **prep.global_model_cfg.preset_values, **param_dict
+        # }
+
+        preset_values = prep.global_model_cfg.preset_values
+        for par in preset_values.keys():
+            current_value = param_dict.get(par, None)
+            is_null = current_value == NULL_VALUE
+            is_none = current_value is None
+            update_par = is_null or is_none
+            if update_par:
+                param_dict[par] = preset_values[par]
+
         (
             log_likelihood, log_full_membership_probs,
             log_sn_membership_probs, log_host_membership_probs

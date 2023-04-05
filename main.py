@@ -403,7 +403,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, color=pop1_color, labels=labels, **cfg['plot_cfg'])
     fig_pop_1.tight_layout()
-    fig_pop_1.suptitle('Corner plot', fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
+    #fig_pop_1.suptitle('Corner plot', fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
     fig_pop_1.savefig(
         os.path.join(path, cfg['emcee_cfg']['run_name']+"_corner.png")
     )
@@ -412,6 +412,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
     fig, axes = plt.subplots(
         ndim, figsize=(10, int(np.ceil(7*ndim/3))), sharex=True
     )
+    if ndim == 1:
+        axes = [axes]
     for i in range(ndim):
         ax = axes[i]
         ax.plot(full_chain[:, :, i], "k", alpha=0.3)
