@@ -27,12 +27,12 @@ def sample_batch_mvn(
     It is not required that ``mean`` and ``cov`` have the same shape
     prefix, only that they are broadcastable against each other.
     """
-    np.random.seed(seed)
     mean = np.asarray(mean)
     cov = np.asarray(cov)
     size = (size, ) if isinstance(size, int) else tuple(size)
     shape = size + np.broadcast_shapes(mean.shape, cov.shape[:-1])
-    X = np.random.standard_normal((*shape, 1))
+    rng = np.random.default_rng(seed)
+    X = rng.standard_normal((*shape, 1))
     L = np.linalg.cholesky(cov)
     return (L @ X).reshape(shape) + mean
 
@@ -57,11 +57,14 @@ class SNGenerator():
         )
 
     def sample_reddening(
-        self, n_sn: int, gamma_Ebv: float, tau_Ebv: float
+        self, n_sn: int, gamma_Ebv: float, tau_Ebv: float,
+        seed: int = None
     ):
         
         gamma = stats.gamma(a=gamma_Ebv, scale=tau_Ebv)
-        samples = gamma.rvs(size=n_sn)
+        samples = gamma.rvs(
+            size=n_sn, random_state=seed
+        )
         return samples
     
     def population_covariances(
@@ -175,7 +178,8 @@ class SNGenerator():
         Ebv_1 = self.sample_reddening(
             n_sn=n_sn,
             gamma_Ebv=self.cfg['pars']['pop_1']['gamma_Ebv'],
-            tau_Ebv=self.cfg['pars']['pop_1']['tau_Ebv']
+            tau_Ebv=self.cfg['pars']['pop_1']['tau_Ebv'],
+            seed=self.cfg['seed']
         )
 
         Ebv_2 = self.sample_reddening(
