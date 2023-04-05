@@ -17,9 +17,10 @@ import src.cosmology_utils as cosmo_utils
 def main(cfg: omegaconf.DictConfig) -> None:
 
     init_seed = cfg['simulation_cfg']['init_seed'] + cfg['simulation_cfg']['run_number']
-    np.random.seed(init_seed)
-    seed = np.random.randint(1, 2**32 - 1, size=1)[0]
-    np.random.seed(seed)
+    rng = np.random.default_rng(init_seed)
+    for i in range(cfg['simulation_cfg']['n_seed_loops']):
+        seed = rng.integers(1, 2**32 - 1, size=1)[0]
+        rng = np.random.default_rng(seed)
     print(f"Seed: {seed}")
     base_data = pd.read_csv(
         cfg['data_cfg']['path'], sep=" "
@@ -58,7 +59,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
     model_cfg = omegaconf.OmegaConf.to_container(cfg['model_cfg'], resolve=True)
     model_cfg['seed'] = seed
     sn_observables_generator = gen.SNGenerator(model_cfg)
-    t_max = sn_observables_generator.cosmo.age(0).value
 
     for prompt_fraction in tqdm.tqdm(prompt_fractions):
 
@@ -74,9 +74,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         )
         os.makedirs(path, exist_ok=True)
 
-        sn_observables_generator.cfg['pars']['cosmology']['eta_prompt'] = cosmo_utils.prompt_frac_to_prompt_rate(
-            prompt_fraction, cfg['model_cfg']['pars']['cosmology']['eta_delayed'], t_max
-        )
+        sn_observables_generator.cfg['pars']['cosmology']['prompt_fraction'] = prompt_fraction
 
         observables, true_classes, sn_rates = sn_observables_generator(z, mean_observable_covariance)
         if cfg['simulation_cfg']['use_physical_ratio']:
