@@ -28,6 +28,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
         tags = ["-".join(cfg['model_cfg']['independent_par_names'])]
     else:
         tags = ["all_shared"]
+    if len(cfg['model_cfg']['cosmology_par_names']) > 0:
+        tags += ["-".join(cfg['model_cfg']['cosmology_par_names'])]
     tags += [
         os.path.split(cfg['data_cfg']['train_path'])[1].split(".")[0]
     ]
@@ -64,8 +66,15 @@ def main(cfg: omegaconf.DictConfig) -> None:
         data = pd.concat([data, eval_data], ignore_index=True)
     else:
         n_eval = 0
+    
+    if cfg['data_cfg']['volumetric_rates_path'] and cfg['model_cfg']['use_volumetric_rates']:
+        volumetric_rates = pd.read_csv(
+            filepath_or_buffer=cfg['data_cfg']['volumetric_rates_path'], sep=cfg['data_cfg']['sep']
+        )
+    else:
+        volumetric_rates = None
 
-    prep.init_global_data(data, cfg['model_cfg'], n_eval)
+    prep.init_global_data(data, volumetric_rates, cfg['model_cfg'], n_eval)
 
     log_prob = model.Model()
 
@@ -82,9 +91,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print("\n----------------- SETUP ---------------------\n")
         init_theta = utils.prior_initialisation(
             cfg['model_cfg']['prior_bounds'], cfg['model_cfg']['init_values'], cfg['model_cfg']['shared_par_names'],
-            cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name'],
-            cfg['model_cfg']['host_galaxy_cfg']['use_properties'], cfg['model_cfg']['host_galaxy_cfg']['property_names'],
-            cfg['model_cfg']['host_galaxy_cfg']['init_values']
+            cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name'], cfg['model_cfg']['cosmology_par_names'],
+            cfg['model_cfg']['use_physical_ratio'], cfg['model_cfg']['host_galaxy_cfg']['use_properties'],
+            cfg['model_cfg']['host_galaxy_cfg']['property_names'], cfg['model_cfg']['host_galaxy_cfg']['init_values'], 
         )
         init_theta = init_theta + 3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'], len(init_theta))
         _ = log_prob(init_theta[0]) # call func once befor loop to jit compile
@@ -96,10 +105,15 @@ def main(cfg: omegaconf.DictConfig) -> None:
         )
         backend = em.backends.HDFBackend(filename, name=cfg['emcee_cfg']['run_name'])
         if not cfg['emcee_cfg']['continue_from_chain']:
-            print("Resetting backend with name", cfg['emcee_cfg']['run_name'])
+            n_steps = cfg['emcee_cfg']['n_steps']
+            print(
+                "Resetting backend with name", cfg['emcee_cfg']['run_name']
+            )
             backend.reset(nwalkers, ndim)
         else:
+            n_steps = cfg['emcee_cfg']['n_steps'] - backend.iteration
             print("Continuing from backend with name", cfg['emcee_cfg']['run_name'])
+            print(f"Running for {n_steps}")
 
         print("\n----------------- SAMPLING ---------------------\n")
         sampler = em.EnsembleSampler(
@@ -108,12 +122,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
         # Set progress bar if pool is None
         use_progress_bar = wrapped_pool.pool == None
         sampler.run_mcmc(
-            init_theta, cfg['emcee_cfg']['n_steps'], progress=use_progress_bar
+            init_theta, n_steps, progress=use_progress_bar
         )
     
     t1 = time()
     total_time = t1-t0
-    avg_eval_time = (total_time) / (cfg['emcee_cfg']['n_walkers'] * cfg['emcee_cfg']['n_steps'])
+    avg_eval_time = (total_time) / (cfg['emcee_cfg']['n_walkers'] * n_steps)
     print(f"\nTotal MCMC time:", total_time)
     print(f"Avg. time pr. step: {avg_eval_time} s\n")
 
@@ -154,13 +168,13 @@ def main(cfg: omegaconf.DictConfig) -> None:
     max_sample_log_prob = sample_log_probs[idx_max]
     max_thetas = sample_thetas[idx_max]
     nlp = lambda *args: -log_prob(*args)[0]
-    sol = sp_opt.minimize(nlp, max_thetas)
+    # sol = sp_opt.minimize(nlp, max_thetas)
     
-    opt_pars = sol.x
-    opt_log_prob = -nlp(opt_pars)
+    #opt_pars = sol.x
+    #opt_log_prob = -nlp(opt_pars)
     
-    if not sol.success:
-        print("Optimization not successful:", sol.message, "\n")
+    if not False:#sol.success:
+        #print("Optimization not successful:", sol.message, "\n")
         print("Using init values corresponding to max sample log(P).")
         opt_log_prob = -nlp(max_thetas)
     
@@ -204,7 +218,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 cfg['model_cfg']['independent_par_names']
             ) +
             utils.gen_pop_par_names(host_galaxy_par_names) +
-            [cfg['model_cfg']['ratio_par_name']]
+            cfg['model_cfg']['cosmology_par_names'] +
+            (not cfg['model_cfg']['use_physical_ratio']) * [cfg['model_cfg']['ratio_par_name']]
         )
 
         quantiles = np.quantile(
@@ -259,15 +274,16 @@ def main(cfg: omegaconf.DictConfig) -> None:
         val_errors, index=['lower', 'median', 'upper', 'sym_sigma'], columns=par_names
     )
 
+    idx_pop_params = quantiles.shape[1] - len(cfg['model_cfg']['cosmology_par_names']) - (not cfg['model_cfg']['use_physical_ratio'])
     max_symmetric_error = np.max(
         symmetrized_stds[
-            len(cfg['model_cfg']['shared_par_names']):-1
+            len(cfg['model_cfg']['shared_par_names']):idx_pop_params
         ].reshape(-1, 2), axis=-1
     )
     param_diff = np.squeeze(
         np.abs(
             np.diff(
-                quantiles[1][len(cfg['model_cfg']['shared_par_names']):-1].reshape(-1, 2),
+                quantiles[1][len(cfg['model_cfg']['shared_par_names']):idx_pop_params].reshape(-1, 2),
                 axis=1
             )
         )
@@ -300,11 +316,14 @@ def main(cfg: omegaconf.DictConfig) -> None:
     print("\n----------------- PLOTS ---------------------\n")
     n_shared = len(cfg['model_cfg']['shared_par_names'])
     n_independent = len(cfg['model_cfg']['independent_par_names'])
+    idx_end_independent = sample_thetas.shape[1] - len(cfg['model_cfg']['cosmology_par_names']) - (not cfg['model_cfg']['use_physical_ratio'])
+    extra_params_present = idx_end_independent != sample_thetas.shape[1]
     labels = (
         cfg['model_cfg']['shared_par_names'] +
         cfg['model_cfg']['independent_par_names'] +
         host_galaxy_par_names +
-        [cfg['model_cfg']['ratio_par_name']]
+        cfg['model_cfg']['cosmology_par_names'] +
+        (not cfg['model_cfg']['use_physical_ratio']) * [cfg['model_cfg']['ratio_par_name']]
     )
 
     fx = sample_thetas[:, :n_shared]
@@ -338,8 +357,14 @@ def main(cfg: omegaconf.DictConfig) -> None:
         np.min(host_membership_quantiles[1,:prep.idx_sn_to_evaluate]),
         np.max(host_membership_quantiles[1,:prep.idx_sn_to_evaluate])
     )
-    cm_min = np.min([cm_full_min, cm_sn_min, cm_host_min])
-    cm_max = np.max([cm_full_max, cm_sn_max, cm_host_max])
+    cm_min = np.min(
+        [cm_full_min, cm_sn_min] +
+        cfg['model_cfg']['host_galaxy_cfg']['use_properties'] * [cm_host_min]
+    )
+    cm_max = np.max(
+        [cm_full_max, cm_sn_max] +
+        cfg['model_cfg']['host_galaxy_cfg']['use_properties'] * [cm_host_max]
+    )
 
     cm = plt.cm.get_cmap("coolwarm")
     cm_norm_full = Normalize(vmin=cm_min, vmax=cm_max, clip=True)
@@ -351,25 +376,34 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if n_independent > 0:
         fx = np.concatenate(
             (
-                fx, sample_thetas[:, n_shared:-1:2]
+                fx, sample_thetas[:, n_shared:idx_end_independent:2]
             ), axis=-1
         )
 
         sx_list = [
             sample_thetas[:, :n_shared],
-            sample_thetas[:, n_shared+1:-1:2],
-            sample_thetas[:,-1][:, None]
+            sample_thetas[:, n_shared+1:idx_end_independent:2]
         ]
+        if extra_params_present:
+            extra_params = sample_thetas[:, idx_end_independent:]
+            n_extra_params = extra_params.shape[-1]
+            extra_params = extra_params.reshape(-1, n_extra_params)
+            sx_list += [extra_params]
         sx = np.concatenate(sx_list, axis=-1)
 
         fig_pop_2 = corner.corner(data=sx, color=pop2_color, **cfg['plot_cfg'])
     
-    fx_list = [fx, sample_thetas[:,-1][:, None]]
-    fx = np.concatenate(fx_list, axis=-1)
+    # TODO: FIX SHAPE SHIT HERE
+    if extra_params_present:
+        extra_params = sample_thetas[:, idx_end_independent:]
+        n_extra_params = extra_params.shape[-1]
+        extra_params = extra_params.reshape(-1, n_extra_params)
+        fx_list = [fx, extra_params]
+        fx = np.concatenate(fx_list, axis=-1)
 
     fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, color=pop1_color, labels=labels, **cfg['plot_cfg'])
     fig_pop_1.tight_layout()
-    fig_pop_1.suptitle('Corner plot', fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
+    #fig_pop_1.suptitle('Corner plot', fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
     fig_pop_1.savefig(
         os.path.join(path, cfg['emcee_cfg']['run_name']+"_corner.png")
     )
@@ -378,6 +412,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
     fig, axes = plt.subplots(
         ndim, figsize=(10, int(np.ceil(7*ndim/3))), sharex=True
     )
+    if ndim == 1:
+        axes = [axes]
     for i in range(ndim):
         ax = axes[i]
         ax.plot(full_chain[:, :, i], "k", alpha=0.3)
@@ -454,6 +490,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
         )
         idx_hubble_flow_observed = hubble_flow_host != prep.NULL_VALUE
         idx_calibration_observed = calibration_host != prep.NULL_VALUE
+
+        if np.count_nonzero(idx_hubble_flow_observed) + np.count_nonzero(idx_calibration_observed) == 0:
+            continue
+
         hubble_flow_host = hubble_flow_host[idx_hubble_flow_observed]
         calibration_host = calibration_host[idx_calibration_observed]
 
@@ -472,15 +512,19 @@ def main(cfg: omegaconf.DictConfig) -> None:
         calibration_membership_quantiles = full_membership_quantiles[:, prep.idx_sn_to_evaluate:][:, idx_calibration_observed][:, idx_calibration_valid]
         hubble_flow_medians = hubble_flow_membership_quantiles[1, :]
         calibration_medians = calibration_membership_quantiles[1, :]
-        hubble_flow_errors = np.row_stack([
-            hubble_flow_medians - hubble_flow_membership_quantiles[0, :],
-            hubble_flow_membership_quantiles[2, :] - hubble_flow_medians
-        ])
-        calibration_errors = np.row_stack([
-            calibration_medians - calibration_membership_quantiles[0, :],
-            calibration_membership_quantiles[2, :] - calibration_medians
-        ])
-
+        hubble_flow_errors = np.abs(
+            np.row_stack([
+                hubble_flow_membership_quantiles[0, :],
+                hubble_flow_membership_quantiles[2, :]
+            ])
+        )
+        calibration_errors = np.abs(
+            np.row_stack([
+                calibration_membership_quantiles[0, :],
+                calibration_membership_quantiles[2, :]
+            ])
+        )
+        
         hubble_flow_errorbar_colors = np.array([(mapper_full.to_rgba(p)) for p in hubble_flow_medians])
         calibration_errorbar_colors = np.array([(mapper_full.to_rgba(p)) for p in calibration_medians])
 

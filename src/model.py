@@ -1,15 +1,19 @@
+import warnings
 import numpy as np
 import numba as nb
 import src.utils as utils
-import scipy.stats as stats
 import scipy.special as sp_special
+import astropy.cosmology as apy_cosmo
 
+from astropy.units import Gyr
 from NumbaQuadpack import quadpack_sig, dqags
-from astropy.cosmology import Planck18 as cosmo
 
 import src.preprocessing as prep
+import src.cosmology_utils as cosmo_utils
 
 NULL_VALUE = -9999.0
+H0_CONVERSION_FACTOR = 0.001022
+DH_70 = 4282.7494
 
 # ---------- E(B-V) PRIOR INTEGRAL ------------
 
@@ -17,6 +21,7 @@ NULL_VALUE = -9999.0
 def Ebv_integral_body(
     x, i1, i2, i3, i4, i5,
     i6, i7, i8, i9, r1, r2, r3,
+    selection_bias_correction,
     rb, sig_rb, Ebv, tau_Ebv, gamma_Ebv
 ):  
 
@@ -27,6 +32,7 @@ def Ebv_integral_body(
     r1 -= rb * tau_Ebv * x
     r3 -= tau_Ebv * x
     i1 += sig_rb * sig_rb * tau_Ebv * tau_Ebv * x * x
+    i1 *= selection_bias_correction
 
     # precalcs
     exponent = gamma_Ebv - 1
@@ -63,7 +69,7 @@ def Ebv_integral_body(
 
 @nb.cfunc(quadpack_sig)
 def Ebv_integral(x, data):
-    _data = nb.carray(data, (17,))
+    _data = nb.carray(data, (18,))
     i1 = _data[0]
     i2 = _data[1]
     i3 = _data[2]
@@ -76,13 +82,15 @@ def Ebv_integral(x, data):
     r1 = _data[9]
     r2 = _data[10]
     r3 = _data[11]
-    rb = _data[12]
-    sig_rb = _data[13]
-    Ebv = _data[14]
-    tau_Ebv = _data[15]
-    gamma_Ebv = _data[16]
+    selection_bias_correction = _data[12]
+    rb = _data[13]
+    sig_rb = _data[14]
+    Ebv = _data[15]
+    tau_Ebv = _data[16]
+    gamma_Ebv = _data[17]
     return Ebv_integral_body(
-        x, i1, i2, i3, i4, i5, i6, i7, i8, i9, r1, r2, r3, 
+        x, i1, i2, i3, i4, i5, i6, i7, i8, i9, r1, r2, r3,
+        selection_bias_correction,
         rb, sig_rb, Ebv, tau_Ebv, gamma_Ebv
     )
 Ebv_integral_ptr = Ebv_integral.address
@@ -102,7 +110,7 @@ def _Ebv_prior_convolution(
     upper_bound_Rb_1: float, upper_bound_Rb_2: float,
     lower_bound_Ebv_1: float, lower_bound_Ebv_2: float,
     upper_bound_Ebv_1: float, upper_bound_Ebv_2: float,
-    shift_Rb: float
+    shift_Rb: float, selection_bias_correction: np.ndarray,
 ):
 
     n_sn = len(cov_1)
@@ -112,12 +120,15 @@ def _Ebv_prior_convolution(
     params_2 = np.array([Rb_2, sig_Rb_2, Ebv_2, tau_Ebv_2, gamma_Ebv_2])
 
     for i in range(n_sn):
+        bias_corr = np.array([selection_bias_correction[i]])
         tmp_params_1 = np.concatenate((
-            cov_1[i].ravel(), res_1[i].ravel(), params_1
+            cov_1[i].ravel(), res_1[i].ravel(),
+            bias_corr, params_1
         )).copy()
         tmp_params_1.astype(np.float64)
         tmp_params_2 = np.concatenate((
-            cov_2[i].ravel(), res_2[i].ravel(), params_2
+            cov_2[i].ravel(), res_2[i].ravel(),
+            bias_corr, params_2
         )).copy()
         tmp_params_2.astype(np.float64)
         
@@ -322,22 +333,29 @@ class Model():
                     value_key == stretch_1_par or value_key == stretch_2_par
                 ) and stretch_independent
             )
+
             is_not_ratio_par_name = value_key != prep.global_model_cfg.ratio_par_name
+            is_not_cosmology_par_name = not value_key in prep.global_model_cfg.cosmology_par_names
+            split_value_key = is_not_ratio_par_name and is_not_cosmology_par_name
 
             if is_independent_stretch:
                 if not par_dict[stretch_1_par] < par_dict[stretch_2_par]:
                     value += -np.inf
                     break
             
-            if is_not_ratio_par_name:
+            if split_value_key:
                 bounds_key = "_".join(value_key.split("_")[:-1])
             else:
                 bounds_key = value_key
             
             is_in_priors = bounds_key in prep.global_model_cfg.prior_bounds.keys()
             if is_in_priors:
+                par_value = par_dict[value_key]
+                is_dtd_rate = bounds_key == 'eta'
+                if is_dtd_rate:
+                    par_value = np.log10(par_value)
                 value += utils.uniform(
-                    par_dict[value_key], **prep.global_model_cfg.prior_bounds[bounds_key]
+                    par_value, **prep.global_model_cfg.prior_bounds[bounds_key]
                 )
 
             if np.isinf(value):
@@ -395,7 +413,8 @@ class Model():
         c_1: float, c_2: float,
         alpha_1: float, alpha_2: float,
         beta_1: float, beta_2: float,
-        H0: float
+        cosmo: apy_cosmo.Cosmology
+        #H0: float, Om0: float, w0: float, wa: float
     ) -> np.ndarray:
         
         #global sn_observables
@@ -403,11 +422,17 @@ class Model():
         s = prep.sn_observables[:, 1]
         c = prep.sn_observables[:, 2]
         z = prep.sn_observables[:, 3]
+        #cosmo_params = (H0, Om0, 1.-Om0, w0, wa)
 
         residuals = np.zeros((2, len(mb), 3))
+
+        # distmod_values = np.array(
+        #     distance_modulus_at_redshift(z, cosmo_params).tolist()
+        # )
         distance_moduli = np.tile(
             cosmo.distmod(z).value, (2, 1)
-        ) + np.log10(cosmo.H0.value / H0)
+        )
+        # ) #+ np.log10(cosmo.H0.value / H0)
 
         residuals[:, :, 0] = np.tile(mb, (2, 1)) - np.array([
             [Mb_1 + alpha_1 * s_1 + beta_1 * c_1],
@@ -483,7 +508,7 @@ class Model():
             lower_bound_Ebv_1=prep.global_model_cfg.Ebv_integral_lower_bound,
             lower_bound_Ebv_2=prep.global_model_cfg.Ebv_integral_lower_bound,
             upper_bound_Ebv_1=upper_bound_Ebv_1, upper_bound_Ebv_2=upper_bound_Ebv_2,
-            shift_Rb=shift_Rb
+            shift_Rb=shift_Rb, selection_bias_correction=prep.selection_bias_correction,
         )
 
         p_1 = probs[:, 0] / norm_1
@@ -553,6 +578,74 @@ class Model():
 
         return prob_1, prob_2
 
+    def volumetric_sn_rates(
+        self, observed_redshifts: np.ndarray,
+        cosmo: apy_cosmo.Cosmology,
+        eta: float, prompt_fraction: float,
+    ):
+
+        dtd_t0 = prep.global_model_cfg['dtd_cfg']['t0']
+        dtd_t1 = prep.global_model_cfg['dtd_cfg']['t1']
+
+        H0 = cosmo.H0.value
+        H0_gyrm1 = cosmo.H0.to(1/Gyr).value
+        Om0 = cosmo.Om0
+        w0 = cosmo.w0
+        wa = cosmo.wa
+        cosmo_args = (H0_gyrm1,Om0,1.-Om0,w0, wa)
+
+        convolution_time_limits = cosmo_utils.convolution_limits(
+            cosmo, observed_redshifts, dtd_t0, dtd_t1
+        )
+        minimum_convolution_time = np.min(convolution_time_limits)
+        
+        warnings.filterwarnings("error")
+        try:
+            z0 = apy_cosmo.z_at_value(
+                cosmo.age, minimum_convolution_time * Gyr,
+                method='Bounded'
+            )
+        except:
+            return np.ones_like(observed_redshifts) * -np.inf
+        warnings.resetwarnings()
+        zinf = 20.
+        age_of_universe = cosmo.age(0).value - cosmo.age(zinf).value
+        _, zs, _ = cosmo_utils.redshift_at_times(
+            convolution_time_limits, minimum_convolution_time, z0, cosmo_args
+        )
+        integral_limits = np.array(zs.tolist(), dtype=np.float64)
+        sn_rates = cosmo_utils.volumetric_rates(
+            observed_redshifts, integral_limits, H0, Om0,
+            w0, wa, eta, prompt_fraction, zinf=zinf,
+            age=age_of_universe
+        )
+
+        return sn_rates
+
+    def volumetric_rate_probs(
+        self, cosmo: apy_cosmo.Cosmology,
+        eta: float, prompt_fraction: float,
+    ):
+        
+        sn_rates = self.volumetric_sn_rates(
+            prep.observed_volumetric_rate_redshifts, cosmo,
+            eta, prompt_fraction
+        )
+
+        is_inf = np.any(np.isinf(sn_rates))
+        if is_inf:
+            return -np.inf
+
+        obs_volumetric_rates = prep.observed_volumetric_rates
+        obs_volumetric_rate_errors = prep.observed_volumetric_rate_errors
+
+        normalization = -0.5 * np.log(2 * np.pi) + np.log(obs_volumetric_rate_errors)
+        exponent = -0.5 * (obs_volumetric_rates - sn_rates[:,0])**2 / obs_volumetric_rate_errors**2
+        log_probs = normalization + exponent
+        log_prob = np.sum(log_probs)
+
+        return log_prob
+
     def log_likelihood(
         self,
         Mb_1: float, Mb_2: float,
@@ -573,9 +666,13 @@ class Model():
         gamma_Ebv_1: float, gamma_Ebv_2: float,
         host_galaxy_means: np.ndarray,
         host_galaxy_sigs: np.ndarray,
-        w: float, H0: float
+        w: float, H0: float, Om0: float,
+        w0: float, wa: float, eta: float,
+        prompt_fraction: float
     ) -> float:
         
+        cosmo = apy_cosmo.Flatw0waCDM(H0=H0, Om0=Om0, w0=w0, wa=wa)
+
         sn_cov_1, sn_cov_2 = self.population_covariances(
             alpha_1=alpha_1, alpha_2=alpha_2,
             beta_1=beta_1, beta_2=beta_2,
@@ -589,7 +686,7 @@ class Model():
             c_1=c_1, c_2=c_2,
             alpha_1=alpha_1, alpha_2=alpha_2,
             beta_1=beta_1, beta_2=beta_2,
-            H0=H0
+            cosmo=cosmo
         )
 
         use_gaussian_Rb = (
@@ -625,34 +722,67 @@ class Model():
                 np.ones(len(prep.sn_observables))*np.nan,
                 np.ones(len(prep.sn_observables))*np.nan,
             )
+        
+        use_physical_population_fraction = prep.global_model_cfg["use_physical_ratio"]
+
+        if use_physical_population_fraction:
+            sn_redshifts = prep.sn_observables[:,-1]
+            sn_rates = self.volumetric_sn_rates(
+                observed_redshifts=sn_redshifts,
+                cosmo=cosmo, eta=eta,
+                prompt_fraction=prompt_fraction
+            )
+
+            is_inf = np.any(np.isinf(sn_rates))
+            if is_inf:
+                return (
+                    -np.inf,
+                    np.ones(len(prep.sn_observables))*np.nan,
+                    np.ones(len(prep.sn_observables))*np.nan,
+                    np.ones(len(prep.sn_observables))*np.nan,
+                )
+
+            w_vector = sn_rates[:, -1] / sn_rates[:, 0]
+        else:
+            w_vector = np.ones_like(sn_probs_1) * w
 
         if host_galaxy_means.shape[0] > 0:
             host_probs_1, host_probs_2 = self.host_galaxy_probs(
                 host_galaxy_means=host_galaxy_means,
                 host_galaxy_sigmas=host_galaxy_sigs,
             )
-            pop_1_probs = w * sn_probs_1 * host_probs_1
-            pop_2_probs = (1-w) * sn_probs_2 * host_probs_2
+            pop_1_probs = w_vector * sn_probs_1 * host_probs_1
+            pop_2_probs = (1-w_vector) * sn_probs_2 * host_probs_2
             combined_probs = pop_1_probs + pop_2_probs
         else:
             host_probs_1 = np.ones(len(prep.sn_observables))*np.nan
             host_probs_2 = np.ones(len(prep.sn_observables))*np.nan
-            pop_1_probs = w * sn_probs_1
-            pop_2_probs = (1-w) * sn_probs_2
+            pop_1_probs = w_vector * sn_probs_1
+            pop_2_probs = (1-w_vector) * sn_probs_2
             combined_probs = pop_1_probs + pop_2_probs
+
         
         log_host_membership_probs = (
             1./np.log(10) * (
-                np.log(w * host_probs_1) - np.log((1-w) * host_probs_2)
+                np.log(w_vector * host_probs_1) - np.log((1-w_vector) * host_probs_2)
             ).flatten()
         )
         log_sn_membership_probs = (
             1./np.log(10) * (
-                np.log(w * sn_probs_1) - np.log((1-w) * sn_probs_2)
+                np.log(w_vector * sn_probs_1) - np.log((1-w_vector) * sn_probs_2)
             ).flatten()
         )
         log_full_membership_probs = 1./np.log(10) * (np.log(pop_1_probs) - np.log(pop_2_probs)).flatten()
-        log_prob = np.sum(np.log(combined_probs[:prep.idx_sn_to_evaluate]))
+
+        use_volumetric_rates = prep.global_model_cfg["use_volumetric_rates"]
+        if use_volumetric_rates and use_physical_population_fraction:
+            log_volumetric_prob = self.volumetric_rate_probs(
+                cosmo, eta=eta, prompt_fraction=prompt_fraction
+            )
+            log_prob = np.sum(np.log(combined_probs[:prep.idx_sn_to_evaluate])) + log_volumetric_prob
+        else:
+            log_prob = np.sum(np.log(combined_probs[:prep.idx_sn_to_evaluate]))
+
         if np.isnan(log_prob):
             log_prob = -np.inf
             log_full_membership_probs = np.ones(len(prep.sn_observables))*np.nan
@@ -683,6 +813,8 @@ class Model():
             n_host_galaxy_observables=n_host_galaxy_observables,
             n_unused_host_properties=prep.n_unused_host_properties,
             ratio_par_name=prep.global_model_cfg.ratio_par_name,
+            cosmology_par_names=prep.global_model_cfg.cosmology_par_names,
+            use_physical_ratio=prep.global_model_cfg.use_physical_ratio,
         )
 
         log_prior = self.log_prior(param_dict)
@@ -694,6 +826,7 @@ class Model():
                 np.ones(len(prep.sn_observables))*np.nan,
             )
         
+        # TODO: Update to handle cosmology
         if prep.global_model_cfg.use_sigmoid:
             param_dict = utils.apply_sigmoid(
                 param_dict, sigmoid_cfg=prep.global_model_cfg.sigmoid_cfg,
@@ -701,9 +834,19 @@ class Model():
                 ratio_par_name=prep.global_model_cfg.ratio_par_name
             )
         
-        param_dict =  {
-            **prep.global_model_cfg.preset_values, **param_dict
-        }
+        # param_dict =  {
+        #     **prep.global_model_cfg.preset_values, **param_dict
+        # }
+
+        preset_values = prep.global_model_cfg.preset_values
+        for par in preset_values.keys():
+            current_value = param_dict.get(par, None)
+            is_null = current_value == NULL_VALUE
+            is_none = current_value is None
+            update_par = is_null or is_none
+            if update_par:
+                param_dict[par] = preset_values[par]
+
         (
             log_likelihood, log_full_membership_probs,
             log_sn_membership_probs, log_host_membership_probs
@@ -713,4 +856,107 @@ class Model():
             log_likelihood, log_full_membership_probs,
             log_sn_membership_probs, log_host_membership_probs
         )
+
+class TrippModel():
+
+    def __init__(
+        self, model_cfg: dict
+    ):
+        self.cfg = model_cfg
+        pass
     
+    def logprior(self, par_dict: dict) -> float:
+            
+        log_prior = 0.0
+        for par in par_dict.keys():
+            par_value = par_dict[par]
+            is_in_priors = par in self.cfg["prior_bounds"].keys()
+            if is_in_priors:
+                log_prior += utils.uniform(
+                    par_value, **self.cfg["prior_bounds"][par]
+                )
+            if np.isinf(log_prior):
+                break
+        
+        return log_prior
+
+    def input_to_dict(self, theta: np.ndarray) -> dict:
+        
+        pars_to_fit = self.cfg["pars"]
+        input_dict = {par: value for par, value in zip(pars_to_fit, theta)}
+        input_dict = {**self.cfg["preset_values"], **input_dict}
+
+        return input_dict
+
+    def residuals(
+        self, observables: np.ndarray,
+        Mb: float, alpha: float, beta: float,
+        cosmo: apy_cosmo.Cosmology
+    ):
+        
+        mb = observables[:, 0]
+        x1 = observables[:, 1]
+        c = observables[:, 2]
+        z = observables[:, 3]
+
+        distance_moduli = cosmo.distmod(z).value
+        residuals = mb - Mb - distance_moduli + alpha * x1 - beta * c
+
+        return residuals
+    
+    def variance(
+        self, observables: np.ndarray,
+        covariances: np.ndarray, 
+        alpha: float, beta: float, sig_int: float
+    ):
+        
+        disp_v_pec = 200. # km / s
+        c = 300000. # km / s
+
+        z = observables[:, 3]
+        covs = covariances
+        if len(covs.shape) == 2:
+            covs = np.tile(covs, [len(z), 1, 1])
+
+        var_tmp = np.diagonal(covs, axis1=1, axis2=2)
+        var = var_tmp.copy()
+        var[:,1] = var_tmp[:,1] * alpha**2
+        var[:,2] = var_tmp[:,2] * beta**2
+        var = np.sum(var, axis=1)
+        var += (5 / np.log(10))**2 * (disp_v_pec / (c * z))**2
+        var -= 2 * beta * covs[:, 0, 2]
+        var += 2 * alpha * covs[:, 0, 1]
+        var -= 2 * alpha * beta * covs[:, 1, 2]
+        var += sig_int**2
+
+        return var
+
+    def log_likelihood(
+        self, observables: np.ndarray,
+        covariances: np.ndarray, 
+        Mb: float, alpha: float, beta: float, sig_int: float,
+        H0: float, Om0: float, w0: float, wa: float
+    ):
+        
+        cosmo = apy_cosmo.Flatw0waCDM(H0=H0, Om0=Om0, w0=w0, wa=wa)
+        residuals = self.residuals(observables, Mb, alpha, beta, cosmo)
+        var = self.variance(observables, covariances, alpha, beta, sig_int)
+
+        if np.any(var <= 0):
+            return -np.inf
+
+        log_likelihood = -0.5 * np.sum(residuals**2 / var + np.log(var))
+
+        return log_likelihood
+
+    def __call__(
+        self, theta: np.ndarray, observables: np.ndarray, covariances: np.ndarray
+    ) -> float:
+
+        par_dict = self.input_to_dict(theta)
+        log_prior = self.logprior(par_dict)
+        if np.isinf(log_prior):
+            return -np.inf
+        log_likelihood = self.log_likelihood(observables, covariances, **par_dict)
+
+        return log_likelihood

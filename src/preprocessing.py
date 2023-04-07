@@ -7,7 +7,8 @@ import src.utils as utils
 NULL_VALUE = -9999.
 
 def init_global_data(
-    data: pd.pandas.DataFrame, cfg: dict, n_evaluate: int = 0
+    data: pd.pandas.DataFrame, volumetric_rates: pd.pandas.DataFrame,
+    cfg: dict, n_evaluate: int = 0
 ) -> tuple:
 
     global sn_covariances
@@ -19,10 +20,15 @@ def init_global_data(
     global host_galaxy_covariances
     global n_unused_host_properties
     global idx_sn_to_evaluate
+    global selection_bias_correction
+    global observed_volumetric_rates
+    global observed_volumetric_rate_errors
+    global observed_volumetric_rate_redshifts
 
     idx_sn_to_evaluate = data.shape[0]-n_evaluate
     global_model_cfg = cfg
 
+    selection_bias_correction_key = 'bias_corr_factor'
     sn_observable_keys = ['mB', 'x1', 'c', 'z']
     sn_covariance_keys = ['x0', 'mBErr', 'x1Err', 'cErr', 'cov_x1_c', 'cov_x1_x0', 'cov_c_x0']
     sn_observables = data[sn_observable_keys].copy().to_numpy()
@@ -31,10 +37,25 @@ def init_global_data(
         sn_observable_keys + sn_covariance_keys + ['CID'], axis=1, inplace=True
     )
 
-    host_property_keys = cfg['host_galaxy_cfg']['property_names']
+    if selection_bias_correction_key in data.columns:
+        selection_bias_correction = data[selection_bias_correction_key].copy().to_numpy()
+        data.drop(selection_bias_correction_key, axis=1, inplace=True)
+    else:
+        selection_bias_correction = np.ones((data.shape[0],))
+
+    if cfg.get('use_volumetric_rates', False):
+        observed_volumetric_rates = volumetric_rates['rate'].to_numpy()
+        observed_volumetric_rate_errors = volumetric_rates['symm'].to_numpy()
+        observed_volumetric_rate_redshifts = volumetric_rates['z'].to_numpy()
+    else:
+        observed_volumetric_rates = np.zeros((0,))
+        observed_volumetric_rate_errors = np.zeros((0,))
+
+    host_galaxy_cfg = cfg.get('host_galaxy_cfg', {})
+    host_property_keys = host_galaxy_cfg.get('property_names', [])
     host_property_err_keys = [key + "_err" for key in host_property_keys]
 
-    use_host_properties = cfg['host_galaxy_cfg']['use_properties']
+    use_host_properties = host_galaxy_cfg.get('use_properties', False)
     can_use_host_properties = (
         set(host_property_keys) <= set(data.columns) and
         set(host_property_err_keys) <= set(data.columns)
@@ -75,8 +96,10 @@ def init_global_data(
     sn_covariances, host_galaxy_covariances = build_covariance_matrix(
         sn_covariance_values, host_galaxy_covariance_values
     )
-    gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
-    gEbv_quantiles = set_gamma_quantiles(cfg, 'Ebv')
+
+    if "prior_bounds" in cfg.keys():
+        gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
+        gEbv_quantiles = set_gamma_quantiles(cfg, 'Ebv')
 
 def set_gamma_quantiles(cfg: dict, par: str) -> np.ndarray:
 

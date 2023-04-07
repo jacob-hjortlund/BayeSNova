@@ -1,10 +1,14 @@
 data_cfg:
   train_path: './data/supercal_w_host_properties'
   eval_path: './data/supercal_cal_sn_w_host_properties'
+  volumetric_rates_path: './data/volumetric_rates'
   sep: ' '
 model_cfg:
   ratio_par_name: w
   stretch_par_name: s
+  use_physical_ratio: False
+  use_volumetric_rates: False
+  cosmology_par_names: []
   shared_par_names: [
     alpha,
     beta,
@@ -52,6 +56,34 @@ model_cfg:
         sigmas: [1., 1.]
   preset_values:
     H0: 73.0
+    Om0: 0.3
+    w0: -1.
+    wa: 0.
+    prompt_fraction: 0.63
+    eta: 0.000102
+    Mb_1: -19.49
+    Mb_2: -19.40
+    s_1: -1.34
+    s_2: 0.39
+    sig_s_1: 0.69
+    sig_s_2: 0.65
+    c_1: -0.037
+    c_2: 0.043
+    sig_c_1: 0.076
+    sig_c_2: 0.043
+    tau_Ebv_1: 0.017
+    tau_Ebv_2: 0.034
+    alpha_1: -0.186
+    alpha_2: -0.186
+    beta_1: 3.1
+    beta_2: 3.1
+    Rb_1: 4.077
+    Rb_2: 4.077
+    sig_Rb_1: 0.970
+    sig_Rb_2: 0.970
+    gamma_Ebv_1: 3.282
+    gamma_Ebv_2: 3.282
+    w: 0.384
     sig_int_1: 0.
     sig_int_2: 0.
     shift_Rb: 0.
@@ -100,6 +132,24 @@ model_cfg:
     w:
       lower: 0.12
       upper: 0.88
+    H0:
+      lower: 50.
+      upper: 90.
+    Om0:
+      lower: 0.01
+      upper: 0.99
+    w0:
+      lower: -5.
+      upper: 5.
+    wa:
+      lower: -5.
+      upper: 5.
+    eta:
+      lower: -6.
+      upper: 2.
+    prompt_fraction:
+      lower: 0.
+      upper: 1.
   init_values:
     Mb: -19.3
     sig_c: 0.05
@@ -111,10 +161,18 @@ model_cfg:
     tau_Rb: 0.3
     gamma_Rb: 5.5
     shift_Rb: 1.5
+    Om0: 0.3
+    w0: -1.
+    wa: 0.
+    prompt_fraction: 0.63
+    eta: -3.99
   use_sigmoid: False
   sigmoid_cfg:
     scale: 750.
     shift: 0.99
+  dtd_cfg:
+    t0: 0.04
+    t1: 0.5
   Ebv_integral_lower_bound: 0.
   Ebv_integral_upper_bound: -9999.
   Rb_integral_lower_bound: 0.
