@@ -8,10 +8,19 @@ prep_cfg:
 
   use_host_morphologies: True
   use_jones_properties: True
+  jones_properties: [
+    'local_u-g',
+    'local_mass',
+    'local_ssfr',
+    'global_u-g',
+    'global_mass',
+    'global_ssfr',
+  ]
 
   flag_duplicate_sn: True
   max_peak_date_diff: 10.
   max_angular_separation: 1.
+  max_redshift_separation: 0.001
 
   column_names: [
     'CID',

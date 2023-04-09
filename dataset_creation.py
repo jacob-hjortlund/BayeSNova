@@ -3,10 +3,12 @@ import omegaconf
 import os
 import numpy as np
 import pandas as pd
+import astropy.units as u
+from astropy.coordinates import SkyCoord
 
 import src.preprocessing as prep
 
-NULLL_VALUE = -9999.
+NULL_VALUE = -9999.
 
 @hydra.main(
     version_base=None, config_path="configs", config_name="datagen_config"
@@ -20,7 +22,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         ),
         sep=cfg['data_cfg']['sep']
     )
-    catalog['duplicate_uid'] = NULLL_VALUE
+    catalog['duplicate_uid'] = NULL_VALUE
 
     if cfg['prep_cfg']['flag_duplicate_sn']:
 
@@ -87,7 +89,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         catalog = catalog[idx_to_keep]
         print(f"Number of SNe filtered: {n_sn_filtered}")
         print(f"Number of SNe remaining: {len(catalog)}")
-        print(f"Fraction of SNe remaining: {len(catalog) / len(idx_to_keep):.3f}\n")
+        print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
     
     if cfg['prep_cfg']['use_x1_cutoff']:
         print("\nApplying x1 cutoff...\n")
@@ -97,7 +99,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         catalog = catalog[idx_to_keep]
         print(f"Number of SNe filtered: {n_sn_filtered}")
         print(f"Number of SNe remaining: {len(catalog)}")
-        print(f"Fraction of SNe remaining: {len(catalog) / len(idx_to_keep):.3f}\n")
+        print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
     
     if cfg['prep_cfg']['use_color_cutoff']:
         print("\nApplying color cutoff...\n")
@@ -107,7 +109,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         catalog = catalog[idx_to_keep]
         print(f"Number of SNe filtered: {n_sn_filtered}")
         print(f"Number of SNe remaining: {len(catalog)}")
-        print(f"Fraction of SNe remaining: {len(catalog) / len(idx_to_keep):.3f}\n")
+        print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
 
     # TODO: ADD REMAINING CUTOFFS
 
@@ -118,8 +120,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print("\nAdding host morphologies...\n")
 
         catalog['CID'] = catalog['CID'].str.lower().str.strip()
-        catalog['t'] = NULLL_VALUE
-        catalog['t_err'] = NULLL_VALUE
+        catalog['t'] = NULL_VALUE
+        catalog['t_err'] = NULL_VALUE
         new_column_names += ['t', 't_err']
         
         morphologies = pd.read_csv(
@@ -135,7 +137,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 catalog.loc[catalog['CID'] == row['CID'], 't'] = row['t']
                 catalog.loc[catalog['CID'] == row['CID'], 't_err'] = row['t_err']
         
-        number_of_sn_with_host_morphologies = np.sum(catalog['t'] != NULLL_VALUE)
+        number_of_sn_with_host_morphologies = np.sum(catalog['t'] != NULL_VALUE)
 
         if cfg['prep_cfg']['flag_duplicate_sn']:
             for _, value in duplicate_details.items():
@@ -148,10 +150,64 @@ def main(cfg: omegaconf.DictConfig) -> None:
                     catalog.loc[idx, 't'] = morphologies.loc[morphologies['CID'] == name, 't'].values[0]
                     catalog.loc[idx, 't_err'] = morphologies.loc[morphologies['CID'] == name, 't_err'].values[0]
 
-        number_of_sn_with_host_morphologies = np.sum(catalog['t'] != NULLL_VALUE)
-        print(f"Number of SNe with host morphologies: {number_of_sn_with_host_morphologies}\n")
-        print(1)
+        number_of_sn_with_host_morphologies = np.sum(catalog['t'] != NULL_VALUE)
+        print(f"Number of SNe with host morphologies: {number_of_sn_with_host_morphologies}")
+        print(f"Percentage of SNe with host morphologies: {number_of_sn_with_host_morphologies / len(catalog) * 100:.3f} %\n")
 
+    if cfg['prep_cfg']['use_jones_properties']:
+        print("\nAdding remaining host properties...\n")
+
+        jones_catalog = pd.read_csv(
+            os.path.join(
+                data_path, cfg['data_cfg']['local_properties']
+            ),
+            sep=' '
+        )
+
+        catalog_coords = SkyCoord(
+            ra=catalog['RA'].values * u.degree,
+            dec=catalog['DEC'].values * u.degree
+        )
+
+        jones_coords = SkyCoord(
+            ra=jones_catalog['RA'].values * u.degree,
+            dec=jones_catalog['DEC'].values * u.degree
+        )
+
+        for host_property in cfg['prep_cfg']['jones_properties']:
+            print(f"Adding {host_property}...\n")
+            
+            host_property_err = host_property + '_err'
+            new_column_names += [host_property, host_property_err]
+
+            if not host_property in catalog.columns:
+                catalog[host_property] = NULL_VALUE
+                catalog[host_property_err] = NULL_VALUE
+                new_column_names += [host_property]
+            
+            idx_already_set = catalog[host_property] != NULL_VALUE
+            for i, jones_coord in enumerate(jones_coords):
+                jones_redshift = jones_catalog.loc[i, 'z']
+                idx_below_max_angular_separation = (
+                    jones_coord.separation(catalog_coords) < cfg['prep_cfg']['max_angular_separation'] * u.arcsec
+                )
+                idx_below_angular_sep_and_not_set = (
+                    idx_below_max_angular_separation & ~idx_already_set
+                )
+                idx_below_max_redshift_sep = (
+                    np.abs(catalog['z'] - jones_redshift) < cfg['prep_cfg']['max_redshift_separation']
+                )
+                idx_match = (
+                    idx_below_angular_sep_and_not_set & idx_below_max_redshift_sep
+                )
+                if np.sum(idx_match) > 0:
+                    catalog.loc[idx_match, host_property] = jones_catalog.loc[i, host_property]
+                    catalog.loc[idx_match, host_property_err] = jones_catalog.loc[i, host_property_err]
+
+            number_of_sn_with_property = np.sum(catalog[host_property] != NULL_VALUE)
+            print(f"Number of SNe with {host_property}: {number_of_sn_with_property}")
+            print(f"Percentage of SNe with {host_property}: {number_of_sn_with_property / len(catalog) * 100:.3f} %\n")   
+        
     # TODO: SYMMETRIZE ERRORS
 
 if __name__ == "__main__":
