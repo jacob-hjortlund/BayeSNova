@@ -51,7 +51,62 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print(f"Median dz: {np.median(dz)}\n")
 
     # TODO: FILTER AND RENAME COLUMNS
+    print("\nFiltering and renaming columns...\n")
+    columns_to_rename = cfg['prep_cfg']['column_names']
+    new_column_names = cfg['prep_cfg']['new_column_names']
+    mapping = dict(zip(columns_to_rename, new_column_names))
+    catalog = catalog.rename(columns=mapping)
 
+    new_column_names += ['duplicate_uid']
+
+    if cfg['prep_cfg']['use_bias_corrections']:
+        print("Applying bias corrections...\n")
+
+        apparent_mag_name = cfg['prep_cfg']['apparent_mag_column_name']
+        apparent_mag_err_name = cfg['prep_cfg']['apparent_mag_err_column_name']
+        apparent_mag_bias_correction_name = cfg['prep_cfg']['apparent_mag_bias_correction_column_name']
+        apparent_mag_bias_correction_err_name = cfg['prep_cfg']['apparent_mag_bias_correction_err_column_name']
+        
+        catalog[apparent_mag_name] = catalog['mB'] - catalog[
+            apparent_mag_bias_correction_name
+        ]
+        catalog[apparent_mag_err_name] = np.sqrt(
+            catalog[apparent_mag_err_name] ** 2 +
+            catalog[apparent_mag_bias_correction_err_name] ** 2
+        )
+
+    if cfg['prep_cfg']['use_redshift_cutoff']:
+        print("Applying redshift cutoff...")
+        redshift_column_name = 'z'
+        idx_to_keep = cfg['prep_cfg']['redshift_cutoff'] <= catalog[redshift_column_name]
+        n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
+        catalog = catalog[idx_to_keep]
+        print(f"Number of SNe filtered: {n_sn_filtered}")
+        print(f"Number of SNe remaining: {len(catalog)}")
+        print(f"Fraction of SNe remaining: {len(catalog) / len(idx_to_keep):.3f}\n")
+    
+    if cfg['prep_cfg']['use_x1_cutoff']:
+        print("\nApplying x1 cutoff...\n")
+        x1_column_name = 'x1'
+        idx_to_keep = np.abs(catalog[x1_column_name]) < cfg['prep_cfg']['x1_cutoff']
+        n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
+        catalog = catalog[idx_to_keep]
+        print(f"Number of SNe filtered: {n_sn_filtered}")
+        print(f"Number of SNe remaining: {len(catalog)}")
+        print(f"Fraction of SNe remaining: {len(catalog) / len(idx_to_keep):.3f}\n")
+    
+    if cfg['prep_cfg']['use_color_cutoff']:
+        print("\nApplying color cutoff...\n")
+        color_column_name = 'c'
+        idx_to_keep = np.abs(catalog[color_column_name]) < cfg['prep_cfg']['color_cutoff']
+        n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
+        catalog = catalog[idx_to_keep]
+        print(f"Number of SNe filtered: {n_sn_filtered}")
+        print(f"Number of SNe remaining: {len(catalog)}")
+        print(f"Fraction of SNe remaining: {len(catalog) / len(idx_to_keep):.3f}\n")
+
+
+    print(1)
     # TODO: ADD ADDITIONAL HOST PROPERTY COLUMNS
 
     # TODO: SYMMETRIZE ERRORS
