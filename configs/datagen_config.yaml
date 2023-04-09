@@ -1,0 +1,8 @@
+data_cfg:
+  path: './data/Pantheon+SH0ES.dat'
+  sep: ' '
+prep_cfg:
+  flag_duplicate_sn: True
+  max_peak_date_diff: 10.
+  max_angular_separation: 1.
+
