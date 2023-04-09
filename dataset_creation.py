@@ -178,7 +178,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
             print(f"Adding {host_property}...\n")
             
             host_property_err = host_property + '_err'
-            new_column_names += [host_property, host_property_err]
 
             if not host_property in catalog.columns:
                 catalog[host_property] = NULL_VALUE
@@ -207,8 +206,16 @@ def main(cfg: omegaconf.DictConfig) -> None:
             number_of_sn_with_property = np.sum(catalog[host_property] != NULL_VALUE)
             print(f"Number of SNe with {host_property}: {number_of_sn_with_property}")
             print(f"Percentage of SNe with {host_property}: {number_of_sn_with_property / len(catalog) * 100:.3f} %\n")   
-        
-    # TODO: SYMMETRIZE ERRORS
+
+    catalog = catalog[new_column_names].copy()
+    save_path = os.path.join(
+        data_path, cfg['prep_cfg']['output_name']
+    )
+    catalog.to_csv(
+        save_path,
+        sep=cfg['prep_cfg']['output_sep'],
+        index=False
+    )
 
 if __name__ == "__main__":
     main()

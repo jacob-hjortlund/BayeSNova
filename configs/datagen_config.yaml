@@ -71,3 +71,6 @@ prep_cfg:
 
   use_color_cutoff: True
   color_cutoff: 0.3
+
+  output_name: "Pantheon+SH0ES"
+  output_sep: ' '
