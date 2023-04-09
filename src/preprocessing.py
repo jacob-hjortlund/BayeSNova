@@ -1,6 +1,99 @@
 import numpy as np
 import pandas as pd
+import astropy.units as u
 import src.utils as utils
+
+from astropy.coordinates import SkyCoord
+
+# --------------- PANTHEON/SUPERCAL DATA PREPROCESSING --------------- #
+
+def identify_duplicate_sn(
+        catalog: pd.pandas.DataFrame, max_peak_date_diff: float = 10,
+        max_angular_separation: float = 1, sn_id_key: str = 'CID',
+        sn_redshift_key: str = 'zHD', sn_peak_date_key: str = 'PKMJD',
+        sn_ra_key: str = 'RA', sn_dec_key: str = 'DEC'
+) -> tuple:
+
+        catalog = catalog.copy()
+        sn_coordinates = SkyCoord(
+            ra=catalog[sn_ra_key].to_numpy() * u.degree,
+            dec=catalog[sn_dec_key].to_numpy() * u.degree,
+            frame='icrs'
+        )
+    
+        i = 0
+        total_number_of_duplicate_sn = 0
+        idx_of_duplicate_sn = []
+        duplicate_sn_details = {}
+    
+        duplicate_subtracted_sn_coordinates = sn_coordinates.copy()
+        duplicate_subtracted_catalog = catalog.copy()
+    
+        looping_condition = True
+        while looping_condition:
+    
+            name_of_current_sn = duplicate_subtracted_catalog.iloc[i][sn_id_key]
+            redshift_of_current_sn = duplicate_subtracted_catalog.iloc[i][sn_redshift_key]
+            peak_date_of_current_sn = duplicate_subtracted_catalog.iloc[i][sn_peak_date_key]
+    
+            peak_date_diff = np.abs(
+                catalog[sn_peak_date_key].to_numpy() - peak_date_of_current_sn
+            )
+            idx_below_max_peak_date_diff = peak_date_diff < max_peak_date_diff
+    
+            idx_below_max_angular_separation = duplicate_subtracted_sn_coordinates[i].separation(
+                sn_coordinates
+            ) < max_angular_separation * u.arcsec
+    
+            idx_duplicates_of_current_sn = (
+                    idx_below_max_peak_date_diff & idx_below_max_angular_separation
+            )
+            number_of_duplicates_for_current_sn = np.count_nonzero(
+                idx_duplicates_of_current_sn
+            )
+    
+            no_duplicates_present = number_of_duplicates_for_current_sn == 1
+    
+            if no_duplicates_present:
+                i += 1
+                reached_end_of_duplicate_subtracted_catalog = (
+                        i == len(duplicate_subtracted_catalog)
+                )
+                if reached_end_of_duplicate_subtracted_catalog:
+                    looping_condition = False
+                continue
+    
+            total_number_of_duplicate_sn += number_of_duplicates_for_current_sn
+
+            max_abs_peak_date_diff = np.max(
+                np.abs(
+                    catalog[sn_peak_date_key].to_numpy()[idx_duplicates_of_current_sn] - peak_date_of_current_sn
+                )
+            )
+            max_abs_redshift_diff = np.max(
+                np.abs(
+                    catalog[sn_redshift_key].to_numpy()[idx_duplicates_of_current_sn] - redshift_of_current_sn
+                )
+            )
+            names_for_duplicates = catalog[sn_id_key].to_numpy()[idx_duplicates_of_current_sn]
+    
+            duplicate_sn_details[name_of_current_sn] = {
+                'dz': max_abs_redshift_diff,
+                'dt': max_abs_peak_date_diff,
+                'number_of_duplicates': number_of_duplicates_for_current_sn,
+                'duplicate_names': names_for_duplicates,
+                'idx_duplicate': idx_duplicates_of_current_sn
+            }
+    
+            idx_of_duplicate_sn.append(idx_duplicates_of_current_sn)
+
+            idx_of_non_duplicates = ~np.any(idx_of_duplicate_sn, axis=0)
+            duplicate_subtracted_catalog = catalog[idx_of_non_duplicates].copy()
+            duplicate_subtracted_sn_coordinates = sn_coordinates[idx_of_non_duplicates].copy()
+    
+        return duplicate_sn_details
+
+# ------------------ SN DATA PREPROCESSING ------------------ #
 
 # TODO: Vectorized cut functions
 
