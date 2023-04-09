@@ -13,8 +13,12 @@ NULLL_VALUE = -9999.
 )
 def main(cfg: omegaconf.DictConfig) -> None:
 
+    data_path = cfg['data_cfg']['path']
     catalog = pd.read_csv(
-        cfg['data_cfg']['path'], sep=cfg['data_cfg']['sep']
+        os.path.join(
+            data_path, cfg['data_cfg']['dataset']
+        ),
+        sep=cfg['data_cfg']['sep']
     )
     catalog['duplicate_uid'] = NULLL_VALUE
 
@@ -105,9 +109,48 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print(f"Number of SNe remaining: {len(catalog)}")
         print(f"Fraction of SNe remaining: {len(catalog) / len(idx_to_keep):.3f}\n")
 
+    # TODO: ADD REMAINING CUTOFFS
 
-    print(1)
     # TODO: ADD ADDITIONAL HOST PROPERTY COLUMNS
+
+    # Morphologies
+    if cfg['prep_cfg']['use_host_morphologies']:
+        print("\nAdding host morphologies...\n")
+
+        catalog['CID'] = catalog['CID'].str.lower().str.strip()
+        catalog['t'] = NULLL_VALUE
+        catalog['t_err'] = NULLL_VALUE
+        new_column_names += ['t', 't_err']
+        
+        morphologies = pd.read_csv(
+            os.path.join(
+                data_path, cfg['data_cfg']['morphologies']
+            ),
+            sep=' ', header=0, names=['CID', 't', 't_err']
+        )
+
+
+        for i, row in morphologies.iterrows():
+            if row['CID'] in catalog['CID'].values:
+                catalog.loc[catalog['CID'] == row['CID'], 't'] = row['t']
+                catalog.loc[catalog['CID'] == row['CID'], 't_err'] = row['t_err']
+        
+        number_of_sn_with_host_morphologies = np.sum(catalog['t'] != NULLL_VALUE)
+
+        if cfg['prep_cfg']['flag_duplicate_sn']:
+            for _, value in duplicate_details.items():
+                duplicate_sn_names = value['duplicate_names']
+                overlap = np.isin(duplicate_sn_names, morphologies['CID'].values)
+                overlap_exists = np.sum(overlap) > 0
+                if overlap_exists:
+                    name = duplicate_sn_names[overlap][0]
+                    idx = np.isin(catalog['CID'].values, duplicate_sn_names)
+                    catalog.loc[idx, 't'] = morphologies.loc[morphologies['CID'] == name, 't'].values[0]
+                    catalog.loc[idx, 't_err'] = morphologies.loc[morphologies['CID'] == name, 't_err'].values[0]
+
+        number_of_sn_with_host_morphologies = np.sum(catalog['t'] != NULLL_VALUE)
+        print(f"Number of SNe with host morphologies: {number_of_sn_with_host_morphologies}\n")
+        print(1)
 
     # TODO: SYMMETRIZE ERRORS
 

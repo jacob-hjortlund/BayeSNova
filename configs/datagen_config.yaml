@@ -1,10 +1,18 @@
 data_cfg:
-  path: './data/Pantheon+SH0ES.dat'
+  path: './data/'
+  dataset: 'Pantheon+SH0ES.dat'
+  morphologies: 'SN-morph-type-t'
+  local_properties: 'jones_2018'
   sep: ' '
 prep_cfg:
+
+  use_host_morphologies: True
+  use_jones_properties: True
+
   flag_duplicate_sn: True
   max_peak_date_diff: 10.
   max_angular_separation: 1.
+
   column_names: [
     'CID',
     'zHD',
