@@ -20,7 +20,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
         os.path.join(
             data_path, cfg['data_cfg']['dataset']
         ),
-        sep=cfg['data_cfg']['sep']
+        sep=cfg['data_cfg']['sep'],
+        header=cfg['data_cfg']['header'],
     )
     catalog['duplicate_uid'] = NULL_VALUE
 
@@ -63,7 +64,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
     mapping = dict(zip(columns_to_rename, new_column_names))
     catalog = catalog.rename(columns=mapping)
 
-    new_column_names += ['duplicate_uid']
+    if cfg['prep_cfg']['flag_duplicate_sn']:
+        new_column_names += ['duplicate_uid']
 
     if cfg['prep_cfg']['use_bias_corrections']:
         print("Applying bias corrections...\n")
@@ -84,7 +86,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if cfg['prep_cfg']['use_redshift_cutoff']:
         print("Applying redshift cutoff...")
         redshift_column_name = 'z'
-        idx_to_keep = cfg['prep_cfg']['redshift_cutoff'] <= catalog[redshift_column_name]
+        idx_above = cfg['prep_cfg']['redshift_lower_cutoff'] <= catalog[redshift_column_name]
+        idx_below = cfg['prep_cfg']['redshift_upper_cutoff'] >= catalog[redshift_column_name]
+        idx_to_keep = idx_above & idx_below
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
         catalog = catalog[idx_to_keep]
         print(f"Number of SNe filtered: {n_sn_filtered}")

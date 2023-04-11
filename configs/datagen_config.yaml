@@ -4,6 +4,7 @@ data_cfg:
   morphologies: 'SN-morph-type-t'
   local_properties: 'jones_2018'
   sep: ' '
+  header: 0
 prep_cfg:
 
   use_host_morphologies: True
@@ -64,7 +65,8 @@ prep_cfg:
   apparent_mag_bias_correction_err_column_name: 'biasCorErr_m_b'
 
   use_redshift_cutoff: True
-  redshift_cutoff: 0.01
+  redshift_lower_cutoff: 0.023
+  redshift_upper_cutoff : 0.15
 
   use_x1_cutoff: True
   x1_cutoff: 3.0
