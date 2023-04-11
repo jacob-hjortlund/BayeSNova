@@ -1,10 +1,10 @@
 data_cfg:
   path: './data/'
-  dataset: 'Pantheon+SH0ES.dat'
+  dataset: 'supercal_vH0.fitres' #'Pantheon+SH0ES.dat'
   morphologies: 'SN-morph-type-t'
   local_properties: 'jones_2018'
   sep: ' '
-  header: 0
+  header: 10 # 0
 prep_cfg:
 
   use_host_morphologies: True
@@ -58,7 +58,7 @@ prep_cfg:
     'bias_corr_factor'
   ]
 
-  use_bias_corrections: True
+  use_bias_corrections: False #True
   apparent_mag_column_name: 'mB'
   apparent_mag_err_column_name: 'mBErr'
   apparent_mag_bias_correction_column_name: 'biasCor_m_b'
@@ -68,11 +68,23 @@ prep_cfg:
   redshift_lower_cutoff: 0.023
   redshift_upper_cutoff : 0.15
 
+  use_mb_err_cutoff: True
+  mb_err_cutoff: 0.2
+
   use_x1_cutoff: True
   x1_cutoff: 3.0
 
+  use_x1_err_cutoff: True
+  x1_err_cutoff: 1.5
+
   use_color_cutoff: True
   color_cutoff: 0.3
+  
+  use_fitprob_cutoff: True
+  fitprob_cutoff: 0.001
 
-  output_name: "Pantheon+SH0ES"
+  use_peak_date_err_cutoff: True
+  peak_date_err_cutoff: 2.
+
+  output_name: "test_supercal" #"Pantheon+SH0ES"
   output_sep: ' '

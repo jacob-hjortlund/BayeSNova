@@ -22,6 +22,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         ),
         sep=cfg['data_cfg']['sep'],
         header=cfg['data_cfg']['header'],
+        skipinitialspace=True
     )
     catalog['duplicate_uid'] = NULL_VALUE
 
@@ -59,13 +60,19 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     # TODO: FILTER AND RENAME COLUMNS
     print("\nFiltering and renaming columns...\n")
+    z_and_zHD_present = 'zHD' in catalog.columns and 'z' in catalog.columns
+    if z_and_zHD_present:
+        print("zHD and z columns present. Using zHD as redshift column.")
+        catalog = catalog.drop(columns=['z'])
     columns_to_rename = cfg['prep_cfg']['column_names']
     new_column_names = cfg['prep_cfg']['new_column_names']
     mapping = dict(zip(columns_to_rename, new_column_names))
     catalog = catalog.rename(columns=mapping)
 
-    if cfg['prep_cfg']['flag_duplicate_sn']:
-        new_column_names += ['duplicate_uid']
+    new_column_names += ['duplicate_uid']
+    for column_name in new_column_names:
+        if column_name not in catalog.columns:
+            catalog[column_name] = NULL_VALUE
 
     if cfg['prep_cfg']['use_bias_corrections']:
         print("Applying bias corrections...\n")
@@ -86,36 +93,81 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if cfg['prep_cfg']['use_redshift_cutoff']:
         print("Applying redshift cutoff...")
         redshift_column_name = 'z'
-        idx_above = cfg['prep_cfg']['redshift_lower_cutoff'] <= catalog[redshift_column_name]
-        idx_below = cfg['prep_cfg']['redshift_upper_cutoff'] >= catalog[redshift_column_name]
+        idx_above = cfg['prep_cfg']['redshift_lower_cutoff'] < catalog[redshift_column_name].to_numpy()
+        idx_below = cfg['prep_cfg']['redshift_upper_cutoff'] > catalog[redshift_column_name].to_numpy()
         idx_to_keep = idx_above & idx_below
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
-        catalog = catalog[idx_to_keep]
+        catalog = catalog.loc[idx_to_keep].copy()
+        catalog = catalog.reset_index(drop=True)
         print(f"Number of SNe filtered: {n_sn_filtered}")
         print(f"Number of SNe remaining: {len(catalog)}")
         print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
     
-    if cfg['prep_cfg']['use_x1_cutoff']:
-        print("\nApplying x1 cutoff...\n")
-        x1_column_name = 'x1'
-        idx_to_keep = np.abs(catalog[x1_column_name]) < cfg['prep_cfg']['x1_cutoff']
+    if cfg['prep_cfg']['use_mb_err_cutoff']:
+        print("\nApplying mB err cutoff...\n")
+        mb_err_column_name = 'mBErr'
+        idx_to_keep = catalog[mb_err_column_name].to_numpy() < cfg['prep_cfg']['mb_err_cutoff']
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
-        catalog = catalog[idx_to_keep]
-        print(f"Number of SNe filtered: {n_sn_filtered}")
-        print(f"Number of SNe remaining: {len(catalog)}")
-        print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
-    
-    if cfg['prep_cfg']['use_color_cutoff']:
-        print("\nApplying color cutoff...\n")
-        color_column_name = 'c'
-        idx_to_keep = np.abs(catalog[color_column_name]) < cfg['prep_cfg']['color_cutoff']
-        n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
-        catalog = catalog[idx_to_keep]
+        catalog = catalog.loc[idx_to_keep]
+        catalog = catalog.reset_index(drop=True)
         print(f"Number of SNe filtered: {n_sn_filtered}")
         print(f"Number of SNe remaining: {len(catalog)}")
         print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
 
-    # TODO: ADD REMAINING CUTOFFS
+    if cfg['prep_cfg']['use_x1_cutoff']:
+        print("\nApplying x1 cutoff...\n")
+        x1_column_name = 'x1'
+        idx_to_keep = np.abs(catalog[x1_column_name]).to_numpy() < cfg['prep_cfg']['x1_cutoff']
+        n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
+        catalog = catalog.loc[idx_to_keep]
+        catalog = catalog.reset_index(drop=True)
+        print(f"Number of SNe filtered: {n_sn_filtered}")
+        print(f"Number of SNe remaining: {len(catalog)}")
+        print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
+    
+    if cfg['prep_cfg']['use_x1_err_cutoff']:
+        print("\nApplying x1 err cutoff...\n")
+        x1_err_column_name = 'x1Err'
+        idx_to_keep = np.abs(catalog[x1_err_column_name]).to_numpy() < cfg['prep_cfg']['x1_err_cutoff']
+        n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
+        catalog = catalog.loc[idx_to_keep]
+        catalog = catalog.reset_index(drop=True)
+        print(f"Number of SNe filtered: {n_sn_filtered}")
+        print(f"Number of SNe remaining: {len(catalog)}")
+        print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
+
+    if cfg['prep_cfg']['use_color_cutoff']:
+        print("\nApplying color cutoff...\n")
+        color_column_name = 'c'
+        idx_to_keep = np.abs(catalog[color_column_name]).to_numpy() < cfg['prep_cfg']['color_cutoff']
+        n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
+        catalog = catalog.loc[idx_to_keep]
+        catalog = catalog.reset_index(drop=True)
+        print(f"Number of SNe filtered: {n_sn_filtered}")
+        print(f"Number of SNe remaining: {len(catalog)}")
+        print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
+
+    if cfg['prep_cfg']['use_fitprob_cutoff']:
+        print("\nApplying fitprob cutoff...\n")
+        fitprob_column_name = 'FITPROB'
+        idx_to_keep = catalog[fitprob_column_name].to_numpy() > cfg['prep_cfg']['fitprob_cutoff']
+        n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
+        catalog = catalog.loc[idx_to_keep]
+        catalog = catalog.reset_index(drop=True)
+        print(f"Number of SNe filtered: {n_sn_filtered}")
+        print(f"Number of SNe remaining: {len(catalog)}")
+        print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
+
+    if cfg['prep_cfg']['use_peak_date_err_cutoff']:
+        print("\nApplying peak date error cutoff...\n")
+        peak_date_err_column_name = 'PKMJDERR'
+        idx_to_keep = catalog[peak_date_err_column_name].to_numpy() < cfg['prep_cfg']['peak_date_err_cutoff']
+        n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
+        catalog = catalog.loc[idx_to_keep]
+        catalog = catalog.reset_index(drop=True)
+        print(f"Number of SNe filtered: {n_sn_filtered}")
+        print(f"Number of SNe remaining: {len(catalog)}")
+        print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
 
     # TODO: ADD ADDITIONAL HOST PROPERTY COLUMNS
 
