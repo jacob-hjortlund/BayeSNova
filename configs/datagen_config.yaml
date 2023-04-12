@@ -1,5 +1,5 @@
 data_cfg:
-  path: './data/'
+  path: './data/raw_data'
   dataset: 'supercal_vH0.fitres' #'Pantheon+SH0ES.dat'
   morphologies: 'SN-morph-type-t'
   local_properties: 'jones_2018'
@@ -86,5 +86,6 @@ prep_cfg:
   use_peak_date_err_cutoff: True
   peak_date_err_cutoff: 2.
 
+  output_path: './data/'
   output_name: "test_supercal" #"Pantheon+SH0ES"
   output_sep: ' '

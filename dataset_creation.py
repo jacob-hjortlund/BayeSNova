@@ -24,41 +24,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         header=cfg['data_cfg']['header'],
         skipinitialspace=True
     )
-    catalog['duplicate_uid'] = NULL_VALUE
 
-    if cfg['prep_cfg']['flag_duplicate_sn']:
-
-        print("\nIdentifying duplicate SNe...\n")
-
-        duplicate_details = prep.identify_duplicate_sn(
-            catalog,
-            max_peak_date_diff=cfg['prep_cfg']['max_peak_date_diff'],
-            max_angular_separation=cfg['prep_cfg']['max_angular_separation'],
-        )
-
-        number_of_sn_observations = len(catalog)
-        number_of_duplicate_sn = len(duplicate_details)
-        number_of_duplicate_sn_observations = 0
-        dz = []
-        for i, (_, sn_details) in enumerate(duplicate_details.items()):
-            number_of_duplicate_sn_observations += sn_details['number_of_duplicates']
-            catalog.loc[sn_details['idx_duplicate'], 'duplicate_uid'] = i
-            dz.append(sn_details['dz'])
-
-        number_of_unique_sn = number_of_sn_observations - number_of_duplicate_sn_observations + number_of_duplicate_sn
-
-        print(f"\nNumber of SNe observations in catalog: {number_of_sn_observations}")
-        print(f"Number of unique SNe in catalog: {number_of_unique_sn}")
-        print(f"Number of SNe with duplicate obsevations: {number_of_duplicate_sn}")
-        print(f"Total number of duplicate SNe observations: {number_of_duplicate_sn_observations}\n")
-            
-        print(f"\nDuplicate SNe redshift diff statistics:")
-        print(f"Max dz: {np.max(dz)}")
-        print(f"Min dz: {np.min(dz)}")
-        print(f"Mean dz: {np.mean(dz)}")
-        print(f"Median dz: {np.median(dz)}\n")
-
-    # TODO: FILTER AND RENAME COLUMNS
     print("\nFiltering and renaming columns...\n")
     z_and_zHD_present = 'zHD' in catalog.columns and 'z' in catalog.columns
     if z_and_zHD_present:
@@ -169,7 +135,37 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print(f"Number of SNe remaining: {len(catalog)}")
         print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
 
-    # TODO: ADD ADDITIONAL HOST PROPERTY COLUMNS
+    if cfg['prep_cfg']['flag_duplicate_sn']:
+
+        print("\nIdentifying duplicate SNe...\n")
+
+        duplicate_details = prep.identify_duplicate_sn(
+            catalog,
+            max_peak_date_diff=cfg['prep_cfg']['max_peak_date_diff'],
+            max_angular_separation=cfg['prep_cfg']['max_angular_separation'],
+        )
+
+        number_of_sn_observations = len(catalog)
+        number_of_duplicate_sn = len(duplicate_details)
+        number_of_duplicate_sn_observations = 0
+        dz = []
+        for i, (_, sn_details) in enumerate(duplicate_details.items()):
+            number_of_duplicate_sn_observations += sn_details['number_of_duplicates']
+            catalog.loc[sn_details['idx_duplicate'], 'duplicate_uid'] = i
+            dz.append(sn_details['dz'])
+
+        number_of_unique_sn = number_of_sn_observations - number_of_duplicate_sn_observations + number_of_duplicate_sn
+
+        print(f"\nNumber of SNe observations in catalog: {number_of_sn_observations}")
+        print(f"Number of unique SNe in catalog: {number_of_unique_sn}")
+        print(f"Number of SNe with duplicate obsevations: {number_of_duplicate_sn}")
+        print(f"Total number of duplicate SNe observations: {number_of_duplicate_sn_observations}\n")
+            
+        print(f"\nDuplicate SNe redshift diff statistics:")
+        print(f"Max dz: {np.max(dz)}")
+        print(f"Min dz: {np.min(dz)}")
+        print(f"Mean dz: {np.mean(dz)}")
+        print(f"Median dz: {np.median(dz)}\n")
 
     # Morphologies
     if cfg['prep_cfg']['use_host_morphologies']:
@@ -238,7 +234,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
             if not host_property in catalog.columns:
                 catalog[host_property] = NULL_VALUE
                 catalog[host_property_err] = NULL_VALUE
-                new_column_names += [host_property]
+                new_column_names += [host_property, host_property_err]
             
             idx_already_set = catalog[host_property] != NULL_VALUE
             for i, jones_coord in enumerate(jones_coords):
@@ -265,7 +261,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     catalog = catalog[new_column_names].copy()
     save_path = os.path.join(
-        data_path, cfg['prep_cfg']['output_name']
+        cfg['prep_cfg']['output_path'],
+        cfg['prep_cfg']['output_name']
     )
     catalog.to_csv(
         save_path,
