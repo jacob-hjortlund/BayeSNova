@@ -10,7 +10,7 @@ from astropy.coordinates import SkyCoord
 def identify_duplicate_sn(
         catalog: pd.pandas.DataFrame, max_peak_date_diff: float = 10,
         max_angular_separation: float = 1, sn_id_key: str = 'CID',
-        sn_redshift_key: str = 'zHD', sn_peak_date_key: str = 'PKMJD',
+        sn_redshift_key: str = 'z', sn_peak_date_key: str = 'PKMJD',
         sn_ra_key: str = 'RA', sn_dec_key: str = 'DEC'
 ) -> tuple:
 
