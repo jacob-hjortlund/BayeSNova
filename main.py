@@ -335,27 +335,32 @@ def main(cfg: omegaconf.DictConfig) -> None:
     log_full_membership_probs = blobs[:, 0, :]
     log_sn_membership_probs = blobs[:, 1, :]
     log_host_membership_probs = blobs[:, 2, :]
-    full_membership_quantiles = np.quantile(
+    all_full_membership_quantiles = np.quantile(
         log_full_membership_probs, [0.16, 0.50, 0.84], axis=0
     )
-    sn_membership_quantiles = np.quantile(
+    all_sn_membership_quantiles = np.quantile(
         log_sn_membership_probs, [0.16, 0.50, 0.84], axis=0
     )
-    host_membership_quantiles = np.quantile(
+    all_host_membership_quantiles = np.quantile(
         log_host_membership_probs, [0.16, 0.50, 0.84], axis=0
     )
 
+    if cfg['model_cfg']['only_evaluate_calibrator_sn']:
+        full_membership_quantiles = all_full_membership_quantiles[:, ~prep.idx_reordered_calibrator_sn]
+        sn_membership_quantiles = all_sn_membership_quantiles[:, ~prep.idx_reordered_calibrator_sn]
+        host_membership_quantiles = all_host_membership_quantiles[:, ~prep.idx_reordered_calibrator_sn]
+
     cm_full_min, cm_full_max = (
-        np.min(full_membership_quantiles[1,:prep.idx_sn_to_evaluate]),
-        np.max(full_membership_quantiles[1,:prep.idx_sn_to_evaluate])
+        np.min(full_membership_quantiles[1,:]),
+        np.max(full_membership_quantiles[1,:])
     )
     cm_sn_min, cm_sn_max = (
-        np.min(sn_membership_quantiles[1,:prep.idx_sn_to_evaluate]),
-        np.max(sn_membership_quantiles[1,:prep.idx_sn_to_evaluate])
+        np.min(sn_membership_quantiles[1,:]),
+        np.max(sn_membership_quantiles[1,:])
     )
     cm_host_min, cm_host_max = (
-        np.min(host_membership_quantiles[1,:prep.idx_sn_to_evaluate]),
-        np.max(host_membership_quantiles[1,:prep.idx_sn_to_evaluate])
+        np.min(host_membership_quantiles[1,:]),
+        np.max(host_membership_quantiles[1,:])
     )
     cm_min = np.min(
         [cm_full_min, cm_sn_min] +
@@ -433,15 +438,15 @@ def main(cfg: omegaconf.DictConfig) -> None:
     )
 
     quantiles_list = [
-        full_membership_quantiles,
-        sn_membership_quantiles,
+        all_full_membership_quantiles,
+        all_sn_membership_quantiles,
     ]
     titles_list = [
         "Full",
         "SN",
     ]
     if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
-        quantiles_list.append(host_membership_quantiles)
+        quantiles_list.append(all_host_membership_quantiles)
         titles_list.append("Host")
 
     n_hists = len(quantiles_list)
@@ -452,7 +457,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
         zip(quantiles_list, titles_list)
     ):
         _, bins, patches = ax[i].hist(
-            membership_quantiles[1,:prep.idx_sn_to_evaluate],color="r",bins=20, density=True
+            membership_quantiles[1,~prep.idx_reordered_calibrator_sn],
+            color="r",bins=20, density=True
         )
         bin_centers = 0.5*(bins[:-1]+bins[1:])
 
@@ -460,9 +466,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
             plt.setp(p, "facecolor", mapper_full.to_rgba(c))
         
         for j in range(
-            len(data) - prep.idx_sn_to_evaluate
+            np.count_nonzero(prep.idx_calibrator_sn)
         ):
-            value = membership_quantiles[1,prep.idx_sn_to_evaluate+j]
+            value = membership_quantiles[1, prep.idx_reordered_calibrator_sn][j]
             ax[i].axvline(
                 value,
                 color=mapper_full.to_rgba(value),
