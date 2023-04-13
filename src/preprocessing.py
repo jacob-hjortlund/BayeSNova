@@ -5,6 +5,8 @@ import src.utils as utils
 
 from astropy.coordinates import SkyCoord
 
+NULL_VALUE = -9999.
+
 # --------------- PANTHEON/SUPERCAL DATA PREPROCESSING --------------- #
 
 def identify_duplicate_sn(
@@ -95,10 +97,6 @@ def identify_duplicate_sn(
 
 # ------------------ SN DATA PREPROCESSING ------------------ #
 
-# TODO: Vectorized cut functions
-
-NULL_VALUE = -9999.
-
 def init_global_data(
     data: pd.pandas.DataFrame, volumetric_rates: pd.pandas.DataFrame,
     cfg: dict, n_evaluate: int = 0
@@ -113,14 +111,19 @@ def init_global_data(
     global host_galaxy_covariances
     global n_unused_host_properties
     global idx_sn_to_evaluate
+    global idx_duplicate_sn
+    global idx_unique_sn
+    global n_unique_sn
     global selection_bias_correction
     global observed_volumetric_rates
     global observed_volumetric_rate_errors
     global observed_volumetric_rate_redshifts
 
+    # TODO: FIX THIS TO ACCOUNT FOR POTENTIAL DUPLICATES
     idx_sn_to_evaluate = data.shape[0]-n_evaluate
     global_model_cfg = cfg
 
+    duplicate_uid_key = 'duplicate_uid'
     selection_bias_correction_key = 'bias_corr_factor'
     sn_observable_keys = ['mB', 'x1', 'c', 'z']
     sn_covariance_keys = ['x0', 'mBErr', 'x1Err', 'cErr', 'cov_x1_c', 'cov_x1_x0', 'cov_c_x0']
@@ -130,8 +133,32 @@ def init_global_data(
         sn_observable_keys + sn_covariance_keys + ['CID'], axis=1, inplace=True
     )
 
+    if duplicate_uid_key in data.columns:
+
+        duplicate_uids = data[duplicate_uid_key].unique()
+        idx_not_null = duplicate_uids != NULL_VALUE
+        duplicate_uids = duplicate_uids[idx_not_null]
+
+        idx_duplicate_sn = []
+        for uid in duplicate_uids:
+            idx_duplicate_sn.append(
+                data['duplicate_uid'].to_numpy() == uid
+            )
+
+        idx_duplicate_sn = np.array(idx_duplicate_sn)
+        idx_unique_sn = ~np.any(idx_duplicate_sn, axis=0)
+
+        data.drop(duplicate_uid_key, axis=1, inplace=True)
+    else:
+        idx_duplicate_sn = []
+        idx_unique_sn = np.ones((data.shape[0],), dtype=bool)
+
+    n_unique_sn = np.count_nonzero(idx_unique_sn) + len(idx_duplicate_sn)    
+
     if selection_bias_correction_key in data.columns:
         selection_bias_correction = data[selection_bias_correction_key].copy().to_numpy()
+        idx_null = selection_bias_correction == NULL_VALUE
+        selection_bias_correction[idx_null] = 1.0
         data.drop(selection_bias_correction_key, axis=1, inplace=True)
     else:
         selection_bias_correction = np.ones((data.shape[0],))

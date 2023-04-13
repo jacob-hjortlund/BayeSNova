@@ -646,6 +646,21 @@ class Model():
 
         return log_prob
 
+    def reduce_duplicates(
+        self, probs: np.ndarray,
+    ):
+        
+        idx_unique_sn = prep.idx_unique_sn
+        idx_duplicate_sn = prep.idx_duplicate_sn
+        duplicate_probs = []
+        for idx in idx_duplicate_sn:
+            duplicate_probs.append(np.prod(probs[idx]))
+        duplicate_probs = np.array(duplicate_probs)
+        probs = np.delete(probs, ~idx_unique_sn)
+        probs = np.append(probs, duplicate_probs)
+
+        return probs
+
     def log_likelihood(
         self,
         Mb_1: float, Mb_2: float,
@@ -713,19 +728,22 @@ class Model():
             tau_Ebv_1=tau_Ebv_1, tau_Ebv_2=tau_Ebv_2,
             gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2,
         )
+        sn_probs_1 = self.reduce_duplicates(sn_probs_1)
+        sn_probs_2 = self.reduce_duplicates(sn_probs_2)
 
         if np.any(sn_probs_1 < 0.) | np.any(sn_probs_2 < 0.):
             print("\nOh no, someones below 0\n")
             return (
                 -np.inf,
-                np.ones(len(prep.sn_observables))*np.nan,
-                np.ones(len(prep.sn_observables))*np.nan,
-                np.ones(len(prep.sn_observables))*np.nan,
+                np.ones(prep.n_unique_sn)*np.nan,
+                np.ones(prep.n_unique_sn)*np.nan,
+                np.ones(prep.n_unique_sn)*np.nan,
             )
         
         use_physical_population_fraction = prep.global_model_cfg["use_physical_ratio"]
 
         if use_physical_population_fraction:
+            # TODO: FIX FOR DUPLICATE SN
             sn_redshifts = prep.sn_observables[:,-1]
             sn_rates = self.volumetric_sn_rates(
                 observed_redshifts=sn_redshifts,
@@ -737,9 +755,9 @@ class Model():
             if is_inf:
                 return (
                     -np.inf,
-                    np.ones(len(prep.sn_observables))*np.nan,
-                    np.ones(len(prep.sn_observables))*np.nan,
-                    np.ones(len(prep.sn_observables))*np.nan,
+                    np.ones(prep.n_unique_sn)*np.nan,
+                    np.ones(prep.n_unique_sn)*np.nan,
+                    np.ones(prep.n_unique_sn)*np.nan,
                 )
 
             w_vector = sn_rates[:, -1] / sn_rates[:, 0]
@@ -751,12 +769,14 @@ class Model():
                 host_galaxy_means=host_galaxy_means,
                 host_galaxy_sigmas=host_galaxy_sigs,
             )
+            host_probs_1 = self.reduce_duplicates(host_probs_1)
+            host_probs_2 = self.reduce_duplicates(host_probs_2)
             pop_1_probs = w_vector * sn_probs_1 * host_probs_1
             pop_2_probs = (1-w_vector) * sn_probs_2 * host_probs_2
             combined_probs = pop_1_probs + pop_2_probs
         else:
-            host_probs_1 = np.ones(len(prep.sn_observables))*np.nan
-            host_probs_2 = np.ones(len(prep.sn_observables))*np.nan
+            host_probs_1 = np.ones(prep.n_unique_sn)*np.nan
+            host_probs_2 = np.ones(prep.n_unique_sn)*np.nan
             pop_1_probs = w_vector * sn_probs_1
             pop_2_probs = (1-w_vector) * sn_probs_2
             combined_probs = pop_1_probs + pop_2_probs
@@ -785,9 +805,9 @@ class Model():
 
         if np.isnan(log_prob):
             log_prob = -np.inf
-            log_full_membership_probs = np.ones(len(prep.sn_observables))*np.nan
-            log_host_membership_probs = np.ones(len(prep.sn_observables))*np.nan
-            log_sn_membership_probs = np.ones(len(prep.sn_observables))*np.nan
+            log_full_membership_probs = np.ones(prep.n_unique_sn)*np.nan
+            log_host_membership_probs = np.ones(prep.n_unique_sn)*np.nan
+            log_sn_membership_probs = np.ones(prep.n_unique_sn)*np.nan
 
         s1, s2 = np.all(status[:prep.idx_sn_to_evaluate, 0]), np.all(status[:prep.idx_sn_to_evaluate, 1])
         if not s1 or not s2:
@@ -821,9 +841,9 @@ class Model():
         if np.isinf(log_prior):
             return (
                 log_prior,
-                np.ones(len(prep.sn_observables))*np.nan,
-                np.ones(len(prep.sn_observables))*np.nan,
-                np.ones(len(prep.sn_observables))*np.nan,
+                np.ones(prep.n_unique_sn)*np.nan,
+                np.ones(prep.n_unique_sn)*np.nan,
+                np.ones(prep.n_unique_sn)*np.nan,
             )
         
         # TODO: Update to handle cosmology

@@ -483,6 +483,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
     available_properties_names = data.keys()[::2]
     for prop_name in available_properties_names:
 
+        # TODO: FIX TO ACCOUNT FOR DUPLICATES
+
         print("\nPlotting property: ", prop_name)
         host_property = data[prop_name].to_numpy()
         hubble_flow_host, calibration_host = (
