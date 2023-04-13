@@ -110,7 +110,9 @@ def init_global_data(
     global host_galaxy_observables
     global host_galaxy_covariances
     global n_unused_host_properties
-    global idx_sn_to_evaluate
+    global calibrator_distance_moduli
+    global idx_calibrator_sn
+    global idx_reordered_calibrator_sn
     global idx_duplicate_sn
     global idx_unique_sn
     global n_unique_sn
@@ -120,7 +122,9 @@ def init_global_data(
     global observed_volumetric_rate_redshifts
 
     # TODO: FIX THIS TO ACCOUNT FOR POTENTIAL DUPLICATES
-    idx_sn_to_evaluate = data.shape[0]-n_evaluate
+    idx_calibrator_sn = data['is_calibrator'] != NULL_VALUE
+    calibrator_distance_moduli = data['mu_calibrator'].to_numpy()[idx_calibrator_sn]
+    
     global_model_cfg = cfg
 
     duplicate_uid_key = 'duplicate_uid'
@@ -152,6 +156,11 @@ def init_global_data(
     else:
         idx_duplicate_sn = []
         idx_unique_sn = np.ones((data.shape[0],), dtype=bool)
+
+    unique_idx_calibrator_sn, duplicate_calibrator_sn = reorder_duplicates(
+        idx_calibrator_sn, idx_duplicate_sn
+    )
+    idx_reordered_calibrator_sn = np.concatenate((unique_idx_calibrator_sn, duplicate_calibrator_sn))
 
     n_unique_sn = np.count_nonzero(idx_unique_sn) + len(idx_duplicate_sn)    
 
@@ -273,3 +282,18 @@ def build_covariance_matrix(
     posdef_cov_sn = utils.ensure_posdef(cov_sn)
     
     return posdef_cov_sn, posdef_cov_host
+
+def reorder_duplicates(
+    sn_array: np.ndarray, idx_unique_sn: np.ndarray,
+    idx_duplicate_sn: np.ndarray
+):
+        
+    idx_unique_sn = idx_unique_sn
+    idx_duplicate_sn = idx_duplicate_sn
+    duplicate_sn_array = []
+    for idx in idx_duplicate_sn:
+        duplicate_sn_array.append(sn_array[idx])
+    duplicate_sn_array = np.array(duplicate_sn_array)
+    unique_sn_array = np.delete(sn_array, ~idx_unique_sn)
+
+    return unique_sn_array, duplicate_sn_array

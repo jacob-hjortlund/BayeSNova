@@ -414,7 +414,6 @@ class Model():
         alpha_1: float, alpha_2: float,
         beta_1: float, beta_2: float,
         cosmo: apy_cosmo.Cosmology
-        #H0: float, Om0: float, w0: float, wa: float
     ) -> np.ndarray:
         
         #global sn_observables
@@ -422,17 +421,14 @@ class Model():
         s = prep.sn_observables[:, 1]
         c = prep.sn_observables[:, 2]
         z = prep.sn_observables[:, 3]
-        #cosmo_params = (H0, Om0, 1.-Om0, w0, wa)
 
         residuals = np.zeros((2, len(mb), 3))
 
-        # distmod_values = np.array(
-        #     distance_modulus_at_redshift(z, cosmo_params).tolist()
-        # )
+        distmod_values = cosmo.distmod(z).value
+        distmod_values[prep.idx_calibrator_sn] = prep.calibrator_distance_moduli
         distance_moduli = np.tile(
-            cosmo.distmod(z).value, (2, 1)
+            distmod_values, (2, 1)
         )
-        # ) #+ np.log10(cosmo.H0.value / H0)
 
         residuals[:, :, 0] = np.tile(mb, (2, 1)) - np.array([
             [Mb_1 + alpha_1 * s_1 + beta_1 * c_1],
@@ -517,11 +513,11 @@ class Model():
         p1_nans = np.isnan(p_1)
         p2_nans = np.isnan(p_2)
 
-        if np.any(p1_nans[:prep.idx_sn_to_evaluate]):
+        if np.any(p1_nans):
             print("Pop 1 contains nan probabilities:", np.count_nonzero(p1_nans)/len(p1_nans)*100, "%")
             print("Pop 1 pars:", [Rb_1, sig_Rb_1, Ebv_1, gamma_Ebv_1])
             print("Pop 1 norm:", norm_1, "\n")
-        if np.any(p2_nans[:prep.idx_sn_to_evaluate]):
+        if np.any(p2_nans):
             print("Pop 2 contains nan probabilities:", np.count_nonzero(p2_nans)/len(p2_nans)*100, "%")
             print("Pop 1 pars:", [Rb_2, sig_Rb_2, Ebv_2, gamma_Ebv_2])
             print("Pop 2 norm:", norm_2, "\n")
@@ -650,14 +646,15 @@ class Model():
         self, probs: np.ndarray,
     ):
         
-        idx_unique_sn = prep.idx_unique_sn
-        idx_duplicate_sn = prep.idx_duplicate_sn
-        duplicate_probs = []
-        for idx in idx_duplicate_sn:
-            duplicate_probs.append(np.prod(probs[idx]))
-        duplicate_probs = np.array(duplicate_probs)
-        probs = np.delete(probs, ~idx_unique_sn)
-        probs = np.append(probs, duplicate_probs)
+        unique_sn_probs, duplicate_sn_probs = prep.reorder_duplicates(
+            probs, prep.idx_unique_sn, prep.idx_duplicate_sn
+        )
+        duplicate_sn_probs = np.array(
+            [
+                np.prod(duplicate_probs) for duplicate_probs in duplicate_sn_probs
+            ]
+        )
+        probs = np.concatenate([unique_sn_probs, duplicate_sn_probs])
 
         return probs
 
@@ -781,6 +778,8 @@ class Model():
             pop_2_probs = (1-w_vector) * sn_probs_2
             combined_probs = pop_1_probs + pop_2_probs
 
+        if prep.global_model_cfg['only_evaluate_calibrators']:
+            combined_probs = combined_probs[~prep.idx_reordered_calibrator_sn]
         
         log_host_membership_probs = (
             1./np.log(10) * (
@@ -799,9 +798,9 @@ class Model():
             log_volumetric_prob = self.volumetric_rate_probs(
                 cosmo, eta=eta, prompt_fraction=prompt_fraction
             )
-            log_prob = np.sum(np.log(combined_probs[:prep.idx_sn_to_evaluate])) + log_volumetric_prob
+            log_prob = np.sum(np.log(combined_probs)) + log_volumetric_prob
         else:
-            log_prob = np.sum(np.log(combined_probs[:prep.idx_sn_to_evaluate]))
+            log_prob = np.sum(np.log(combined_probs))
 
         if np.isnan(log_prob):
             log_prob = -np.inf
@@ -809,7 +808,7 @@ class Model():
             log_host_membership_probs = np.ones(prep.n_unique_sn)*np.nan
             log_sn_membership_probs = np.ones(prep.n_unique_sn)*np.nan
 
-        s1, s2 = np.all(status[:prep.idx_sn_to_evaluate, 0]), np.all(status[:prep.idx_sn_to_evaluate, 1])
+        s1, s2 = np.all(status[:, 0]), np.all(status[:, 1])
         if not s1 or not s2:
             mean1, mean2 = np.mean(sn_probs_1), np.mean(sn_probs_2)
             std1, std2 = np.std(sn_probs_1), np.std(sn_probs_2)
