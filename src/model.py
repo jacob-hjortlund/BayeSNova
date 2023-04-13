@@ -382,11 +382,14 @@ class Model():
             [sig_int_1**2 + alpha_1**2 * sig_s_1**2 + beta_1**2 * sig_c_1**2],
             [sig_int_2**2 + alpha_2**2 * sig_s_2**2 + beta_2**2 * sig_c_2**2]
         ])
+
+        distmod_var = z**(-2) * (
+            (5. / np.log(10.))**2
+            * (disp_v_pec / c)**2
+        )
+        distmod_var[prep.idx_calibrator_sn] = 0.
         cov[:,:,0,0] += np.tile(
-            z**(-2) * (
-                (5. / np.log(10.))**2
-                * (disp_v_pec / c)**2
-            ), (2, 1)
+            distmod_var, (2, 1)
         )
 
         cov[:,:,1,1] += np.array([
