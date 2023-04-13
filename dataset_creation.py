@@ -20,9 +20,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         os.path.join(
             data_path, cfg['data_cfg']['dataset']
         ),
-        sep=cfg['data_cfg']['sep'],
-        header=cfg['data_cfg']['header'],
-        skipinitialspace=True
+        sep=cfg['data_cfg']['sep']
     )
 
     print("\nFiltering and renaming columns...\n")
@@ -39,6 +37,22 @@ def main(cfg: omegaconf.DictConfig) -> None:
     for column_name in new_column_names:
         if column_name not in catalog.columns:
             catalog[column_name] = NULL_VALUE
+    
+    # Flag calibration SNe
+    if cfg['prep_cfg']['include_calibrator_sn']:
+        print("Including calbrator SNe...\n")
+        catalog = catalog.rename(
+            columns={
+                'IS_CALIBRATOR': 'is_calibrator',
+                'CEPH_DIST': 'mu_calibrator'
+            }
+        )
+        n_calibrator_sn = np.sum(catalog['is_calibrator'].to_numpy() == 1)
+        print(f"Number of calibrator SNe: {n_calibrator_sn}\n")
+    else:
+        catalog['is_calibrator'] = NULL_VALUE
+        catalog['mu_calibrator'] = NULL_VALUE
+    new_column_names += ['is_calibrator', 'mu_calibrator']
 
     if cfg['prep_cfg']['use_bias_corrections']:
         print("Applying bias corrections...\n")
@@ -61,7 +75,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
         redshift_column_name = 'z'
         idx_above = cfg['prep_cfg']['redshift_lower_cutoff'] < catalog[redshift_column_name].to_numpy()
         idx_below = cfg['prep_cfg']['redshift_upper_cutoff'] > catalog[redshift_column_name].to_numpy()
-        idx_to_keep = idx_above & idx_below
+        idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
+        idx_to_keep = (idx_above & idx_below) | idx_calibrator
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
         catalog = catalog.loc[idx_to_keep].copy()
         catalog = catalog.reset_index(drop=True)
@@ -72,7 +87,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if cfg['prep_cfg']['use_mb_err_cutoff']:
         print("\nApplying mB err cutoff...\n")
         mb_err_column_name = 'mBErr'
-        idx_to_keep = catalog[mb_err_column_name].to_numpy() < cfg['prep_cfg']['mb_err_cutoff']
+        idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
+        idx_to_keep = (
+            catalog[mb_err_column_name].to_numpy() < cfg['prep_cfg']['mb_err_cutoff']
+        ) | idx_calibrator
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
         catalog = catalog.loc[idx_to_keep]
         catalog = catalog.reset_index(drop=True)
@@ -83,7 +101,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if cfg['prep_cfg']['use_x1_cutoff']:
         print("\nApplying x1 cutoff...\n")
         x1_column_name = 'x1'
-        idx_to_keep = np.abs(catalog[x1_column_name]).to_numpy() < cfg['prep_cfg']['x1_cutoff']
+        idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
+        idx_to_keep = (
+            np.abs(catalog[x1_column_name]).to_numpy() < cfg['prep_cfg']['x1_cutoff']
+        ) | idx_calibrator
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
         catalog = catalog.loc[idx_to_keep]
         catalog = catalog.reset_index(drop=True)
@@ -94,7 +115,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if cfg['prep_cfg']['use_x1_err_cutoff']:
         print("\nApplying x1 err cutoff...\n")
         x1_err_column_name = 'x1Err'
-        idx_to_keep = np.abs(catalog[x1_err_column_name]).to_numpy() < cfg['prep_cfg']['x1_err_cutoff']
+        idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
+        idx_to_keep = (
+            np.abs(catalog[x1_err_column_name]).to_numpy() < cfg['prep_cfg']['x1_err_cutoff']
+        ) | idx_calibrator
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
         catalog = catalog.loc[idx_to_keep]
         catalog = catalog.reset_index(drop=True)
@@ -105,7 +129,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if cfg['prep_cfg']['use_color_cutoff']:
         print("\nApplying color cutoff...\n")
         color_column_name = 'c'
-        idx_to_keep = np.abs(catalog[color_column_name]).to_numpy() < cfg['prep_cfg']['color_cutoff']
+        idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
+        idx_to_keep = (
+            np.abs(catalog[color_column_name]).to_numpy() < cfg['prep_cfg']['color_cutoff']
+        ) | idx_calibrator
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
         catalog = catalog.loc[idx_to_keep]
         catalog = catalog.reset_index(drop=True)
@@ -116,7 +143,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if cfg['prep_cfg']['use_fitprob_cutoff']:
         print("\nApplying fitprob cutoff...\n")
         fitprob_column_name = 'FITPROB'
-        idx_to_keep = catalog[fitprob_column_name].to_numpy() > cfg['prep_cfg']['fitprob_cutoff']
+        idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
+        idx_to_keep = (
+            catalog[fitprob_column_name].to_numpy() > cfg['prep_cfg']['fitprob_cutoff']
+        ) | idx_calibrator
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
         catalog = catalog.loc[idx_to_keep]
         catalog = catalog.reset_index(drop=True)
@@ -127,7 +157,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if cfg['prep_cfg']['use_peak_date_err_cutoff']:
         print("\nApplying peak date error cutoff...\n")
         peak_date_err_column_name = 'PKMJDERR'
-        idx_to_keep = catalog[peak_date_err_column_name].to_numpy() < cfg['prep_cfg']['peak_date_err_cutoff']
+        idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
+        idx_to_keep = (
+            catalog[peak_date_err_column_name].to_numpy() < cfg['prep_cfg']['peak_date_err_cutoff']
+        ) | idx_calibrator
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
         catalog = catalog.loc[idx_to_keep]
         catalog = catalog.reset_index(drop=True)

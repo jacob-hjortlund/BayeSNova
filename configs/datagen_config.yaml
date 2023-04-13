@@ -1,11 +1,12 @@
 data_cfg:
   path: './data/raw_data'
-  dataset: 'supercal_vH0.fitres' #'Pantheon+SH0ES.dat'
+  dataset: 'supercal.fitres' #'Pantheon+SH0ES.dat'
   morphologies: 'SN-morph-type-t'
   local_properties: 'jones_2018'
   sep: ' '
-  header: 10 # 0
 prep_cfg:
+
+  include_calibrator_sn: True
 
   use_host_morphologies: True
   use_jones_properties: True
