@@ -113,11 +113,13 @@ def init_global_data(
     global idx_sn_to_evaluate
     global idx_duplicate_sn
     global idx_unique_sn
+    global n_unique_sn
     global selection_bias_correction
     global observed_volumetric_rates
     global observed_volumetric_rate_errors
     global observed_volumetric_rate_redshifts
 
+    # TODO: FIX THIS TO ACCOUNT FOR POTENTIAL DUPLICATES
     idx_sn_to_evaluate = data.shape[0]-n_evaluate
     global_model_cfg = cfg
 
@@ -147,6 +149,11 @@ def init_global_data(
         idx_unique_sn = ~np.any(idx_duplicate_sn, axis=0)
 
         data.drop(duplicate_uid_key, axis=1, inplace=True)
+    else:
+        idx_duplicate_sn = []
+        idx_unique_sn = np.ones((data.shape[0],), dtype=bool)
+
+    n_unique_sn = np.count_nonzero(idx_unique_sn) + len(idx_duplicate_sn)    
 
     if selection_bias_correction_key in data.columns:
         selection_bias_correction = data[selection_bias_correction_key].copy().to_numpy()
