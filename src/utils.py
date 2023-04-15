@@ -57,6 +57,17 @@ class PoolWrapper():
             self.pool.wait()
             sys.exit(0)
 
+def weighted_mean_and_error(
+    values: np.ndarray, errors: np.ndarray,
+    error_floor: float = 1e-10
+) -> tuple:
+    
+    weights = 1. / (errors**2 + error_floor)
+    mean = np.sum(values * weights) / np.sum(weights)
+    err = np.sqrt(1. / np.sum(weights))
+
+    return mean, err
+
 def estimate_mmap(samples):
 
     mean_val = np.mean(samples)

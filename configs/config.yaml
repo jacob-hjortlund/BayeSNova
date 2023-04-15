@@ -1,9 +1,9 @@
 data_cfg:
   train_path: './data/supercal_w_host_properties'
-  eval_path: './data/supercal_cal_sn_w_host_properties'
   volumetric_rates_path: './data/volumetric_rates'
   sep: ' '
 model_cfg:
+  only_evaluate_calibrators: True
   ratio_par_name: w
   stretch_par_name: s
   use_physical_ratio: False
