@@ -58,14 +58,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
     data = pd.read_csv(
         filepath_or_buffer=cfg['data_cfg']['train_path'], sep=cfg['data_cfg']['sep']
     )
-    if cfg['data_cfg']['eval_path']:
-        eval_data = pd.read_csv(
-            filepath_or_buffer=cfg['data_cfg']['eval_path'], sep=cfg['data_cfg']['sep']
-        )    
-        n_eval = len(eval_data)
-        data = pd.concat([data, eval_data], ignore_index=True)
-    else:
-        n_eval = 0
     
     if cfg['data_cfg']['volumetric_rates_path'] and cfg['model_cfg']['use_volumetric_rates']:
         volumetric_rates = pd.read_csv(
@@ -74,7 +66,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     else:
         volumetric_rates = None
 
-    prep.init_global_data(data, volumetric_rates, cfg['model_cfg'], n_eval)
+    prep.init_global_data(data, volumetric_rates, cfg['model_cfg'])
 
     log_prob = model.Model()
 
@@ -408,7 +400,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, color=pop1_color, labels=labels, **cfg['plot_cfg'])
     fig_pop_1.tight_layout()
-    #fig_pop_1.suptitle('Corner plot', fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
     fig_pop_1.savefig(
         os.path.join(path, cfg['emcee_cfg']['run_name']+"_corner.png")
     )
@@ -431,7 +422,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
         suffix = "_transformed"
     else:
         suffix = ""
-    #fig.subplots_adjust(top=0.1)
     fig.suptitle("Walkers" + suffix, fontsize=int(2 * cfg['plot_cfg']['label_kwargs']['fontsize']))
     fig.savefig(
         os.path.join(path, cfg['emcee_cfg']['run_name']+suffix+"_walkers.png")

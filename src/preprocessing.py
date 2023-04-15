@@ -99,7 +99,7 @@ def identify_duplicate_sn(
 
 def init_global_data(
     data: pd.pandas.DataFrame, volumetric_rates: pd.pandas.DataFrame,
-    cfg: dict, n_evaluate: int = 0
+    cfg: dict
 ) -> tuple:
 
     global sn_covariances
@@ -122,7 +122,7 @@ def init_global_data(
     global observed_volumetric_rate_redshifts
 
     # TODO: FIX THIS TO ACCOUNT FOR POTENTIAL DUPLICATES
-    idx_calibrator_sn = data['is_calibrator'] != NULL_VALUE
+    idx_calibrator_sn = data['is_calibrator'].to_numpy() != NULL_VALUE
     calibrator_distance_moduli = data['mu_calibrator'].to_numpy()[idx_calibrator_sn]
     
     global_model_cfg = cfg
@@ -152,15 +152,23 @@ def init_global_data(
         idx_duplicate_sn = np.array(idx_duplicate_sn)
         idx_unique_sn = ~np.any(idx_duplicate_sn, axis=0)
 
+        idx_unique_calibrator_sn, idx_duplicate_calibrator_sn = reorder_duplicates(
+            idx_calibrator_sn, idx_unique_sn, idx_duplicate_sn
+        )
+        idx_duplicate_calibrator_sn = np.array(
+            [
+                np.any(tmp_idx) for tmp_idx in idx_duplicate_calibrator_sn
+            ]
+        )
+        idx_reordered_calibrator_sn = np.concatenate(
+            (idx_unique_calibrator_sn, idx_duplicate_calibrator_sn)
+        )
+
         data.drop(duplicate_uid_key, axis=1, inplace=True)
     else:
         idx_duplicate_sn = []
         idx_unique_sn = np.ones((data.shape[0],), dtype=bool)
-
-    unique_idx_calibrator_sn, duplicate_calibrator_sn = reorder_duplicates(
-        idx_calibrator_sn, idx_duplicate_sn
-    )
-    idx_reordered_calibrator_sn = np.concatenate((unique_idx_calibrator_sn, duplicate_calibrator_sn))
+        idx_reordered_calibrator_sn = idx_calibrator_sn
 
     n_unique_sn = np.count_nonzero(idx_unique_sn) + len(idx_duplicate_sn)    
 
@@ -287,9 +295,7 @@ def reorder_duplicates(
     sn_array: np.ndarray, idx_unique_sn: np.ndarray,
     idx_duplicate_sn: np.ndarray
 ):
-        
-    idx_unique_sn = idx_unique_sn
-    idx_duplicate_sn = idx_duplicate_sn
+    
     duplicate_sn_array = []
     for idx in idx_duplicate_sn:
         duplicate_sn_array.append(sn_array[idx])
