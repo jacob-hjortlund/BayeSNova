@@ -86,11 +86,21 @@ def main(cfg: omegaconf.DictConfig) -> None:
     
     if cfg['prep_cfg']['use_mb_err_cutoff']:
         print("\nApplying mB err cutoff...\n")
+        alpha = cfg['prep_cfg']['alpha']
+        beta = cfg['prep_cfg']['beta']
         mb_err_column_name = 'mBErr'
+        mu_err_column_name = 'MUERR'
         idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
-        idx_to_keep = (
-            catalog[mb_err_column_name].to_numpy() < cfg['prep_cfg']['mb_err_cutoff']
-        ) | idx_calibrator
+        x1_err_column_name = 'x1Err'
+        c_err_column_name = 'cErr'
+        err = np.sqrt(
+            (
+                catalog[mu_err_column_name].to_numpy() ** 2 +
+                (alpha * catalog[x1_err_column_name].to_numpy()) ** 2 +
+                (beta * catalog[c_err_column_name].to_numpy()) ** 2
+            )
+        )
+        idx_to_keep = (err < cfg['prep_cfg']['mb_err_cutoff']) | idx_calibrator
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
         catalog = catalog.loc[idx_to_keep]
         catalog = catalog.reset_index(drop=True)
