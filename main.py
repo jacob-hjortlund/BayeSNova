@@ -478,35 +478,71 @@ def main(cfg: omegaconf.DictConfig) -> None:
     available_properties_names = data.keys()[::2]
     for prop_name in available_properties_names:
 
-        # TODO: FIX TO ACCOUNT FOR DUPLICATES
+        host_property = data[prop_name].to_numpy()
+        host_property_errors = data[prop_name+"_err"].to_numpy()
+        if np.all(host_property == prep.NULL_VALUE):
+            continue
 
         print("\nPlotting property: ", prop_name)
-        host_property = data[prop_name].to_numpy()
-        hubble_flow_host, calibration_host = (
-            host_property[:prep.idx_sn_to_evaluate], host_property[prep.idx_sn_to_evaluate:]
+        
+        unique_host_properties, duplicate_host_properties = prep.reorder_duplicates(
+            host_property, prep.idx_unique_sn, prep.idx_duplicate_sn
         )
-        idx_hubble_flow_observed = hubble_flow_host != prep.NULL_VALUE
-        idx_calibration_observed = calibration_host != prep.NULL_VALUE
+        unique_host_properties_errors, duplicate_host_properties_errors = prep.reorder_duplicates(
+            host_property_errors, prep.idx_unique_sn, prep.idx_duplicate_sn
+        )
 
-        if np.count_nonzero(idx_hubble_flow_observed) + np.count_nonzero(idx_calibration_observed) == 0:
-            continue
+        duplicate_host_propertie_means = np.zeros(len(duplicate_host_properties))
+        duplicate_host_propertie_mean_errors = np.zeros(len(duplicate_host_properties))
+        for i, (duplicate_property, duplicate_property_error) in enumerate(
+            zip(duplicate_host_properties, duplicate_host_properties_errors)
+        ):
+            idx_available = duplicate_property != prep.NULL_VALUE
+            mean, err = utils.weighted_mean_and_error(
+                duplicate_property[idx_available],
+                duplicate_property_error[idx_available]
+            )
+            duplicate_host_propertie_means[i] = mean
+            duplicate_host_propertie_mean_errors[i] = err
+        
+        host_property = np.concatenate(
+            (unique_host_properties, duplicate_host_propertie_means)
+        )
+        host_property_errors = np.concatenate(
+            (unique_host_properties_errors, duplicate_host_propertie_mean_errors)
+        )
+
+        hubble_flow_host, calibration_host = (
+            host_property[~prep.idx_reordered_calibrator_sn],
+            host_property[prep.idx_reordered_calibrator_sn]
+        )
+        hubble_flow_host_err, calibration_host_err = (
+            host_property_errors[~prep.idx_reordered_calibrator_sn],
+            host_property_errors[prep.idx_reordered_calibrator_sn]
+        )
+        idx_hubble_flow_observed = (
+            (hubble_flow_host != prep.NULL_VALUE) &
+            (hubble_flow_host_err != prep.NULL_VALUE)
+        )
+        idx_calibration_observed = (
+            (calibration_host != prep.NULL_VALUE) &
+            (calibration_host_err != prep.NULL_VALUE)
+        )
 
         hubble_flow_host = hubble_flow_host[idx_hubble_flow_observed]
         calibration_host = calibration_host[idx_calibration_observed]
+        hubble_flow_host_err = hubble_flow_host_err[idx_hubble_flow_observed]
+        calibration_host_err = calibration_host_err[idx_calibration_observed]
 
-        hubble_flow_host_err, calibration_host_err = (
-            data[prop_name+"_err"].to_numpy()[:prep.idx_sn_to_evaluate][idx_hubble_flow_observed],
-            data[prop_name+"_err"].to_numpy()[prep.idx_sn_to_evaluate:][idx_calibration_observed]
-        )
-        idx_hubble_flow_valid = np.ones_like(hubble_flow_host, dtype='bool')#np.abs(hubble_flow_host_err/hubble_flow_host) < 10.#0.25
-        idx_calibration_valid = np.ones_like(calibration_host, dtype='bool')#np.abs(calibration_host_err/calibration_host) < 10.#0.25
+        idx_hubble_flow_valid = np.ones_like(hubble_flow_host, dtype='bool') & (hubble_flow_host_err >= 0.) #np.abs(hubble_flow_host_err/hubble_flow_host) < 10.#0.25
+        idx_calibration_valid = np.ones_like(calibration_host, dtype='bool') & (calibration_host_err >= 0.) #np.abs(calibration_host_err/calibration_host) < 10.#0.25
         hubble_flow_host, hubble_flow_host_err = hubble_flow_host[idx_hubble_flow_valid], hubble_flow_host_err[idx_hubble_flow_valid]
         calibration_host, calibration_host_err = calibration_host[idx_calibration_valid], calibration_host_err[idx_calibration_valid]
         print("No. of Hubble flow hosts: ", len(hubble_flow_host))
         print("No. of calibration hosts: ", len(calibration_host), "\n")
 
-        hubble_flow_membership_quantiles = full_membership_quantiles[:, :prep.idx_sn_to_evaluate][:, idx_hubble_flow_observed][:, idx_hubble_flow_valid]
-        calibration_membership_quantiles = full_membership_quantiles[:, prep.idx_sn_to_evaluate:][:, idx_calibration_observed][:, idx_calibration_valid]
+        hubble_flow_membership_quantiles = all_full_membership_quantiles[:, ~prep.idx_reordered_calibrator_sn][:, idx_hubble_flow_observed][:, idx_hubble_flow_valid]
+        calibration_membership_quantiles = all_full_membership_quantiles[:, prep.idx_reordered_calibrator_sn][:, idx_calibration_observed][:, idx_calibration_valid]
         hubble_flow_medians = hubble_flow_membership_quantiles[1, :]
         calibration_medians = calibration_membership_quantiles[1, :]
         hubble_flow_errors = np.abs(
@@ -553,7 +589,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         x_lower = cfg['plot_cfg']['property_ranges'][prop_name]['lower']
         x_upper = cfg['plot_cfg']['property_ranges'][prop_name]['upper']
         if prop_name == "global_mass":
-            ax.set_ylim(-5, 2.5)
+           ax.set_ylim(-5, 2.5)
         ax.set_xlim(x_lower, x_upper)
         ax.set_xlabel(prop_name, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
         ax.set_ylabel(
