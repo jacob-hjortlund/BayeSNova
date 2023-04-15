@@ -339,7 +339,7 @@ def membership_histogram(
         zip(quantiles_list, titles_list)
     ):
         _, bins, patches = ax[i].hist(
-            membership_quantiles[1,idx_reordered_calibrator_sn],
+            membership_quantiles[1,~idx_reordered_calibrator_sn],
             color="r",bins=20, density=True
         )
         bin_centers = 0.5*(bins[:-1]+bins[1:])
@@ -388,24 +388,31 @@ def observed_property_vs_membership(
         host_property_errors, idx_unique_sn, idx_duplicate_sn
     )
 
-    duplicate_host_propertie_means = np.zeros(len(duplicate_host_properties))
-    duplicate_host_propertie_mean_errors = np.zeros(len(duplicate_host_properties))
+    duplicate_host_property_means = []
+    duplicate_host_property_mean_errors = []
     for i, (duplicate_property, duplicate_property_error) in enumerate(
         zip(duplicate_host_properties, duplicate_host_properties_errors)
     ):
         idx_available = duplicate_property != NULL_VALUE
+        if np.count_nonzero(idx_available) == 0:
+            duplicate_host_property_means.append(NULL_VALUE)
+            duplicate_host_property_mean_errors.append(NULL_VALUE)
+            continue
         mean, err = utils.weighted_mean_and_error(
             duplicate_property[idx_available],
             duplicate_property_error[idx_available]
         )
-        duplicate_host_propertie_means[i] = mean
-        duplicate_host_propertie_mean_errors[i] = err
+        duplicate_host_property_means.append(mean)
+        duplicate_host_property_mean_errors.append(err)
+    
+    duplicate_host_property_means = np.array(duplicate_host_property_means)
+    duplicate_host_property_mean_errors = np.array(duplicate_host_property_mean_errors)
     
     host_property = np.concatenate(
-        (unique_host_properties, duplicate_host_propertie_means)
+        (unique_host_properties, duplicate_host_property_means)
     )
     host_property_errors = np.concatenate(
-        (unique_host_properties_errors, duplicate_host_propertie_mean_errors)
+        (unique_host_properties_errors, duplicate_host_property_mean_errors)
     )
 
     hubble_flow_host, calibration_host = (
