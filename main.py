@@ -337,10 +337,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
         log_host_membership_probs, [0.16, 0.50, 0.84], axis=0
     )
 
-    if cfg['model_cfg']['only_evaluate_calibrator_sn']:
-        full_membership_quantiles = all_full_membership_quantiles[:, ~prep.idx_reordered_calibrator_sn]
-        sn_membership_quantiles = all_sn_membership_quantiles[:, ~prep.idx_reordered_calibrator_sn]
-        host_membership_quantiles = all_host_membership_quantiles[:, ~prep.idx_reordered_calibrator_sn]
+    full_membership_quantiles = all_full_membership_quantiles[:, ~prep.idx_reordered_calibrator_sn]
+    sn_membership_quantiles = all_sn_membership_quantiles[:, ~prep.idx_reordered_calibrator_sn]
+    host_membership_quantiles = all_host_membership_quantiles[:, ~prep.idx_reordered_calibrator_sn]
 
     cm_full_min, cm_full_max = (
         np.min(full_membership_quantiles[1,:]),

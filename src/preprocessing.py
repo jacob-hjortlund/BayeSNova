@@ -124,6 +124,7 @@ def init_global_data(
     # TODO: FIX THIS TO ACCOUNT FOR POTENTIAL DUPLICATES
     idx_calibrator_sn = data['is_calibrator'].to_numpy() != NULL_VALUE
     calibrator_distance_moduli = data['mu_calibrator'].to_numpy()[idx_calibrator_sn]
+    data.drop(['is_calibrator', 'mu_calibrator'], axis=1, inplace=True)
     
     global_model_cfg = cfg
 
@@ -299,7 +300,7 @@ def reorder_duplicates(
     duplicate_sn_array = []
     for idx in idx_duplicate_sn:
         duplicate_sn_array.append(sn_array[idx])
-    duplicate_sn_array = np.array(duplicate_sn_array)
+    duplicate_sn_array = np.array(duplicate_sn_array, dtype=object)
     unique_sn_array = np.delete(sn_array, ~idx_unique_sn)
 
     return unique_sn_array, duplicate_sn_array
