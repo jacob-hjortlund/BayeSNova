@@ -89,6 +89,6 @@ prep_cfg:
   use_peak_date_err_cutoff: True
   peak_date_err_cutoff: 2.
 
-  output_path: './data/'
-  output_name: "test_supercal" #"Pantheon+SH0ES"
+  output_path: './data/processed_data/'
+  output_name: "supercal" #"Pantheon+SH0ES"
   output_sep: ' '

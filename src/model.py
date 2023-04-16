@@ -531,10 +531,11 @@ class Model():
         self, means: np.ndarray, sigmas: np.ndarray
     ):
 
+        idx_not_observed = prep.host_galaxy_observables == NULL_VALUE
         n_properties = prep.host_galaxy_observables.shape[1]
         res = np.atleast_3d(
             np.where(
-                prep.host_galaxy_observables == NULL_VALUE,
+                idx_not_observed,
                 0.,
                 prep.host_galaxy_observables - means
             )
@@ -544,7 +545,7 @@ class Model():
             sigmas, [prep.host_galaxy_observables.shape[0], 1]
         )
         sigmas = np.where(
-            prep.host_galaxy_observables == NULL_VALUE,
+            idx_not_observed,
             0.,
             sigmas
         )

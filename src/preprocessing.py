@@ -210,13 +210,26 @@ def init_global_data(
             len(data.columns) - len(host_property_keys) - len(host_property_err_keys)
         ) // 2
         host_galaxy_observables = data[host_property_keys].to_numpy()
+        host_galaxy_covariance_values = data[host_property_err_keys].to_numpy()
+        idx_err_below_zero = host_galaxy_covariance_values < 0.
+
+        host_galaxy_observables = np.where(
+            idx_err_below_zero,
+            NULL_VALUE,
+            host_galaxy_observables
+        )
         host_galaxy_observables = np.concatenate(
             (
                 host_galaxy_observables,
                 np.ones((host_galaxy_observables.shape[0], n_unused_host_properties)) * NULL_VALUE
             ), axis=1
         )
-        host_galaxy_covariance_values = data[host_property_err_keys].to_numpy()
+        
+        host_galaxy_covariance_values = np.where(
+            idx_err_below_zero,
+            NULL_VALUE,
+            host_galaxy_covariance_values
+        )
         host_galaxy_covariance_values = np.concatenate(
             (
                 host_galaxy_covariance_values,
