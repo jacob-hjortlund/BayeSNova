@@ -64,7 +64,7 @@ def weighted_mean_and_error(
     
     weights = 1. / (errors**2 + error_floor)
     mean = np.sum(values * weights) / np.sum(weights)
-    err = np.sqrt(1. / np.sum(weights))
+    err = np.sqrt(1. / np.sum(weights + error_floor))
 
     return mean, err
 
