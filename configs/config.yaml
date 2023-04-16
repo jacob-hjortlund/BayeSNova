@@ -1,6 +1,6 @@
 data_cfg:
-  train_path: './data/supercal_w_host_properties'
-  volumetric_rates_path: './data/volumetric_rates'
+  train_path: './data/processed_data/supercal'
+  volumetric_rates_path: './data/processed_data/volumetric_rates'
   sep: ' '
 model_cfg:
   only_evaluate_calibrators: True

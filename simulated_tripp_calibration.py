@@ -78,6 +78,14 @@ def main(cfg: omegaconf.DictConfig) -> None:
         f"{init_idx}-{init_idx + n_runs}"
     )
 
+    column_names = (
+        cfg['model_cfg']['pars'] +
+        [par + "_lower" for par in cfg['model_cfg']['pars']] +
+        [par + "_upper" for par in cfg['model_cfg']['pars']] +
+        [par + "_symm" for par in cfg['model_cfg']['pars']] +
+        ['prompt_fraction']
+    )
+
     with utils.PoolWrapper(cfg['emcee_cfg']['pool_type']) as wrapped_pool:
 
         for i in range(n_runs):
@@ -195,10 +203,31 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 (medians, lower, upper, symm), axis=0
             )
 
-            if i == 0:
-                df_array = tmp_df_array
+            # if i == 0:
+            #     df_array = tmp_df_array
+            # else:
+            #     df_array = np.row_stack((df_array, tmp_df_array))
+
+            does_results_dataframe_exist = os.path.exists(
+                os.path.join(path, "results.csv")
+            )
+            if not does_results_dataframe_exist:
+                df = pd.DataFrame(
+                    tmp_df_array, columns=column_names
+                )
+                df.to_csv(
+                    os.path.join(path, "results.csv")
+                )
             else:
-                df_array = np.row_stack((df_array, tmp_df_array))
+                df = pd.read_csv(
+                    os.path.join(path, "results.csv")
+                )
+                df = pd.concat(
+                    [df, pd.DataFrame(tmp_df_array, columns=column_names)]
+                ).reset_index(drop=True)
+                df.to_csv(
+                    os.path.join(path, "results.csv")
+                )
 
             print("\nQuantiles:\n")
             for i, par in enumerate(cfg['model_cfg']['pars']):
@@ -326,23 +355,23 @@ def main(cfg: omegaconf.DictConfig) -> None:
             t1 = time.time()
             print("\nPlots took: {:.2f} s\n".format(t1 - t0))
 
-    df_array = np.concatenate(
-        (df_array, prompt_fractions[init_idx:init_idx+n_runs, None]), axis=1
-    )
-    column_names = (
-        cfg['model_cfg']['pars'] +
-        [par + "_lower" for par in cfg['model_cfg']['pars']] +
-        [par + "_upper" for par in cfg['model_cfg']['pars']] +
-        [par + "_symm" for par in cfg['model_cfg']['pars']] +
-        ['prompt_fraction']
-    )
-    df = pd.DataFrame(
-        df_array, columns=column_names
-    )
+    # df_array = np.concatenate(
+    #     (df_array, prompt_fractions[init_idx:init_idx+n_runs, None]), axis=1
+    # )
+    # column_names = (
+    #     cfg['model_cfg']['pars'] +
+    #     [par + "_lower" for par in cfg['model_cfg']['pars']] +
+    #     [par + "_upper" for par in cfg['model_cfg']['pars']] +
+    #     [par + "_symm" for par in cfg['model_cfg']['pars']] +
+    #     ['prompt_fraction']
+    # )
+    # df = pd.DataFrame(
+    #     df_array, columns=column_names
+    # )
 
-    df.to_csv(
-        os.path.join(path, "results.csv")
-    )
+    # df.to_csv(
+    #     os.path.join(path, "results.csv")
+    # )
 
 if __name__ == "__main__":
     main()
