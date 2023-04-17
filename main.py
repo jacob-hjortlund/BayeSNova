@@ -182,6 +182,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
         cfg['model_cfg']['cosmology_par_names'] +
         (not cfg['model_cfg']['use_physical_ratio']) * [cfg['model_cfg']['ratio_par_name']]
     )
+    fig_path = os.path.join(path, "figures")
+    os.makedirs(fig_path, exist_ok=True)
 
     (
         full_membership_quantiles, sn_membership_quantiles, host_membership_quantiles
@@ -195,11 +197,11 @@ def main(cfg: omegaconf.DictConfig) -> None:
     )
 
     post.corner_plot(
-        sample_thetas, pop1_color, pop2_color, labels, cfg, path
+        sample_thetas, pop1_color, pop2_color, labels, cfg, fig_path
     )
 
     post.chain_plot(
-        backend, burnin, par_names, cfg, path
+        backend, burnin, par_names, cfg, fig_path
     )
 
     quantiles_list = [
@@ -212,25 +214,27 @@ def main(cfg: omegaconf.DictConfig) -> None:
     
     post.membership_histogram(
         quantiles_list, titles_list, mapper_full,
-        prep.idx_reordered_calibrator_sn, cfg, path
+        prep.idx_reordered_calibrator_sn, cfg, fig_path
     )
 
     available_properties_names = data.keys()[::2]
     for property_name in available_properties_names:
+        for membership_name, membership_quantiles in zip(titles_list,quantiles_list):
 
-        host_property = data[property_name].to_numpy()
-        host_property_errors = data[property_name+"_err"].to_numpy()
-        if np.all(host_property == prep.NULL_VALUE):
-            continue
+            host_property = data[property_name].to_numpy()
+            host_property_errors = data[property_name+"_err"].to_numpy()
+            if np.all(host_property == prep.NULL_VALUE):
+                continue
 
-        print("\nPlotting property: ", property_name)
-        
-        post.observed_property_vs_membership(
-            property_name, host_property, host_property_errors,
-            full_membership_quantiles, cm, cm_norm_full, mapper_full,
-            prep.idx_unique_sn, prep.idx_duplicate_sn,
-            prep.idx_reordered_calibrator_sn, cfg, path
-        )
+            print(f"\nPlotting {membership_name} membership vs {property_name}\n")
+            
+            post.observed_property_vs_membership(
+                membership_name,
+                property_name, host_property, host_property_errors,
+                membership_quantiles, cm, cm_norm_full, mapper_full,
+                prep.idx_unique_sn, prep.idx_duplicate_sn,
+                prep.idx_reordered_calibrator_sn, cfg, fig_path
+            )
 
 
 if __name__ == "__main__":

@@ -363,7 +363,7 @@ def membership_histogram(
     )
 
 def observed_property_vs_membership(
-    property_name: str, host_property: np.ndarray,
+    membership_name: str, property_name: str, host_property: np.ndarray,
     host_property_errors: np.ndarray, membership_quantiles: np.ndarray,
     colormap, colormap_norm, mapper_full,
     idx_unique_sn: np.ndarray, idx_duplicate_sn: np.ndarray,
@@ -485,7 +485,11 @@ def observed_property_vs_membership(
     # ax.set_xlim(x_lower, x_upper)
     ax.set_xlabel(property_name, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
     ax.set_ylabel(
-        r"log$_{10}\left(p_{pop 1}(SN)/p_{pop 2}(SN)\right)$",
+        r"log$_{10}\left( p_1 / p_2 \right)$",
+        fontsize=cfg['plot_cfg']['label_kwargs']['fontsize']
+    )
+    ax.set_title(
+        f"{membership_name} membership vs {property_name}",
         fontsize=cfg['plot_cfg']['label_kwargs']['fontsize']
     )
     fig.tight_layout()
@@ -494,6 +498,15 @@ def observed_property_vs_membership(
         suffix = "_transformed"
     else:
         suffix = ""
+    
+    save_path = os.path.join(
+        save_path, membership_name
+    )
+    os.makedirs(save_path, exist_ok=True)
+
     fig.savefig(
-        os.path.join(save_path, cfg['emcee_cfg']['run_name']+suffix+"_"+property_name+"_vs_membership.png")
+        os.path.join(
+            save_path,
+            f"{cfg['emcee_cfg']['run_name']}{suffix}_{property_name}_vs_{membership_name}_membership.png"
+        )
     )
