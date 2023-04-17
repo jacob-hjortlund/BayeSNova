@@ -922,8 +922,8 @@ class Model():
         
         log_full_host_membership_probs = (
             1./np.log(10) * (
-                log_w_1 + np.sum(host_log_probs_1, axis=1) +
-                log_w_2 + np.sum(host_log_probs_2, axis=1)
+                log_w_1 + np.sum(host_log_probs_1, axis=1) -
+                log_w_2 - np.sum(host_log_probs_2, axis=1)
             )
         ).flatten()
         log_host_membership_probs = (
