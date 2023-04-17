@@ -640,9 +640,10 @@ class Model():
         return log_prob
 
     def reduce_duplicates(
-        self, array: np.ndarray, reduction_func, axis: int = None
+        self, array: np.ndarray, reduction_func,
+        axis: int = None, apply_to_unique: bool = False
     ) -> np.ndarray:
-        
+
         new_reduction_func = reduction_func
         if type(axis) == int:
             new_reduction_func = lambda x: np.apply_along_axis(
@@ -652,12 +653,16 @@ class Model():
         unique_array, duplicate_array = prep.reorder_duplicates(
             array, prep.idx_unique_sn, prep.idx_duplicate_sn
         )
+
         reduced_array = np.array(
             [
                 new_reduction_func(duplicate_values) for
                 duplicate_values in duplicate_array
             ]
         )
+        if apply_to_unique:
+            vectorized_reduction_func = np.vectorize(reduction_func)
+            unique_array = vectorized_reduction_func(unique_array)
         output_array = np.concatenate([unique_array, reduced_array])
 
         return output_array
@@ -730,9 +735,10 @@ class Model():
             gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2,
         )
 
+        log_reduction_func = lambda x: np.sum(np.log(x))
         sn_log_probs_1, sn_log_probs_2 = (
-            self.reduce_duplicates(sn_probs_1, reduction_func=np.log),
-            self.reduce_duplicates(sn_probs_2, reduction_func=np.log)
+            self.reduce_duplicates(sn_probs_1, reduction_func=log_reduction_func, apply_to_unique=True),
+            self.reduce_duplicates(sn_probs_2, reduction_func=log_reduction_func, apply_to_unique=True)
         )
         sn_probs_1, sn_probs_2 = (
             self.reduce_duplicates(sn_probs_1, reduction_func=np.prod),
@@ -902,11 +908,11 @@ class Model():
                 host_log_probs_2, reduction_func=np.sum, axis=0
             )
         else:
-            host_log_probs_1 = np.zeros(prep.n_unique_sn)
-            host_log_probs_2 = np.zeros(prep.n_unique_sn)
+            host_log_probs_1 = np.zeros((prep.n_unique_sn, 1))
+            host_log_probs_2 = np.zeros((prep.n_unique_sn, 1))
 
-        pop_1_log_probs = log_w_1 + sn_log_probs_1 + host_log_probs_1
-        pop_2_log_probs = log_w_2 + sn_log_probs_2 + host_log_probs_2
+        pop_1_log_probs = log_w_1 + sn_log_probs_1 + np.sum(host_log_probs_1, axis=1)
+        pop_2_log_probs = log_w_2 + sn_log_probs_2 + np.sum(host_log_probs_2, axis=1)
         combined_log_probs = np.logaddexp(pop_1_log_probs, pop_2_log_probs)
 
         if prep.global_model_cfg['only_evaluate_calibrators']:
@@ -914,7 +920,7 @@ class Model():
         
         log_host_membership_probs = (
             1./np.log(10) * (
-                log_w_1 + host_log_probs_1 - log_w_2 - host_log_probs_2
+                log_w_1 + np.sum(host_log_probs_1, axis=1) - log_w_2 - np.sum(host_log_probs_2, axis=1)
             ).flatten()
         )
         log_sn_membership_probs = (
