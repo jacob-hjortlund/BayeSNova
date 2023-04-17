@@ -863,12 +863,14 @@ class Model():
 
             warnings.warn(warning_string)
 
-            return (
-                -np.inf,
-                np.ones(prep.n_unique_sn)*np.nan,
-                np.ones(prep.n_unique_sn)*np.nan,
-                np.ones(prep.n_unique_sn)*np.nan,
+            outputs = (
+                (-np.inf,) + tuple(
+                    (3 + prep.host_galaxy_observables.shape[1]) * 
+                    [np.ones(prep.n_unique_sn)*np.nan]
+                )
             )
+
+            return outputs
         
         use_physical_population_fraction = prep.global_model_cfg["use_physical_ratio"]
 
@@ -918,19 +920,26 @@ class Model():
         if prep.global_model_cfg['only_evaluate_calibrators']:
             combined_log_probs = combined_log_probs[~prep.idx_reordered_calibrator_sn]
         
+        log_full_host_membership_probs = (
+            1./np.log(10) * (
+                log_w_1 + np.sum(host_log_probs_1, axis=1) +
+                log_w_2 + np.sum(host_log_probs_2, axis=1)
+            )
+        ).flatten()
         log_host_membership_probs = (
             1./np.log(10) * (
-                log_w_1 + np.sum(host_log_probs_1, axis=1) - log_w_2 - np.sum(host_log_probs_2, axis=1)
-            ).flatten()
+                log_w_1[:, None] + host_log_probs_1 -
+                log_w_2[:, None] - host_log_probs_2
+            )
         )
         log_sn_membership_probs = (
             1./np.log(10) * (
                 log_w_1 + sn_log_probs_1 - log_w_2 - sn_log_probs_2
-            ).flatten()
-        )
+            )
+        ).flatten()
         log_full_membership_probs = (
-            1./np.log(10) * (pop_1_log_probs - pop_2_log_probs).flatten()
-        )
+            1./np.log(10) * (pop_1_log_probs - pop_2_log_probs)
+        ).flatten()
 
         use_volumetric_rates = prep.global_model_cfg["use_volumetric_rates"]
         if use_volumetric_rates and use_physical_population_fraction:
@@ -941,18 +950,27 @@ class Model():
         else:
             log_prob = np.sum(combined_log_probs)
 
+        outputs = (
+            (log_prob, log_full_membership_probs, log_sn_membership_probs, log_full_host_membership_probs) +
+            tuple(
+                [log_host_membership_probs[:, i].flatten() for i in range(log_host_membership_probs.shape[1])]
+            )
+        )
+
         if not np.isfinite(log_prob):
             warnings.warn(
                 "Log posterior probability is not finite. Returning -np.inf. "
             )
-            log_prob = -np.inf
-            log_full_membership_probs = np.ones(prep.n_unique_sn)*np.nan
-            log_host_membership_probs = np.ones(prep.n_unique_sn)*np.nan
-            log_sn_membership_probs = np.ones(prep.n_unique_sn)*np.nan
+            outputs = (
+                (-np.inf,) + tuple(
+                    (3 + prep.host_galaxy_observables.shape[1]) * 
+                    [np.ones(prep.n_unique_sn)*np.nan]
+                )
+            )
         
         self.convolution_fn = None
 
-        return log_prob, log_full_membership_probs, log_sn_membership_probs, log_host_membership_probs
+        return outputs
 
     def __call__(self, theta: np.ndarray) -> float:
 
@@ -971,12 +989,15 @@ class Model():
 
         log_prior = self.log_prior(param_dict)
         if np.isinf(log_prior):
-            return (
-                log_prior,
-                np.ones(prep.n_unique_sn)*np.nan,
-                np.ones(prep.n_unique_sn)*np.nan,
-                np.ones(prep.n_unique_sn)*np.nan,
+
+            outputs = (
+                (-np.inf,) + tuple(
+                    (3 + prep.host_galaxy_observables.shape[1]) * 
+                    [np.ones(prep.n_unique_sn)*np.nan]
+                )
             )
+
+            return outputs
         
         # TODO: Update to handle cosmology
         if prep.global_model_cfg.use_sigmoid:
@@ -995,15 +1016,9 @@ class Model():
             if update_par:
                 param_dict[par] = preset_values[par]
 
-        (
-            log_likelihood, log_full_membership_probs,
-            log_sn_membership_probs, log_host_membership_probs
-        ) = self.log_likelihood(**param_dict)
+        outputs = self.log_likelihood(**param_dict)
 
-        return (
-            log_likelihood, log_full_membership_probs,
-            log_sn_membership_probs, log_host_membership_probs
-        )
+        return outputs
 
 class TrippModel():
 
