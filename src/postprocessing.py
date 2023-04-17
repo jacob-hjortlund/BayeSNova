@@ -217,26 +217,15 @@ def setup_colormap(
     host_membership_quantiles: np.ndarray, cfg: dict, color_map: str = "coolwarm"
 ):
 
-    cm_full_min, cm_full_max = (
-        np.min(full_membership_quantiles[1,:]),
-        np.max(full_membership_quantiles[1,:])
-    )
-    cm_sn_min, cm_sn_max = (
-        np.min(sn_membership_quantiles[1,:]),
-        np.max(sn_membership_quantiles[1,:])
-    )
-    cm_host_min, cm_host_max = (
-        np.min(host_membership_quantiles[1,:]),
-        np.max(host_membership_quantiles[1,:])
-    )
-    cm_min = np.min(
-        [cm_full_min, cm_sn_min] +
-        cfg['model_cfg']['host_galaxy_cfg']['use_properties'] * [cm_host_min]
-    )
+    cm_full_max = np.max(np.abs(full_membership_quantiles[1,:]))
+    cm_sn_max = np.max(np.abs(sn_membership_quantiles[1,:]))
+    cm_host_max = np.max(np.abs(host_membership_quantiles[1,:]))
+
     cm_max = np.max(
         [cm_full_max, cm_sn_max] +
         cfg['model_cfg']['host_galaxy_cfg']['use_properties'] * [cm_host_max]
     )
+    cm_min = -cm_max
 
     cm = plt.cm.get_cmap(color_map)
     cm_norm_full = Normalize(vmin=cm_min, vmax=cm_max, clip=True)
@@ -489,11 +478,11 @@ def observed_property_vs_membership(
             edgecolors="k", zorder=1000
         )
     
-    x_lower = cfg['plot_cfg']['property_ranges'][property_name]['lower']
-    x_upper = cfg['plot_cfg']['property_ranges'][property_name]['upper']
-    if property_name == "global_mass":
-        ax.set_ylim(-5, 2.5)
-    ax.set_xlim(x_lower, x_upper)
+    # x_lower = cfg['plot_cfg']['property_ranges'][property_name]['lower']
+    # x_upper = cfg['plot_cfg']['property_ranges'][property_name]['upper']
+    # if property_name == "global_mass":
+    #     ax.set_ylim(-5, 2.5)
+    # ax.set_xlim(x_lower, x_upper)
     ax.set_xlabel(property_name, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
     ax.set_ylabel(
         r"log$_{10}\left(p_{pop 1}(SN)/p_{pop 2}(SN)\right)$",

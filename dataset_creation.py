@@ -304,6 +304,14 @@ def main(cfg: omegaconf.DictConfig) -> None:
                     catalog.loc[idx_match, host_property] = jones_catalog.loc[i, host_property]
                     catalog.loc[idx_match, host_property_err] = jones_catalog.loc[i, host_property_err]
 
+            idx_not_null = (
+                (catalog[host_property] != NULL_VALUE) & (catalog[host_property_err] == NULL_VALUE)
+            )
+            idx_fractional_error_cutoff = (
+                catalog[host_property_err] / np.abs(catalog[host_property]) > cfg['prep_cfg']['fractional_error_cutoff']
+            ) & idx_not_null
+            catalog.loc[idx_fractional_error_cutoff, host_property_err] = NULL_VALUE
+
             number_of_sn_with_property = np.sum(catalog[host_property] != NULL_VALUE)
             print(f"Number of SNe with {host_property}: {number_of_sn_with_property}")
             print(f"Percentage of SNe with {host_property}: {number_of_sn_with_property / len(catalog) * 100:.3f} %\n")   

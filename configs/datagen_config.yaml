@@ -8,6 +8,7 @@ prep_cfg:
 
   include_calibrator_sn: True
 
+  fractional_error_cutoff: 1.
   use_host_morphologies: True
   use_jones_properties: True
   jones_properties: [
