@@ -285,6 +285,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
                     idx_already_set & (catalog[host_property] < 5.0)
                 )
                 catalog.loc[idx_invalid, host_property] = NULL_VALUE
+                catalog.loc[idx_invalid, host_property_err] = NULL_VALUE
 
             for i, jones_coord in enumerate(jones_coords):
                 jones_redshift = jones_catalog.loc[i, 'z']
@@ -304,12 +305,19 @@ def main(cfg: omegaconf.DictConfig) -> None:
                     catalog.loc[idx_match, host_property] = jones_catalog.loc[i, host_property]
                     catalog.loc[idx_match, host_property_err] = jones_catalog.loc[i, host_property_err]
 
+            idx_either_null = (
+                (catalog[host_property] == NULL_VALUE) | (catalog[host_property_err] == NULL_VALUE)
+            )
+            catalog.loc[idx_either_null, host_property] = NULL_VALUE
+            catalog.loc[idx_either_null, host_property_err] = NULL_VALUE
+
             idx_not_null = (
-                (catalog[host_property] != NULL_VALUE) & (catalog[host_property_err] == NULL_VALUE)
+                (catalog[host_property] != NULL_VALUE) & (catalog[host_property_err] != NULL_VALUE)
             )
             idx_fractional_error_cutoff = (
                 catalog[host_property_err] / np.abs(catalog[host_property]) > cfg['prep_cfg']['fractional_error_cutoff']
             ) & idx_not_null
+            catalog.loc[idx_fractional_error_cutoff, host_property] = NULL_VALUE
             catalog.loc[idx_fractional_error_cutoff, host_property_err] = NULL_VALUE
 
             number_of_sn_with_property = np.sum(catalog[host_property] != NULL_VALUE)
