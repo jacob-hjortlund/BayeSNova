@@ -319,6 +319,7 @@ def reorder_duplicates(
     for idx in idx_duplicate_sn:
         duplicate_sn_array.append(sn_array[idx])
     duplicate_sn_array = np.array(duplicate_sn_array, dtype=object)
-    unique_sn_array = np.delete(sn_array, ~idx_unique_sn)
+
+    unique_sn_array = sn_array[idx_unique_sn].copy()
 
     return unique_sn_array, duplicate_sn_array

@@ -1,3 +1,4 @@
+import inspect
 import warnings
 import numpy as np
 import numba as nb
@@ -5,6 +6,7 @@ import src.utils as utils
 import scipy.special as sp_special
 import astropy.cosmology as apy_cosmo
 
+from functools import partial
 from astropy.units import Gyr
 from NumbaQuadpack import quadpack_sig, dqags
 
@@ -527,7 +529,6 @@ class Model():
 
         return p_1, p_2, status
 
-    # TODO: CONVERT TO LOG
     def independent_gaussians(
         self, means: np.ndarray, sigmas: np.ndarray
     ):
@@ -639,24 +640,27 @@ class Model():
         return log_prob
 
     def reduce_duplicates(
-        self, probs: np.ndarray,
-    ) -> tuple:
+        self, array: np.ndarray, reduction_func, axis: int = None
+    ) -> np.ndarray:
         
-        unique_sn_probs, duplicate_sn_probs = prep.reorder_duplicates(
-            probs, prep.idx_unique_sn, prep.idx_duplicate_sn
+        new_reduction_func = reduction_func
+        if type(axis) == int:
+            new_reduction_func = lambda x: np.apply_along_axis(
+                reduction_func, axis, x
+            )
+
+        unique_array, duplicate_array = prep.reorder_duplicates(
+            array, prep.idx_unique_sn, prep.idx_duplicate_sn
         )
-        reduced_duplicate_sn_probs = np.array(
+        reduced_array = np.array(
             [
-                np.prod(duplicate_probs) for duplicate_probs in duplicate_sn_probs
+                new_reduction_func(duplicate_values) for
+                duplicate_values in duplicate_array
             ]
         )
-        reduced_dulpicate_sn_log_probs = np.array(
-            [np.sum(np.log(duplicate_probs)) for duplicate_probs in duplicate_sn_probs]
-        )
-        probs = np.concatenate([unique_sn_probs, reduced_duplicate_sn_probs])
-        log_probs = np.concatenate([np.log(unique_sn_probs), reduced_dulpicate_sn_log_probs])
+        output_array = np.concatenate([unique_array, reduced_array])
 
-        return probs, log_probs
+        return output_array
 
     def log_likelihood(
         self,
@@ -726,10 +730,18 @@ class Model():
             gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2,
         )
 
-        sn_probs_1, sn_log_probs_1 = self.reduce_duplicates(sn_probs_1)
-        sn_probs_2, sn_log_probs_2 = self.reduce_duplicates(sn_probs_2)
+        sn_log_probs_1, sn_log_probs_2 = (
+            self.reduce_duplicates(sn_probs_1, reduction_func=np.log),
+            self.reduce_duplicates(sn_probs_2, reduction_func=np.log)
+        )
+        sn_probs_1, sn_probs_2 = (
+            self.reduce_duplicates(sn_probs_1, reduction_func=np.prod),
+            self.reduce_duplicates(sn_probs_2, reduction_func=np.prod)
+        )
+
         reduced_status = (
-            self.reduce_duplicates(status[:,0])[0] * self.reduce_duplicates(status[:,1])[0]
+            self.reduce_duplicates(status[:,0], reduction_func=np.prod) *
+            self.reduce_duplicates(status[:,1], reduction_func=np.prod)
         ).astype('bool')
 
         idx_prior_convolution_failed = ~reduced_status
@@ -883,8 +895,12 @@ class Model():
                 host_galaxy_means=host_galaxy_means,
                 host_galaxy_sigmas=host_galaxy_sigs,
             )
-            host_probs_1, host_log_probs_1 = self.reduce_duplicates(host_probs_1)
-            host_probs_2, host_log_probs_2 = self.reduce_duplicates(host_probs_2)
+            host_log_probs_1 = self.reduce_duplicates(
+                host_log_probs_1, reduction_func=np.sum, axis=0
+            )
+            host_log_probs_2 = self.reduce_duplicates(
+                host_log_probs_2, reduction_func=np.sum, axis=0
+            )
         else:
             host_log_probs_1 = np.zeros(prep.n_unique_sn)
             host_log_probs_2 = np.zeros(prep.n_unique_sn)

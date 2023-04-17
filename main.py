@@ -1,14 +1,11 @@
 import hydra
 import omegaconf
 import os
-import corner
 
 import emcee as em
 import numpy as np
 import pandas as pd
 import clearml as cl
-import scipy.optimize as sp_opt
-import matplotlib.pyplot as plt
 import src.utils as utils
 import src.model as model
 import src.preprocessing as prep
