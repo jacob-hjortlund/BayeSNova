@@ -648,19 +648,23 @@ class Model():
 
     def reduce_duplicates(
         self, probs: np.ndarray,
-    ):
+    ) -> tuple:
         
         unique_sn_probs, duplicate_sn_probs = prep.reorder_duplicates(
             probs, prep.idx_unique_sn, prep.idx_duplicate_sn
         )
-        duplicate_sn_probs = np.array(
+        reduced_duplicate_sn_probs = np.array(
             [
                 np.prod(duplicate_probs) for duplicate_probs in duplicate_sn_probs
             ]
         )
-        probs = np.concatenate([unique_sn_probs, duplicate_sn_probs])
+        reduced_dulpicate_sn_log_probs = np.array(
+            [np.sum(np.log(duplicate_probs)) for duplicate_probs in duplicate_sn_probs]
+        )
+        probs = np.concatenate([unique_sn_probs, reduced_duplicate_sn_probs])
+        log_probs = np.concatenate([np.log(unique_sn_probs), reduced_dulpicate_sn_log_probs])
 
-        return probs
+        return probs, log_probs
 
     def log_likelihood(
         self,
@@ -729,10 +733,10 @@ class Model():
             tau_Ebv_1=tau_Ebv_1, tau_Ebv_2=tau_Ebv_2,
             gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2,
         )
-        sn_probs_1 = self.reduce_duplicates(sn_probs_1)
-        sn_probs_2 = self.reduce_duplicates(sn_probs_2)
+        sn_probs_1, sn_log_probs_1 = self.reduce_duplicates(sn_probs_1)
+        sn_probs_2, sn_log_probs_2 = self.reduce_duplicates(sn_probs_2)
         reduced_status = (
-            self.reduce_duplicates(status[:,0]) * self.reduce_duplicates(status[:,1])
+            self.reduce_duplicates(status[:,0])[0] * self.reduce_duplicates(status[:,1])[0]
         ).astype('bool')
 
         idx_prior_convolution_failed = ~reduced_status
@@ -837,6 +841,7 @@ class Model():
             ):
                 warning_string += (
                     f"\ncid: {cid}\n" +
+                    f"calibrator: {calibrator_flag}\n" +
                     f"mb: {mb:.3f}\n" +
                     f"x1: {x1:.3f}\n" +
                     f"c: {c:.3f}\n" +
@@ -877,47 +882,49 @@ class Model():
             w_vector = sn_rates[:, -1] / sn_rates[:, 0]
         else:
             w_vector = np.ones_like(sn_probs_1) * w
+        log_w_1 = np.log(w)
+        log_w_2 = np.log(1-w)
 
         if host_galaxy_means.shape[0] > 0:
             host_probs_1, host_probs_2 = self.host_galaxy_probs(
                 host_galaxy_means=host_galaxy_means,
                 host_galaxy_sigmas=host_galaxy_sigs,
             )
-            host_probs_1 = self.reduce_duplicates(host_probs_1)
-            host_probs_2 = self.reduce_duplicates(host_probs_2)
-            pop_1_probs = w_vector * sn_probs_1 * host_probs_1
-            pop_2_probs = (1-w_vector) * sn_probs_2 * host_probs_2
-            combined_probs = pop_1_probs + pop_2_probs
+            host_probs_1, host_log_probs_1 = self.reduce_duplicates(host_probs_1)
+            host_probs_2, host_log_probs_2 = self.reduce_duplicates(host_probs_2)
         else:
-            host_probs_1 = np.ones(prep.n_unique_sn)*np.nan
-            host_probs_2 = np.ones(prep.n_unique_sn)*np.nan
-            pop_1_probs = w_vector * sn_probs_1
-            pop_2_probs = (1-w_vector) * sn_probs_2
-            combined_probs = pop_1_probs + pop_2_probs
+            host_probs_1, host_log_probs_1 = np.ones(prep.n_unique_sn), np.zeros(prep.n_unique_sn)
+            host_probs_2, host_log_probs_2 = np.ones(prep.n_unique_sn), np.zeros(prep.n_unique_sn)
 
+        pop_1_log_probs = log_w_1 + sn_log_probs_1 + host_log_probs_1
+        pop_2_log_probs = log_w_2 + sn_log_probs_2 + host_log_probs_2
+        combined_log_probs = np.logaddexp(pop_1_log_probs, pop_2_log_probs)
+        
         if prep.global_model_cfg['only_evaluate_calibrators']:
-            combined_probs = combined_probs[~prep.idx_reordered_calibrator_sn]
+            combined_log_probs = combined_log_probs[~prep.idx_reordered_calibrator_sn]
         
         log_host_membership_probs = (
             1./np.log(10) * (
-                np.log(w_vector * host_probs_1) - np.log((1-w_vector) * host_probs_2)
+                log_w_1 + host_log_probs_1 - log_w_2 - host_log_probs_2
             ).flatten()
         )
         log_sn_membership_probs = (
             1./np.log(10) * (
-                np.log(w_vector * sn_probs_1) - np.log((1-w_vector) * sn_probs_2)
+                log_w_1 + sn_log_probs_1 - log_w_2 - sn_log_probs_2
             ).flatten()
         )
-        log_full_membership_probs = 1./np.log(10) * (np.log(pop_1_probs) - np.log(pop_2_probs)).flatten()
+        log_full_membership_probs = (
+            1./np.log(10) * (pop_1_log_probs - pop_2_log_probs).flatten()
+        )
 
         use_volumetric_rates = prep.global_model_cfg["use_volumetric_rates"]
         if use_volumetric_rates and use_physical_population_fraction:
             log_volumetric_prob = self.volumetric_rate_probs(
                 cosmo, eta=eta, prompt_fraction=prompt_fraction
             )
-            log_prob = np.sum(np.log(combined_probs)) + log_volumetric_prob
+            log_prob = np.sum(combined_log_probs) + log_volumetric_prob
         else:
-            log_prob = np.sum(np.log(combined_probs))
+            log_prob = np.sum(combined_log_probs)
 
         if not np.isfinite(log_prob):
             warnings.warn(
