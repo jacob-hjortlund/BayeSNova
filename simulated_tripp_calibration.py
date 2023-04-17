@@ -200,7 +200,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
             symm = (upper + lower) / 2
 
             tmp_df_array = np.concatenate(
-                (medians, lower, upper, symm), axis=0
+                (medians, lower, upper, symm, [prompt_fraction]), axis=0
             )
 
             # if i == 0:

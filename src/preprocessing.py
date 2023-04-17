@@ -122,8 +122,8 @@ def init_global_data(
     global observed_volumetric_rate_redshifts
 
     # TODO: FIX THIS TO ACCOUNT FOR POTENTIAL DUPLICATES
-    idx_calibrator_sn = data['is_calibrator'].to_numpy() != NULL_VALUE
-    calibrator_distance_moduli = data['mu_calibrator'].to_numpy()[idx_calibrator_sn]
+    idx_calibrator_sn = data['is_calibrator'].copy().to_numpy() != NULL_VALUE
+    calibrator_distance_moduli = data['mu_calibrator'].copy().to_numpy()[idx_calibrator_sn]
     data.drop(['is_calibrator', 'mu_calibrator'], axis=1, inplace=True)
     
     global_model_cfg = cfg
@@ -140,14 +140,14 @@ def init_global_data(
 
     if duplicate_uid_key in data.columns:
 
-        duplicate_uids = data[duplicate_uid_key].unique()
+        duplicate_uids = data[duplicate_uid_key].copy().unique()
         idx_not_null = duplicate_uids != NULL_VALUE
         duplicate_uids = duplicate_uids[idx_not_null]
 
         idx_duplicate_sn = []
         for uid in duplicate_uids:
             idx_duplicate_sn.append(
-                data['duplicate_uid'].to_numpy() == uid
+                data['duplicate_uid'].copy().to_numpy() == uid
             )
 
         idx_duplicate_sn = np.array(idx_duplicate_sn)
