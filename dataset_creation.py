@@ -7,7 +7,7 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord
 
 import src.preprocessing as prep
-#test
+
 NULL_VALUE = -9999.
 
 @hydra.main(
@@ -280,6 +280,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 new_column_names += [host_property, host_property_err]
             
             idx_already_set = catalog[host_property] != NULL_VALUE
+            if host_property in ['global_mass', 'local_mass']:
+                idx_invalid = (
+                    idx_already_set & (catalog[host_property] < 5.0)
+                )
+                catalog.loc[idx_invalid, host_property] = NULL_VALUE
+
             for i, jones_coord in enumerate(jones_coords):
                 jones_redshift = jones_catalog.loc[i, 'z']
                 idx_below_max_angular_separation = (

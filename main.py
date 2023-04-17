@@ -20,7 +20,7 @@ from mpi4py import MPI
 @hydra.main(
     version_base=None, config_path="configs", config_name="config"
 )
-def main(cfg: omegaconf.DictConfig) -> None:   
+def main(cfg: omegaconf.DictConfig) -> None:
 
     # Setup clearml
     task_name = utils.create_task_name(cfg)
