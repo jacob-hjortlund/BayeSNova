@@ -845,18 +845,18 @@ class Model():
             )[idx_not_valid]
             
             warning_string += "\nObserved SN parameters:\n"
-            for cid, calibrator_flag, mb, x1, c, z in zip(
+            for failure_cid, failure_calibrator_flag, failure_mb, failure_x1, failure_c, failure_z in zip(
                 cid_for_failures, calibrator_flag_for_failures,
                 observed_mb_for_failures, observed_x1_for_failures,
                 observed_c_for_failures, observed_redshifts_for_failures
             ):
                 warning_string += (
-                    f"\ncid: {cid}\n" +
-                    f"calibrator: {calibrator_flag}\n" +
-                    f"mb: {mb:.3f}\n" +
-                    f"x1: {x1:.3f}\n" +
-                    f"c: {c:.3f}\n" +
-                    f"redshift: {z:.3f}\n"
+                    f"\ncid: {failure_cid}\n" +
+                    f"calibrator: {failure_calibrator_flag}\n" +
+                    f"mb: {failure_mb}\n" +
+                    f"x1: {failure_x1}\n" +
+                    f"c: {failure_c}\n" +
+                    f"redshift: {failure_z}\n"
                 )
 
             warning_string += "\n ----------------------------------------------- \n"
