@@ -288,6 +288,9 @@ def build_covariance_matrix(
     if np.any(host_cov_values):
         cov_host = np.eye(host_cov_values.shape[1]) * host_cov_values[:, None, :] ** 2
         posdef_cov_host = utils.ensure_posdef(cov_host)
+        posdef_cov_host = np.array(
+            [np.diag(tmp_cov) for tmp_cov in posdef_cov_host]
+        )
     else:
         posdef_cov_host = np.zeros((0,0))
 

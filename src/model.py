@@ -528,18 +528,16 @@ class Model():
         return p_1, p_2, status
 
     # TODO: CONVERT TO LOG
-    def independent_mvgaussian(
+    def independent_gaussians(
         self, means: np.ndarray, sigmas: np.ndarray
     ):
 
         idx_not_observed = prep.host_galaxy_observables == NULL_VALUE
-        n_properties = prep.host_galaxy_observables.shape[1]
-        res = np.atleast_3d(
-            np.where(
-                idx_not_observed,
-                0.,
-                prep.host_galaxy_observables - means
-            )
+        
+        res = np.where(
+            idx_not_observed,
+            0.,
+            prep.host_galaxy_observables - means
         )
 
         sigmas = np.tile(
@@ -550,22 +548,15 @@ class Model():
             0.,
             sigmas
         )
-        sigmas = np.eye(n_properties) * sigmas[:, None, :]
         cov = prep.host_galaxy_covariances + sigmas**2
 
-        exponent = np.squeeze(
-            np.moveaxis(res, 1, 2) @ np.linalg.inv(cov) @ res
-        )
+        log_normalisations = -0.5 * np.log(2 * np.pi) - 0.5 * np.log(cov)
+        log_exponents = -0.5 * (res**2 / cov)
+        log_probs = log_normalisations + log_exponents
 
-        prob = (
-            ((2 * np.pi)**(-n_properties/2) *
-            np.linalg.det(cov)**(-1/2)) *
-            np.exp(-0.5 * exponent)
-        )
+        return log_probs
 
-        return prob
-
-    def host_galaxy_probs(
+    def host_galaxy_log_probs(
         self,
         host_galaxy_means: np.ndarray,
         host_galaxy_sigmas: np.ndarray,
@@ -574,10 +565,10 @@ class Model():
         mu_1, mu_2 = host_galaxy_means[::2], host_galaxy_means[1::2]
         sig_1, sig_2 = host_galaxy_sigmas[::2], host_galaxy_sigmas[1::2]
 
-        prob_1 = self.independent_mvgaussian(mu_1, sig_1)
-        prob_2 = self.independent_mvgaussian(mu_2, sig_2)
+        log_probs_1 = self.independent_gaussians(mu_1, sig_1)
+        log_probs_2 = self.independent_gaussians(mu_2, sig_2)
 
-        return prob_1, prob_2
+        return log_probs_1, log_probs_2
 
     def volumetric_sn_rates(
         self, observed_redshifts: np.ndarray,
@@ -888,15 +879,15 @@ class Model():
         log_w_2 = np.log(1-w_vector)
 
         if host_galaxy_means.shape[0] > 0:
-            host_probs_1, host_probs_2 = self.host_galaxy_probs(
+            host_log_probs_1, host_log_probs_2 = self.host_galaxy_log_probs(
                 host_galaxy_means=host_galaxy_means,
                 host_galaxy_sigmas=host_galaxy_sigs,
             )
             host_probs_1, host_log_probs_1 = self.reduce_duplicates(host_probs_1)
             host_probs_2, host_log_probs_2 = self.reduce_duplicates(host_probs_2)
         else:
-            host_probs_1, host_log_probs_1 = np.ones(prep.n_unique_sn), np.zeros(prep.n_unique_sn)
-            host_probs_2, host_log_probs_2 = np.ones(prep.n_unique_sn), np.zeros(prep.n_unique_sn)
+            host_log_probs_1 = np.zeros(prep.n_unique_sn)
+            host_log_probs_2 = np.zeros(prep.n_unique_sn)
 
         pop_1_log_probs = log_w_1 + sn_log_probs_1 + host_log_probs_1
         pop_2_log_probs = log_w_2 + sn_log_probs_2 + host_log_probs_2
