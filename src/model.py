@@ -731,9 +731,122 @@ class Model():
         )
         sn_probs_1 = self.reduce_duplicates(sn_probs_1)
         sn_probs_2 = self.reduce_duplicates(sn_probs_2)
+        reduced_status = (
+            self.reduce_duplicates(status[:,0]) * self.reduce_duplicates(status[:,1])
+        ).astype('bool')
 
-        if np.any(sn_probs_1 < 0.) | np.any(sn_probs_2 < 0.):
-            print("\nOh no, someones below 0\n")
+        idx_prior_convolution_failed = ~reduced_status
+        idx_sn_prob_below_zero = (sn_probs_1 < 0.) | (sn_probs_2 < 0.)
+        idx_prob_not_finite = (
+            ~np.isfinite(sn_probs_1) | ~np.isfinite(sn_probs_2)
+        )
+        idx_not_valid = (
+            idx_prior_convolution_failed |
+            idx_sn_prob_below_zero |
+            idx_prob_not_finite
+        )
+        sn_prob_not_valid = np.any(idx_not_valid)
+        if sn_prob_not_valid:
+            
+            n_convolution_failed = np.sum(idx_prior_convolution_failed)
+            n_sn_prob_below_zero = np.sum(idx_sn_prob_below_zero)
+            n_prob_not_finite = np.sum(idx_prob_not_finite)
+
+            warning_string = (
+                "\n --------- Failure in SN prior convolution --------- \n" +
+                f"\nNo. of SN with failed convolutions: {n_convolution_failed}\n" +
+                f"No. of SN with negative probabilities: {n_sn_prob_below_zero}\n" +
+                f"No. of SN with non-finite probabilities: {n_prob_not_finite}\n"
+            )
+            failure_in_pop_1 = (
+                np.any(~status[:,0]) or
+                np.any(sn_probs_1 < 0.) or
+                np.any(~np.isfinite(sn_probs_1))
+            )
+            failure_in_pop_2 = (
+                np.any(~status[:,1]) or
+                np.any(sn_probs_2 < 0.) or
+                np.any(~np.isfinite(sn_probs_2))
+            )
+
+            if failure_in_pop_1:
+                warning_string += (
+                    "\nFailure(s) occured in population 1.\n" +
+                    f"Mb: {Mb_1:.3f}, x1: {s_1:.3f}, c: {c_1:.3f},\n" +
+                    f"alpha: {alpha_1:.3f}, beta: {beta_1:.3f},\n" +
+                    f"sig_int: {sig_int_1:.3f}, sig_s: {sig_s_1:.3f}, sig_c: {sig_c_1:.3f},\n" +
+                    f"Rb: {Rb_1:.3f}, sig_Rb: {sig_Rb_1:.3f},\n" +
+                    f"tau_Rb: {tau_Rb_1:.3f}, gamma_Rb: {gamma_Rb_1:.3f}, shift_Rb: {shift_Rb:.3f},\n" +
+                    f"Ebv: {Ebv_1:.3f}, tau_Ebv: {tau_Ebv_1:.3f}, gamma_Ebv: {gamma_Ebv_1:.3f}\n"
+                )
+            
+            if failure_in_pop_2:
+                warning_string += (
+                    "\nFailure(s) occured in population 2.\n" +
+                    f"Mb: {Mb_2:.3f}, x1: {s_2:.3f}, c: {c_2:.3f},\n" +
+                    f"alpha: {alpha_2:.3f}, beta: {beta_2:.3f},\n" +
+                    f"sig_int: {sig_int_2:.3f}, sig_s: {sig_s_2:.3f}, sig_c: {sig_c_2:.3f},\n" +
+                    f"Rb: {Rb_2:.3f}, sig_Rb: {sig_Rb_2:.3f},\n" +
+                    f"tau_Rb: {tau_Rb_2:.3f}, gamma_Rb: {gamma_Rb_2:.3f}, shift_Rb: {shift_Rb:.3f},\n" +
+                    f"Ebv: {Ebv_2:.3f}, tau_Ebv: {tau_Ebv_2:.3f}, gamma_Ebv: {gamma_Ebv_2:.3f}\n"
+                )
+
+            warning_string += (
+                "\nCosmology parameters used:\n" +
+                f"H0: {H0:.3f}, Om0: {Om0:.3f}, w0: {w0:.3f}, wa: {wa}\n" +
+                f"eta: {eta:.3f}, prompt_fraction: {prompt_fraction:.3f}\n"
+            )
+
+            cid_for_failures = np.concatenate(
+                prep.reorder_duplicates(
+                    prep.sn_cids, prep.idx_unique_sn,
+                    prep.idx_duplicate_sn
+                )
+            )[idx_not_valid]
+            calibrator_flag_for_failures = prep.idx_reordered_calibrator_sn[idx_not_valid]
+            observed_mb_for_failures = np.concatenate(
+                prep.reorder_duplicates(
+                    prep.sn_observables[:,0], prep.idx_unique_sn,
+                    prep.idx_duplicate_sn
+                )
+            )[idx_not_valid]
+            observed_x1_for_failures = np.concatenate(
+                prep.reorder_duplicates(
+                    prep.sn_observables[:,1], prep.idx_unique_sn,
+                    prep.idx_duplicate_sn
+                )
+            )[idx_not_valid]
+            observed_c_for_failures = np.concatenate(
+                prep.reorder_duplicates(
+                    prep.sn_observables[:,2], prep.idx_unique_sn,
+                    prep.idx_duplicate_sn
+                )
+            )[idx_not_valid]
+            observed_redshifts_for_failures = np.concatenate(
+                prep.reorder_duplicates(
+                    prep.sn_observables[:,-1], prep.idx_unique_sn,
+                    prep.idx_duplicate_sn
+                )
+            )[idx_not_valid]
+            
+            warning_string += "\nObserved SN parameters:\n"
+            for cid, calibrator_flag, mb, x1, c, z in zip(
+                cid_for_failures, calibrator_flag_for_failures,
+                observed_mb_for_failures, observed_x1_for_failures,
+                observed_c_for_failures, observed_redshifts_for_failures
+            ):
+                warning_string += (
+                    f"\ncid: {cid}\n" +
+                    f"mb: {mb:.3f}\n" +
+                    f"x1: {x1:.3f}\n" +
+                    f"c: {c:.3f}\n" +
+                    f"redshift: {z:.3f}\n"
+                )
+
+            warning_string += "\n ----------------------------------------------- \n"
+
+            warnings.warn(warning_string)
+
             return (
                 -np.inf,
                 np.ones(prep.n_unique_sn)*np.nan,
@@ -806,20 +919,14 @@ class Model():
         else:
             log_prob = np.sum(np.log(combined_probs))
 
-        if np.isnan(log_prob):
+        if not np.isfinite(log_prob):
+            warnings.warn(
+                "Log posterior probability is not finite. Returning -np.inf. "
+            )
             log_prob = -np.inf
             log_full_membership_probs = np.ones(prep.n_unique_sn)*np.nan
             log_host_membership_probs = np.ones(prep.n_unique_sn)*np.nan
             log_sn_membership_probs = np.ones(prep.n_unique_sn)*np.nan
-
-        s1, s2 = np.all(status[:, 0]), np.all(status[:, 1])
-        if not s1 or not s2:
-            mean1, mean2 = np.mean(sn_probs_1), np.mean(sn_probs_2)
-            std1, std2 = np.std(sn_probs_1), np.std(sn_probs_2)
-            f1, f2 = np.count_nonzero(~status[:, 0])/len(status), np.count_nonzero(~status[:, 1])/len(status)
-            print("\nPop 1 mean and std, percentage failed:", mean1, "+-", std1, ",", f1*100, "%")
-            print("Pop 2 mean and std, percentage failed:", mean2, "+-", std2, ",", f2*100, "%")
-            print("Log prob:", log_prob, "\n")
         
         self.convolution_fn = None
 
@@ -856,10 +963,6 @@ class Model():
                 independent_par_names=prep.global_model_cfg.independent_par_names,
                 ratio_par_name=prep.global_model_cfg.ratio_par_name
             )
-        
-        # param_dict =  {
-        #     **prep.global_model_cfg.preset_values, **param_dict
-        # }
 
         preset_values = prep.global_model_cfg.preset_values
         for par in preset_values.keys():

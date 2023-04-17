@@ -102,6 +102,7 @@ def init_global_data(
     cfg: dict
 ) -> tuple:
 
+    global sn_cids
     global sn_covariances
     global sn_observables
     global gRb_quantiles
@@ -134,6 +135,7 @@ def init_global_data(
     sn_covariance_keys = ['x0', 'mBErr', 'x1Err', 'cErr', 'cov_x1_c', 'cov_x1_x0', 'cov_c_x0']
     sn_observables = data[sn_observable_keys].copy().to_numpy()
     sn_covariance_values = data[sn_covariance_keys].copy().to_numpy()
+    sn_cids = data['CID'].copy().to_numpy()
     data.drop(
         sn_observable_keys + sn_covariance_keys + ['CID'], axis=1, inplace=True
     )
