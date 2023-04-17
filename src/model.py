@@ -527,6 +527,7 @@ class Model():
 
         return p_1, p_2, status
 
+    # TODO: CONVERT TO LOG
     def independent_mvgaussian(
         self, means: np.ndarray, sigmas: np.ndarray
     ):
@@ -733,6 +734,7 @@ class Model():
             tau_Ebv_1=tau_Ebv_1, tau_Ebv_2=tau_Ebv_2,
             gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2,
         )
+
         sn_probs_1, sn_log_probs_1 = self.reduce_duplicates(sn_probs_1)
         sn_probs_2, sn_log_probs_2 = self.reduce_duplicates(sn_probs_2)
         reduced_status = (
@@ -882,8 +884,8 @@ class Model():
             w_vector = sn_rates[:, -1] / sn_rates[:, 0]
         else:
             w_vector = np.ones_like(sn_probs_1) * w
-        log_w_1 = np.log(w)
-        log_w_2 = np.log(1-w)
+        log_w_1 = np.log(w_vector)
+        log_w_2 = np.log(1-w_vector)
 
         if host_galaxy_means.shape[0] > 0:
             host_probs_1, host_probs_2 = self.host_galaxy_probs(
@@ -899,7 +901,7 @@ class Model():
         pop_1_log_probs = log_w_1 + sn_log_probs_1 + host_log_probs_1
         pop_2_log_probs = log_w_2 + sn_log_probs_2 + host_log_probs_2
         combined_log_probs = np.logaddexp(pop_1_log_probs, pop_2_log_probs)
-        
+
         if prep.global_model_cfg['only_evaluate_calibrators']:
             combined_log_probs = combined_log_probs[~prep.idx_reordered_calibrator_sn]
         
