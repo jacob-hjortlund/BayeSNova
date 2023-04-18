@@ -191,26 +191,33 @@ def parameter_values(
     z_score_df.to_csv(os.path.join(save_path, "z_scores.csv"))
 
 def get_membership_quantiles(
-    backend: em.backends.HDFBackend, burnin: int, tau: int
+    backend: em.backends.HDFBackend, burnin: int, tau: int,
+    n_unused_host_properties: int, cfg: dict
 ):
     
     blobs = backend.get_blobs(
         discard=burnin, thin=int(0.5*tau), flat=True
     )
-    log_full_membership_probs = blobs[:, 0, :]
-    log_sn_membership_probs = blobs[:, 1, :]
-    log_host_membership_probs = blobs[:, 2, :]
-    full_membership_quantiles = np.quantile(
-        log_full_membership_probs, [0.16, 0.50, 0.84], axis=0
+
+    index_unused = (
+        -n_unused_host_properties -
+        (not cfg['host_galaxy_cfg']['use_properties'])
     )
-    sn_membership_quantiles = np.quantile(
-        log_sn_membership_probs, [0.16, 0.50, 0.84], axis=0
-    )
-    host_membership_quantiles = np.quantile(
-        log_host_membership_probs, [0.16, 0.50, 0.84], axis=0
+    membership_quantiles = np.quantile(
+        blobs, [0.16, 0.50, 0.84], axis=0
     )
 
-    return full_membership_quantiles, sn_membership_quantiles, host_membership_quantiles
+    are_unused_flagged = np.all(
+        membership_quantiles[:, index_unused:, :] == NULL_VALUE
+    )
+    if not are_unused_flagged:
+        raise ValueError(
+            "Some of the unused host properties are not flagged as NULL_VALUE."
+        )
+    
+    membership_quantiles = membership_quantiles[:, :index_unused, :]
+
+    return membership_quantiles
 
 def setup_colormap(
     full_membership_quantiles: np.ndarray, sn_membership_quantiles: np.ndarray,

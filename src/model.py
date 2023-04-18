@@ -892,7 +892,8 @@ class Model():
         log_w_1 = np.log(w_vector)
         log_w_2 = np.log(1-w_vector)
 
-        if host_galaxy_means.shape[0] > 0:
+        n_host_properties = host_galaxy_means.shape[0] // 2
+        if n_host_properties > 0:
             host_log_probs_1, host_log_probs_2 = self.host_galaxy_log_probs(
                 host_galaxy_means=host_galaxy_means,
                 host_galaxy_sigmas=host_galaxy_sigs,
@@ -903,9 +904,15 @@ class Model():
             host_log_probs_2 = self.reduce_duplicates(
                 host_log_probs_2, reduction_func=np.sum, axis=0
             )
+            idx_property_not_observed = self.reduce_duplicates(
+                prep.host_galaxy_observables == NULL_VALUE, np.prod, axis=0
+            ).astype(bool)
         else:
             host_log_probs_1 = np.zeros((prep.n_unique_sn, 1))
             host_log_probs_2 = np.zeros((prep.n_unique_sn, 1))
+            idx_property_not_observed = np.ones(
+                (prep.n_unique_sn, 1), dtype=bool
+            )
 
         pop_1_log_probs = log_w_1 + sn_log_probs_1 + np.sum(host_log_probs_1, axis=1)
         pop_2_log_probs = log_w_2 + sn_log_probs_2 + np.sum(host_log_probs_2, axis=1)
@@ -914,26 +921,40 @@ class Model():
         if prep.global_model_cfg['only_evaluate_calibrators']:
             combined_log_probs = combined_log_probs[~prep.idx_reordered_calibrator_sn]
         
+        n_tile = (
+            n_host_properties + (not prep.global_model_cfg['host_galaxy_cfg']['use_properties'])
+        )
+        idx_all_properties_not_observed = np.all(
+            idx_property_not_observed, axis=1
+        )
+        tiled_log_w_1 = np.tile(log_w_1[:, None], [1, n_tile])
+        tiled_log_w_2 = np.tile(log_w_2[:, None], [1, n_tile])
+
+        log_host_membership_probs = (
+            1./np.log(10) * (
+                tiled_log_w_1 + host_log_probs_1 -
+                tiled_log_w_2 - host_log_probs_2
+            )
+        )
+        log_host_membership_probs[idx_property_not_observed] = NULL_VALUE
+
         log_full_host_membership_probs = (
             1./np.log(10) * (
                 log_w_1 + np.sum(host_log_probs_1, axis=1) -
                 log_w_2 - np.sum(host_log_probs_2, axis=1)
             )
-        ).flatten()
-        log_host_membership_probs = (
-            1./np.log(10) * (
-                log_w_1[:, None] + host_log_probs_1 -
-                log_w_2[:, None] - host_log_probs_2
-            )
-        )
+        )#.flatten()
+        log_full_host_membership_probs[idx_all_properties_not_observed] = NULL_VALUE
+
         log_sn_membership_probs = (
             1./np.log(10) * (
                 log_w_1 + sn_log_probs_1 - log_w_2 - sn_log_probs_2
             )
-        ).flatten()
+        )#.flatten()
+        
         log_full_membership_probs = (
             1./np.log(10) * (pop_1_log_probs - pop_2_log_probs)
-        ).flatten()
+        )#.flatten()
 
         use_volumetric_rates = prep.global_model_cfg["use_volumetric_rates"]
         if use_volumetric_rates and use_physical_population_fraction:
