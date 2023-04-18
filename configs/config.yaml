@@ -54,6 +54,9 @@ model_cfg:
       global_ssfr:
         means: [-11., -9.]
         sigmas: [1., 1.]
+      t:
+        means: [0., 4.]
+        sigmas: [3., 1.]
   preset_values:
     H0: 73.0
     Om0: 0.3
