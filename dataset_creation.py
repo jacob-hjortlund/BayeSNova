@@ -88,13 +88,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print("\nApplying mB err cutoff...\n")
         alpha = cfg['prep_cfg']['alpha']
         beta = cfg['prep_cfg']['beta']
-        mb_err_column_name = 'mBErr'
         mu_err_column_name = 'MUERR'
         idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
         x1_err_column_name = 'x1Err'
         c_err_column_name = 'cErr'
         err = np.sqrt(
-            (
+            (   
                 catalog[mu_err_column_name].to_numpy() ** 2 +
                 (alpha * catalog[x1_err_column_name].to_numpy()) ** 2 +
                 (beta * catalog[c_err_column_name].to_numpy()) ** 2
