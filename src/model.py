@@ -857,7 +857,7 @@ class Model():
             using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
                 3 + prep.host_galaxy_observables.shape[1] +
-                (not using_host_galaxy_properties)
+                2 * (not using_host_galaxy_properties)
             )
             outputs = (
                 (-np.inf,) + 
@@ -979,7 +979,7 @@ class Model():
             using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
                 3 + prep.host_galaxy_observables.shape[1] +
-                (not using_host_galaxy_properties)
+                2 * (not using_host_galaxy_properties)
             )
             outputs = (
                 (-np.inf,) + 
@@ -1011,7 +1011,7 @@ class Model():
             using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
                 3 + prep.host_galaxy_observables.shape[1] +
-                (not using_host_galaxy_properties)
+                2 * (not using_host_galaxy_properties)
             )
             outputs = (
                 (-np.inf,) + 
