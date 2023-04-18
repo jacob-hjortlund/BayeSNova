@@ -518,15 +518,6 @@ class Model():
         p1_nans = np.isnan(p_1)
         p2_nans = np.isnan(p_2)
 
-        if np.any(p1_nans):
-            print("Pop 1 contains nan probabilities:", np.count_nonzero(p1_nans)/len(p1_nans)*100, "%")
-            print("Pop 1 pars:", [Rb_1, sig_Rb_1, Ebv_1, gamma_Ebv_1])
-            print("Pop 1 norm:", norm_1, "\n")
-        if np.any(p2_nans):
-            print("Pop 2 contains nan probabilities:", np.count_nonzero(p2_nans)/len(p2_nans)*100, "%")
-            print("Pop 1 pars:", [Rb_2, sig_Rb_2, Ebv_2, gamma_Ebv_2])
-            print("Pop 2 norm:", norm_2, "\n")
-
         return p_1, p_2, status
 
     def independent_gaussians(
@@ -863,11 +854,14 @@ class Model():
 
             warnings.warn(warning_string)
 
+            using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
+            number_of_blobs = (
+                3 + prep.host_galaxy_observables.shape[1] +
+                (not using_host_galaxy_properties)
+            )
             outputs = (
-                (-np.inf,) + tuple(
-                    (3 + prep.host_galaxy_observables.shape[1]) * 
-                    [np.ones(prep.n_unique_sn)*np.nan]
-                )
+                (-np.inf,) + 
+                tuple(number_of_blobs * [np.ones(prep.n_unique_sn) * np.nan])
             )
 
             return outputs
@@ -961,11 +955,14 @@ class Model():
             warnings.warn(
                 "Log posterior probability is not finite. Returning -np.inf. "
             )
+            using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
+            number_of_blobs = (
+                3 + prep.host_galaxy_observables.shape[1] +
+                (not using_host_galaxy_properties)
+            )
             outputs = (
-                (-np.inf,) + tuple(
-                    (3 + prep.host_galaxy_observables.shape[1]) * 
-                    [np.ones(prep.n_unique_sn)*np.nan]
-                )
+                (-np.inf,) + 
+                tuple(number_of_blobs * [np.ones(prep.n_unique_sn) * np.nan])
             )
         
         self.convolution_fn = None
@@ -990,11 +987,14 @@ class Model():
         log_prior = self.log_prior(param_dict)
         if np.isinf(log_prior):
 
+            using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
+            number_of_blobs = (
+                3 + prep.host_galaxy_observables.shape[1] +
+                (not using_host_galaxy_properties)
+            )
             outputs = (
-                (-np.inf,) + tuple(
-                    (3 + prep.host_galaxy_observables.shape[1]) * 
-                    [np.ones(prep.n_unique_sn)*np.nan]
-                )
+                (-np.inf,) + 
+                tuple(number_of_blobs * [np.ones(prep.n_unique_sn) * np.nan])
             )
 
             return outputs
