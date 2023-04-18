@@ -57,6 +57,31 @@ class PoolWrapper():
             self.pool.wait()
             sys.exit(0)
 
+def format_property_names(
+    property_names: list
+) -> list:
+    formatted_names = []
+    for name in property_names:
+
+        if name == 't':
+            tmp_name = "Morphological type T"
+            formatted_names.append(tmp_name)
+            continue
+
+        tmp_name = name.replace("_", " ")
+        tmp_name = tmp_name.replace("u-g", "U-G")
+        tmp_name = tmp_name.capitalize()
+        
+        tmp_name = tmp_name.replace(
+            "mass", "log$_{10}\left( M_* \cdot [M_\odot]^{-1} \right)$"
+        )
+        tmp_name = tmp_name.replace(
+            "ssfr", "log$_{10}\left( sSFR \cdot [M_\odot \cdot yr]^{-1} \right)$"
+        )
+        formatted_names.append(tmp_name)
+        
+    return formatted_names
+
 def weighted_mean_and_error(
     values: np.ndarray, errors: np.ndarray,
     error_floor: float = 1e-10
