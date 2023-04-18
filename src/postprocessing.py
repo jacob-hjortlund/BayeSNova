@@ -201,7 +201,7 @@ def get_membership_quantiles(
 
     index_unused = (
         -n_unused_host_properties -
-        (not cfg['host_galaxy_cfg']['use_properties'])
+        2 * (not cfg['host_galaxy_cfg']['use_properties'])
     )
     membership_quantiles = np.quantile(
         blobs, [0.16, 0.50, 0.84], axis=0

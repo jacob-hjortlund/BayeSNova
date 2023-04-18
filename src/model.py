@@ -857,7 +857,7 @@ class Model():
             using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
                 3 + prep.host_galaxy_observables.shape[1] +
-                2 * (not using_host_galaxy_properties)
+                (not using_host_galaxy_properties)
             )
             outputs = (
                 (-np.inf,) + 
@@ -879,6 +879,7 @@ class Model():
 
             is_inf = np.any(np.isinf(sn_rates))
             if is_inf:
+                # TODO: UPDATE FOR VARIABLE BLOB SIZE
                 return (
                     -np.inf,
                     np.ones(prep.n_unique_sn)*np.nan,
@@ -979,7 +980,7 @@ class Model():
             using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
                 3 + prep.host_galaxy_observables.shape[1] +
-                2 * (not using_host_galaxy_properties)
+                (not using_host_galaxy_properties)
             )
             outputs = (
                 (-np.inf,) + 
@@ -1011,7 +1012,7 @@ class Model():
             using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
                 3 + prep.host_galaxy_observables.shape[1] +
-                2 * (not using_host_galaxy_properties)
+                (not using_host_galaxy_properties)
             )
             outputs = (
                 (-np.inf,) + 

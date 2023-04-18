@@ -185,7 +185,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
     (
         full_membership_quantiles, sn_membership_quantiles, host_membership_quantiles
     ) = post.get_membership_quantiles(
-        backend, burnin, tau
+        backend, burnin, tau, prep.n_unused_host_properties,
+        cfg['model_cfg']
     )
 
     cm, cm_norm_full, mapper_full, pop1_color, pop2_color = post.setup_colormap(
