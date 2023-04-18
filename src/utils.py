@@ -63,20 +63,22 @@ def format_property_names(
     formatted_names = []
     for name in property_names:
 
+
         if name == 't':
             tmp_name = "Morphological type T"
             formatted_names.append(tmp_name)
             continue
-
+        
+        name = r"{}".format(name)
         tmp_name = name.replace("_", " ")
-        tmp_name = tmp_name.replace("u-g", "U-G")
         tmp_name = tmp_name.capitalize()
+        tmp_name = tmp_name.replace("u-g", "U-G")
         
         tmp_name = tmp_name.replace(
-            "mass", "log$_{10}\left( M_* \cdot [M_\odot]^{-1} \right)$"
+            "mass", "log$_{10}( M_* \cdot [M_\odot]^{-1})$"
         )
         tmp_name = tmp_name.replace(
-            "ssfr", "log$_{10}\left( sSFR \cdot [M_\odot \cdot yr]^{-1} \right)$"
+            "ssfr", "log$_{10}( sSFR \cdot [M_\odot \cdot yr]^{-1})$"
         )
         formatted_names.append(tmp_name)
         

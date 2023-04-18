@@ -195,43 +195,37 @@ def get_membership_quantiles(
     n_unused_host_properties: int, cfg: dict
 ):
     
-    blobs = backend.get_blobs(
-        discard=burnin, thin=int(0.5*tau), flat=True
-    )
-
     index_unused = (
         -n_unused_host_properties -
         2 * (not cfg['host_galaxy_cfg']['use_properties'])
     )
-    membership_quantiles = np.quantile(
-        blobs, [0.16, 0.50, 0.84], axis=0
-    )
 
-    are_unused_flagged = np.all(
-        membership_quantiles[:, index_unused:, :] == NULL_VALUE
+    blobs = backend.get_blobs(
+        discard=burnin, thin=int(0.5*tau), flat=True
+    )[:, :index_unused, :]
+    blobs = np.where(blobs == NULL_VALUE, np.nan, blobs)
+
+    membership_quantiles = np.array(
+        [
+            np.quantile(blobs[:, i, :], [0.16, 0.50, 0.84], axis=0)
+            for i in range(blobs.shape[1])
+        ]
     )
-    if not are_unused_flagged:
-        raise ValueError(
-            "Some of the unused host properties are not flagged as NULL_VALUE."
-        )
+    membership_quantiles = np.where(
+        np.isnan(membership_quantiles), NULL_VALUE, membership_quantiles
+    )
     
-    membership_quantiles = membership_quantiles[:, :index_unused, :]
-
     return membership_quantiles
 
 def setup_colormap(
-    full_membership_quantiles: np.ndarray, sn_membership_quantiles: np.ndarray,
-    host_membership_quantiles: np.ndarray, cfg: dict, color_map: str = "coolwarm"
+    membership_quantiles, cfg: dict, color_map: str = "coolwarm"
 ):
 
-    cm_full_max = np.max(np.abs(full_membership_quantiles[1,:]))
-    cm_sn_max = np.max(np.abs(sn_membership_quantiles[1,:]))
-    cm_host_max = np.max(np.abs(host_membership_quantiles[1,:]))
-
-    cm_max = np.max(
-        [cm_full_max, cm_sn_max] +
-        cfg['model_cfg']['host_galaxy_cfg']['use_properties'] * [cm_host_max]
+    membership_quantiles = np.where(
+        membership_quantiles == NULL_VALUE, np.nan, membership_quantiles
     )
+
+    cm_max = np.nanmax(np.abs(membership_quantiles))
     cm_min = -cm_max
 
     cm = plt.cm.get_cmap(color_map)
@@ -322,20 +316,32 @@ def chain_plot(
     )
 
 def membership_histogram(
-    quantiles_list: list, titles_list: list,
+    membership_quantiles: np.ndarray, titles_list: list,
     mapper_full, idx_reordered_calibrator_sn: np.ndarray,
-    cfg: dict, save_path: str,
+    cfg: dict, save_path: str, n_cols: int = 2,
 ):
 
-    n_hists = len(quantiles_list)
+    n_hists = len(membership_quantiles)
+    n_rows = int(np.ceil(n_hists/n_cols))
     fig, ax = plt.subplots(
-        ncols=n_hists, figsize=(15/3*n_hists, 5/3*n_hists)
+        nrows=n_rows, ncols=n_cols,
+        figsize=(10, 5 * n_rows)
     )
-    for i, (membership_quantiles, title) in enumerate(
-        zip(quantiles_list, titles_list)
-    ):
+    ax = ax.flatten()
+    for i in range(n_hists):
+        title = titles_list[i]
+        quantiles = membership_quantiles[i,1,:]
+        
+        quantiles_no_calibrators = quantiles[~idx_reordered_calibrator_sn]
+        idx_not_null = quantiles_no_calibrators != NULL_VALUE
+        quantiles_no_calibrators = quantiles_no_calibrators[idx_not_null]
+
+        quantiles_calibrators = quantiles[idx_reordered_calibrator_sn]
+        idx_not_null = quantiles_calibrators != NULL_VALUE
+        quantiles_calibrators = quantiles_calibrators[idx_not_null]
+
         _, bins, patches = ax[i].hist(
-            membership_quantiles[1,~idx_reordered_calibrator_sn],
+            quantiles_no_calibrators,
             color="r",bins=20, density=True
         )
         bin_centers = 0.5*(bins[:-1]+bins[1:])
@@ -343,10 +349,8 @@ def membership_histogram(
         for c, p in zip(bin_centers, patches):
             plt.setp(p, "facecolor", mapper_full.to_rgba(c))
         
-        for j in range(
-            np.count_nonzero(idx_reordered_calibrator_sn)
-        ):
-            value = membership_quantiles[1, idx_reordered_calibrator_sn][j]
+        for j in range(quantiles_calibrators.shape[0]):
+            value = quantiles_calibrators[j]
             ax[i].axvline(
                 value,
                 color=mapper_full.to_rgba(value),
@@ -355,10 +359,15 @@ def membership_histogram(
             )
 
         ax[i].set_xlabel(
-            r"log$_{10}\left(p_{pop 1}(SN)/p_{pop 2}(SN)\right)$",
+            r"log$_{10}\left(p_1/p_2\right)$",
             fontsize=cfg['plot_cfg']['label_kwargs']['fontsize']
         )
-        ax[i].set_title(title, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+        ax[i].set_title(
+            title, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize']
+        )
+
+    if n_hists < n_cols * n_rows:
+        ax[-1].axis("off")
     fig.tight_layout()
 
     if cfg['model_cfg']['use_sigmoid']:
@@ -368,6 +377,97 @@ def membership_histogram(
     fig.savefig(
         os.path.join(save_path, cfg['emcee_cfg']['run_name']+suffix+"_membership_hist.png")
     )
+
+def scatter_plot(
+    figure, axes,
+    x: np.ndarray, y: np.ndarray,
+    x_err: np.ndarray, y_err: np.ndarray,
+    x_name: str, y_name: str,
+    colormap_values: np.ndarray, colormap, colormap_norm, mapper_full,
+    cfg: dict, title: str,
+):
+    
+    errorbar_colors = np.array([
+        mapper_full.to_rgba(value) for value in colormap_values
+    ])
+
+    for x_i,y_i,ex,ey,color in zip(x,y,x_err,y_err,errorbar_colors):
+        axes.errorbar(
+            x_i, y_i, xerr=ex, yerr=ey,
+            fmt='none', color=color,
+            capsize=0.5, capthick=0.5,
+            elinewidth=0.5
+        )
+    
+    axes.scatter(
+        x, y, c=colormap_values, cmap=colormap, norm=colormap_norm,
+    )
+
+    axes.set_xlabel(x_name, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+    axes.set_ylabel(y_name, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+    axes.set_title(title, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+    figure.tight_layout()
+
+    return figure, axes
+
+
+def get_host_property_values(
+    host_property: np.ndarray, host_property_errors: np.ndarray,
+    idx_unique_sn: np.ndarray, idx_duplicate_sn: np.ndarray,
+    idx_reordered_calibrator_sn: np.ndarray,
+):
+
+    unique_host_properties, duplicate_host_properties = prep.reorder_duplicates(
+        host_property, idx_unique_sn, idx_duplicate_sn
+    )
+    unique_host_properties_errors, duplicate_host_properties_errors = prep.reorder_duplicates(
+        host_property_errors, idx_unique_sn, idx_duplicate_sn
+    )
+
+    duplicate_host_property_means = []
+    duplicate_host_property_mean_errors = []
+    for duplicate_property, duplicate_property_error in zip(
+        duplicate_host_properties, duplicate_host_properties_errors
+    ):
+        idx_available = duplicate_property != NULL_VALUE
+        if np.count_nonzero(idx_available) == 0:
+            duplicate_host_property_means.append(NULL_VALUE)
+            duplicate_host_property_mean_errors.append(NULL_VALUE)
+            continue
+        mean, err = utils.weighted_mean_and_error(
+            duplicate_property[idx_available],
+            duplicate_property_error[idx_available]
+        )
+        duplicate_host_property_means.append(mean)
+        duplicate_host_property_mean_errors.append(err)
+
+    duplicate_host_property_means = np.array(duplicate_host_property_means)
+    duplicate_host_property_mean_errors = np.array(duplicate_host_property_mean_errors)
+
+    host_property_values = np.concatenate(
+        (unique_host_properties, duplicate_host_property_means)
+    )
+    host_property_errors_values = np.concatenate(
+        (unique_host_properties_errors, duplicate_host_property_mean_errors)
+    )
+
+    return host_property_values, host_property_errors_values
+
+def get_host_property_split_idx(
+    host_property: np.ndarray, host_property_errors: np.ndarray,
+    idx_reordered_calibrator_sn: np.ndarray,
+):
+    
+    idx_observed = (
+        (host_property != NULL_VALUE) &
+        (host_property_errors != NULL_VALUE)
+    )
+
+    idx_not_calibrator = ~idx_reordered_calibrator_sn & idx_observed
+    idx_calibrator = idx_reordered_calibrator_sn & idx_observed
+
+    return idx_not_calibrator, idx_calibrator
+
 
 def observed_property_vs_membership(
     membership_name: str, property_name: str, host_property: np.ndarray,

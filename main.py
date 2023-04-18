@@ -182,36 +182,34 @@ def main(cfg: omegaconf.DictConfig) -> None:
     fig_path = os.path.join(path, "figures")
     os.makedirs(fig_path, exist_ok=True)
 
-    (
-        full_membership_quantiles, sn_membership_quantiles, host_membership_quantiles
-    ) = post.get_membership_quantiles(
+    full_membership_quantiles, sn_membership_quantiles, host_membership_quantiles = (1,1,1)
+    membership_quantiles = post.get_membership_quantiles(
         backend, burnin, tau, prep.n_unused_host_properties,
         cfg['model_cfg']
     )
 
     cm, cm_norm_full, mapper_full, pop1_color, pop2_color = post.setup_colormap(
-        full_membership_quantiles, sn_membership_quantiles,
-        host_membership_quantiles, cfg
+        membership_quantiles, cfg
     )
 
     post.corner_plot(
         sample_thetas, pop1_color, pop2_color, labels, cfg, fig_path
     )
 
-    post.chain_plot(
-        backend, burnin, par_names, cfg, fig_path
-    )
+    # post.chain_plot(
+    #     backend, burnin, par_names, cfg, fig_path
+    # )
 
-    quantiles_list = [
-        full_membership_quantiles, sn_membership_quantiles,
-    ]
-    titles_list = ["Full", "SN",]
+    quantiles_list = []
+    titles_list = ["All Observables", "Light Curve Observables",]
     if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
-        quantiles_list.append(host_membership_quantiles)
-        titles_list.append("Host")
+        titles_list.append("All Host Properties")
+        titles_list += utils.format_property_names(
+            cfg['model_cfg']['host_galaxy_cfg']['property_names']
+        )
     
     post.membership_histogram(
-        quantiles_list, titles_list, mapper_full,
+        membership_quantiles, titles_list, mapper_full,
         prep.idx_reordered_calibrator_sn, cfg, fig_path
     )
 
