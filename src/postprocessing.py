@@ -392,6 +392,10 @@ def scatter_plot(
     ])
 
     for x_i,y_i,ex,ey,color in zip(x,y,x_err,y_err,errorbar_colors):
+        if type(ex) == np.ndarray:
+            ex = ex[:, None]
+        if type(ey) == np.ndarray:
+            ey = ey[:, None]
         axes.errorbar(
             x_i, y_i, xerr=ex, yerr=ey,
             fmt='none', color=color,
@@ -414,7 +418,6 @@ def scatter_plot(
 def get_host_property_values(
     host_property: np.ndarray, host_property_errors: np.ndarray,
     idx_unique_sn: np.ndarray, idx_duplicate_sn: np.ndarray,
-    idx_reordered_calibrator_sn: np.ndarray,
 ):
 
     unique_host_properties, duplicate_host_properties = prep.reorder_duplicates(

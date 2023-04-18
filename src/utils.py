@@ -58,7 +58,7 @@ class PoolWrapper():
             sys.exit(0)
 
 def format_property_names(
-    property_names: list
+    property_names: list, use_scientific_notation: bool = True
 ) -> list:
     formatted_names = []
     for name in property_names:
@@ -74,12 +74,19 @@ def format_property_names(
         tmp_name = tmp_name.capitalize()
         tmp_name = tmp_name.replace("u-g", "U-G")
         
+        mass_name = "log$_{10}( M_* \cdot [M_\odot]^{-1})$"
+        ssfr_name = "log$_{10}( sSFR \cdot [M_\odot \cdot yr]^{-1})$"
+        if not use_scientific_notation:
+            mass_name = "Mass"
+            ssfr_name = "sSFR"
+            
         tmp_name = tmp_name.replace(
-            "mass", "log$_{10}( M_* \cdot [M_\odot]^{-1})$"
+            "mass", mass_name
         )
         tmp_name = tmp_name.replace(
-            "ssfr", "log$_{10}( sSFR \cdot [M_\odot \cdot yr]^{-1})$"
+            "ssfr", ssfr_name
         )
+    
         formatted_names.append(tmp_name)
         
     return formatted_names

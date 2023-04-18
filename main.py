@@ -6,6 +6,7 @@ import emcee as em
 import numpy as np
 import pandas as pd
 import clearml as cl
+import matplotlib.pyplot as plt
 import src.utils as utils
 import src.model as model
 import src.preprocessing as prep
@@ -188,7 +189,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         cfg['model_cfg']
     )
 
-    cm, cm_norm_full, mapper_full, pop1_color, pop2_color = post.setup_colormap(
+    cm, cm_norm, mapper, pop1_color, pop2_color = post.setup_colormap(
         membership_quantiles, cfg
     )
 
@@ -200,7 +201,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
     #     backend, burnin, par_names, cfg, fig_path
     # )
 
-    quantiles_list = []
     titles_list = ["All Observables", "Light Curve Observables",]
     if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
         titles_list.append("All Host Properties")
@@ -209,28 +209,88 @@ def main(cfg: omegaconf.DictConfig) -> None:
         )
     
     post.membership_histogram(
-        membership_quantiles, titles_list, mapper_full,
+        membership_quantiles, titles_list, mapper,
         prep.idx_reordered_calibrator_sn, cfg, fig_path
     )
 
     available_properties_names = data.keys()[::2]
     for property_name in available_properties_names:
-        for membership_name, membership_quantiles in zip(titles_list,quantiles_list):
 
-            host_property = data[property_name].to_numpy()
-            host_property_errors = data[property_name+"_err"].to_numpy()
-            if np.all(host_property == prep.NULL_VALUE):
+        host_property = data[property_name].to_numpy()
+        host_property_errors = data[property_name+"_err"].to_numpy()
+        if np.all(host_property == prep.NULL_VALUE):
+            continue
+        
+        host_property, host_property_errors = post.get_host_property_values(
+            host_property, host_property_errors,
+            prep.idx_unique_sn, prep.idx_duplicate_sn,
+        )
+
+        idx_not_calibrator, idx_calibrator = post.get_host_property_split_idx(
+            host_property, host_property_errors,
+            prep.idx_reordered_calibrator_sn
+        )
+
+        for i in range(len(titles_list)):
+
+            quantiles = membership_quantiles[i]
+            idx_valid = quantiles[1,:] != prep.NULL_VALUE
+
+            idx_not_calibrator_and_quantile = idx_not_calibrator & idx_valid
+            idx_calibrator_and_quantile = idx_calibrator & idx_valid
+
+            if (
+                np.sum(idx_not_calibrator_and_quantile) + np.sum(idx_calibrator_and_quantile)
+            ) == 0:
                 continue
 
+            membership_name = titles_list[i]
             print(f"\nPlotting {membership_name} membership vs {property_name}\n")
             
-            post.observed_property_vs_membership(
-                membership_name,
-                property_name, host_property, host_property_errors,
-                membership_quantiles, cm, cm_norm_full, mapper_full,
-                prep.idx_unique_sn, prep.idx_duplicate_sn,
-                prep.idx_reordered_calibrator_sn, cfg, fig_path
+            property_not_calibrator = host_property[idx_not_calibrator]
+            property_calibrator = host_property[idx_calibrator]
+
+            property_not_calibrator_errors = host_property_errors[idx_not_calibrator]
+            property_calibrator_errors = host_property_errors[idx_calibrator]
+
+            membership_not_calibrator = quantiles[1,idx_not_calibrator]
+            membership_calibrator = quantiles[1,idx_calibrator]
+            membership_not_calibrator_errors = np.abs(
+                np.row_stack([
+                    membership_not_calibrator - quantiles[0,idx_not_calibrator],
+                    quantiles[2,idx_not_calibrator] - membership_not_calibrator
+                ])
             )
+            membership_calibrator_errors = np.abs(
+                np.row_stack([
+                    membership_calibrator - quantiles[0,idx_calibrator],
+                    quantiles[2,idx_calibrator] - membership_calibrator
+                ])
+            )
+
+            formatted_property_name = utils.format_property_names(
+                [property_name], use_scientific_notation=False
+            )[0]
+            title = f"{membership_name} membership vs {formatted_property_name}"
+            membership_y_axis = r"log$_{10}(p_1 / p_2)$"
+            fig, ax = plt.subplots()
+            fig, ax = post.scatter_plot(
+                fig, ax,
+                property_not_calibrator, membership_not_calibrator,
+                property_not_calibrator_errors, membership_not_calibrator_errors.T,
+                property_name, membership_y_axis, membership_not_calibrator,
+                cm, cm_norm, mapper, cfg, title
+            )
+            fig, ax = post.scatter_plot(
+                fig, ax,
+                property_calibrator, membership_calibrator,
+                property_calibrator_errors, membership_calibrator_errors.T,
+                property_name, membership_y_axis, membership_calibrator,
+                cm, cm_norm, mapper, cfg, title
+            )
+
+            filename = title.replace(" ", "_").replace("/", "_")
+            fig.savefig(os.path.join(fig_path, filename+".png"))
 
 
 if __name__ == "__main__":
