@@ -382,14 +382,21 @@ def scatter_plot(
     figure, axes,
     x: np.ndarray, y: np.ndarray,
     x_err: np.ndarray, y_err: np.ndarray,
-    x_name: str, y_name: str,
-    colormap_values: np.ndarray, colormap, colormap_norm, mapper_full,
-    cfg: dict, title: str,
+    x_name: str, y_name: str, colorbar_name: str,
+    colormap_values: np.ndarray, colormap,
+    colormap_norm, mapper_full,
+    cfg: dict, title: str, edgecolor: str = "face",
+    use_colorbar: bool = False, zorder: int = -1,
 ):
     
     errorbar_colors = np.array([
         mapper_full.to_rgba(value) for value in colormap_values
     ])
+
+    if zorder != -1:
+        kwargs = {'zorder': zorder}
+    else:
+        kwargs = {}
 
     for x_i,y_i,ex,ey,color in zip(x,y,x_err,y_err,errorbar_colors):
         if type(ex) == np.ndarray:
@@ -400,16 +407,20 @@ def scatter_plot(
             x_i, y_i, xerr=ex, yerr=ey,
             fmt='none', color=color,
             capsize=0.5, capthick=0.5,
-            elinewidth=0.5
+            elinewidth=0.5, **kwargs
         )
     
-    axes.scatter(
-        x, y, c=colormap_values, cmap=colormap, norm=colormap_norm,
+    c = axes.scatter(
+        x, y, c=colormap_values, cmap=colormap,
+        norm=colormap_norm, edgecolor=edgecolor,
+        **kwargs
     )
 
     axes.set_xlabel(x_name, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
     axes.set_ylabel(y_name, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
     axes.set_title(title, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+    if use_colorbar:
+        figure.colorbar(c, ax=axes, label=colorbar_name)
     figure.tight_layout()
 
     return figure, axes

@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import clearml as cl
 import matplotlib.pyplot as plt
+import scipy.stats as stats
 import src.utils as utils
 import src.model as model
 import src.preprocessing as prep
@@ -14,6 +15,7 @@ import src.postprocessing as post
 
 from time import time
 from mpi4py import MPI
+from itertools import combinations
 
 @hydra.main(
     version_base=None, config_path="configs", config_name="config"
@@ -161,14 +163,14 @@ def main(cfg: omegaconf.DictConfig) -> None:
     par_names, host_galaxy_par_names = post.get_par_names(cfg)
     if using_MPI_and_is_master or using_multiprocessing or no_pool:
 
-        quantiles, symmetrized_stds = post.map_mmap_comparison(
+        par_quantiles, symmetrized_stds = post.map_mmap_comparison(
             sample_thetas, max_thetas, par_names, path, clearml_logger
         )
 
     print("\n-------- PARAM VALUES / ERRORS / Z-SCORES -----------\n")
 
     post.parameter_values(
-        quantiles, symmetrized_stds, par_names,
+        par_quantiles, symmetrized_stds, par_names,
         host_galaxy_par_names, cfg, path, clearml_logger
     )
 
@@ -183,7 +185,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
     fig_path = os.path.join(path, "figures")
     os.makedirs(fig_path, exist_ok=True)
 
-    full_membership_quantiles, sn_membership_quantiles, host_membership_quantiles = (1,1,1)
     membership_quantiles = post.get_membership_quantiles(
         backend, burnin, tau, prep.n_unused_host_properties,
         cfg['model_cfg']
@@ -196,10 +197,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
     post.corner_plot(
         sample_thetas, pop1_color, pop2_color, labels, cfg, fig_path
     )
-
-    # post.chain_plot(
-    #     backend, burnin, par_names, cfg, fig_path
-    # )
 
     titles_list = ["All Observables", "Light Curve Observables",]
     if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
@@ -231,6 +228,14 @@ def main(cfg: omegaconf.DictConfig) -> None:
             prep.idx_reordered_calibrator_sn
         )
 
+        formatted_property_name = utils.format_property_names(
+            [property_name], use_scientific_notation=False
+        )[0]
+        scientific_notation_property_name = utils.format_property_names(
+            [property_name], use_scientific_notation=True
+        )[0]
+        print("\n----------------- HOST PROPERTY: ", formatted_property_name, "---------------------\n")
+
         for i in range(len(titles_list)):
 
             quantiles = membership_quantiles[i]
@@ -245,53 +250,296 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 continue
 
             membership_name = titles_list[i]
-            print(f"\nPlotting {membership_name} membership vs {property_name}\n")
+            is_log_mass = "log" in membership_name and "M_*" in membership_name
+            is_log_ssfr = "log" in membership_name and "sSFR" in membership_name
+            if is_log_mass:
+                membership_name = "Mass"
+            if is_log_ssfr:
+                membership_name = "sSFR"
+
+            print(f"\n{membership_name} membership\n")
             
-            property_not_calibrator = host_property[idx_not_calibrator]
-            property_calibrator = host_property[idx_calibrator]
+            property_not_calibrator = host_property[idx_not_calibrator_and_quantile]
+            property_calibrator = host_property[idx_calibrator_and_quantile]
 
-            property_not_calibrator_errors = host_property_errors[idx_not_calibrator]
-            property_calibrator_errors = host_property_errors[idx_calibrator]
+            property_not_calibrator_errors = host_property_errors[idx_not_calibrator_and_quantile]
+            property_calibrator_errors = host_property_errors[idx_calibrator_and_quantile]
 
-            membership_not_calibrator = quantiles[1,idx_not_calibrator]
-            membership_calibrator = quantiles[1,idx_calibrator]
+            membership_not_calibrator = quantiles[1,idx_not_calibrator_and_quantile]
+            membership_calibrator = quantiles[1,idx_calibrator_and_quantile]
             membership_not_calibrator_errors = np.abs(
                 np.row_stack([
-                    membership_not_calibrator - quantiles[0,idx_not_calibrator],
-                    quantiles[2,idx_not_calibrator] - membership_not_calibrator
+                    membership_not_calibrator - quantiles[0,idx_not_calibrator_and_quantile],
+                    quantiles[2,idx_not_calibrator_and_quantile] - membership_not_calibrator
                 ])
             )
             membership_calibrator_errors = np.abs(
                 np.row_stack([
-                    membership_calibrator - quantiles[0,idx_calibrator],
-                    quantiles[2,idx_calibrator] - membership_calibrator
+                    membership_calibrator - quantiles[0,idx_calibrator_and_quantile],
+                    quantiles[2,idx_calibrator_and_quantile] - membership_calibrator
                 ])
             )
 
-            formatted_property_name = utils.format_property_names(
-                [property_name], use_scientific_notation=False
-            )[0]
             title = f"{membership_name} membership vs {formatted_property_name}"
             membership_y_axis = r"log$_{10}(p_1 / p_2)$"
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=(8, 8))
             fig, ax = post.scatter_plot(
                 fig, ax,
                 property_not_calibrator, membership_not_calibrator,
                 property_not_calibrator_errors, membership_not_calibrator_errors.T,
-                property_name, membership_y_axis, membership_not_calibrator,
-                cm, cm_norm, mapper, cfg, title
+                scientific_notation_property_name, membership_y_axis, membership_y_axis,
+                membership_not_calibrator, cm, cm_norm, mapper, cfg, title
             )
             fig, ax = post.scatter_plot(
                 fig, ax,
                 property_calibrator, membership_calibrator,
                 property_calibrator_errors, membership_calibrator_errors.T,
-                property_name, membership_y_axis, membership_calibrator,
-                cm, cm_norm, mapper, cfg, title
+                scientific_notation_property_name, membership_y_axis, membership_y_axis,
+                membership_calibrator, cm, cm_norm, mapper, cfg,
+                title, edgecolor='k', use_colorbar=True, zorder=int(1e10)
             )
 
-            filename = title.replace(" ", "_").replace("/", "_")
-            fig.savefig(os.path.join(fig_path, filename+".png"))
+            save_path = os.path.join(
+                fig_path,
+                "host_property_vs_membership",
+                f"{membership_name.replace(' ', '_')}"
+            )
+            os.makedirs(save_path, exist_ok=True)
 
+            filename = formatted_property_name.replace(" ", "_")
+            fig.savefig(os.path.join(save_path, filename+".png"))
+
+            plt.close('all')
+
+
+    membership_combinations = list(combinations(titles_list, 2))
+
+    all_membership_quantiles = membership_quantiles[0]
+    idx_not_calibrator = ~prep.idx_reordered_calibrator_sn
+    idx_calibrator = prep.idx_reordered_calibrator_sn
+
+    for membership_1, membership_2 in membership_combinations:
+            
+            quantiles_1 = membership_quantiles[titles_list.index(membership_1)]
+            quantiles_2 = membership_quantiles[titles_list.index(membership_2)]
+
+            idx_valid_1 = quantiles_1[1,:] != prep.NULL_VALUE
+            idx_valid_2 = quantiles_2[1,:] != prep.NULL_VALUE
+    
+            idx_not_calibrator_and_quantile = idx_not_calibrator & idx_valid_1 & idx_valid_2
+            idx_calibrator_and_quantile = idx_calibrator & idx_valid_1 & idx_valid_2
+
+            n_not_calibrator = np.sum(idx_not_calibrator_and_quantile)
+            n_calibrator = np.sum(idx_calibrator_and_quantile)
+            n_total = n_not_calibrator + n_calibrator
+            if n_total == 0:
+                continue
+            
+            is_log_mass_1 = "log" in membership_1 and "M_*" in membership_1
+            is_log_ssfr_1 = "log" in membership_1 and "sSFR" in membership_1
+            is_local_1 = "Local" in membership_1
+            is_global_1 = "Global" in membership_1
+            if is_log_mass_1:
+                membership_1 = is_local_1 * "Local " + is_global_1 * "Global " + "Mass"
+            if is_log_ssfr_1:
+                membership_1 = is_local_1 * "Local " + is_global_1 * "Global " "sSFR"
+
+            is_log_mass_2 = "log" in membership_2 and "M_*" in membership_2
+            is_log_ssfr_2 = "log" in membership_2 and "sSFR" in membership_2
+            is_local_2 = "Local" in membership_2
+            is_global_2 = "Global" in membership_2
+            if is_log_mass_2:
+                membership_2 = is_local_2 * "Local " + is_global_2 * "Global " "Mass"
+            if is_log_ssfr_2:
+                membership_2 = is_local_2 * "Local " + is_global_2 * "Global " "sSFR"
+
+            print("\n----------------- MEMBERSHIP COMBINATION: ", membership_1, "vs", membership_2, "---------------------\n")
+            print(f"\nNumber of calibrator SN: {n_calibrator}")
+            print(f"Number of non-calibrator SN: {n_not_calibrator}")
+            print(f"Total number of SN: {n_total}\n")
+    
+            membership_1_not_calibrator = quantiles_1[1,idx_not_calibrator_and_quantile]
+            membership_1_calibrator = quantiles_1[1,idx_calibrator_and_quantile]
+            membership_1_not_calibrator_errors = np.abs(
+                np.row_stack([
+                    membership_1_not_calibrator - quantiles_1[0,idx_not_calibrator_and_quantile],
+                    quantiles_1[2,idx_not_calibrator_and_quantile] - membership_1_not_calibrator
+                ])
+            )
+            membership_1_calibrator_errors = np.abs(
+                np.row_stack([
+                    membership_1_calibrator - quantiles_1[0,idx_calibrator_and_quantile],
+                    quantiles_1[2,idx_calibrator_and_quantile] - membership_1_calibrator
+                ])
+            )
+    
+            membership_2_not_calibrator = quantiles_2[1,idx_not_calibrator_and_quantile]
+            membership_2_calibrator = quantiles_2[1,idx_calibrator_and_quantile]
+            membership_2_not_calibrator_errors = np.abs(
+                np.row_stack([
+                    membership_2_not_calibrator - quantiles_2[0,idx_not_calibrator_and_quantile],
+                    quantiles_2[2,idx_not_calibrator_and_quantile] - membership_2_not_calibrator
+                ])
+            )
+            membership_2_calibrator_errors = np.abs(
+                np.row_stack([
+                    membership_2_calibrator - quantiles_2[0,idx_calibrator_and_quantile],
+                    quantiles_2[2,idx_calibrator_and_quantile] - membership_2_calibrator
+                ])
+            )
+
+            all_membership_not_calibrator = all_membership_quantiles[1,idx_not_calibrator_and_quantile]
+            all_membership_calibrator = all_membership_quantiles[1,idx_calibrator_and_quantile]
+
+            title = f"{membership_1} membership vs {membership_2} membership"
+            membership_x_axis = membership_1 + r" log$_{10}(p_1 / p_2)$"
+            membership_y_axis = membership_2 + r" log$_{10}(p_1 / p_2)$"
+            colorbar_label = r"All Observables log$_{10}(p_1 / p_2)$"
+            fig, ax = plt.subplots(figsize=(8, 8))
+            fig, ax = post.scatter_plot(
+                fig, ax,
+                membership_1_not_calibrator, membership_2_not_calibrator,
+                membership_1_not_calibrator_errors.T, membership_2_not_calibrator_errors.T,
+                membership_x_axis, membership_y_axis, colorbar_label,
+                all_membership_not_calibrator, cm, cm_norm, mapper, cfg, title
+            )
+            fig, ax = post.scatter_plot(
+                fig, ax,
+                membership_1_calibrator, membership_2_calibrator,
+                membership_1_calibrator_errors.T, membership_2_calibrator_errors.T,
+                membership_x_axis, membership_y_axis, colorbar_label,
+                all_membership_calibrator, cm, cm_norm, mapper, cfg, title,
+                edgecolor='k', use_colorbar=True, zorder=int(1e10)
+            )
+
+            save_path = os.path.join(
+                fig_path,
+                "host_membership_vs_membership"
+            )
+
+            os.makedirs(save_path, exist_ok=True)
+
+            filename = f"{membership_1.replace(' ', '_')}_vs_{membership_2.replace(' ', '_')}"
+            fig.savefig(os.path.join(save_path, filename+".png"))
+
+            plt.close('all')
+
+    if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
+        
+        use_physical_ratio = cfg['model_cfg']['use_physical_ratio']
+        host_galaxy_property_names = cfg['model_cfg']['host_galaxy_cfg']['property_names']
+        n_host_galaxy_properties = len(host_galaxy_property_names)
+        n_host_galaxy_pars = 4 * n_host_galaxy_properties
+        n_cosmology_pars = len(cfg['model_cfg']['cosmology_par_names'])
+        
+        idx_first = -(n_host_galaxy_pars + n_cosmology_pars + (not use_physical_ratio))
+        idx_last = -n_cosmology_pars - (not use_physical_ratio)
+
+        host_prop_par_samples = sample_thetas[:,idx_first:idx_last]
+
+        w_1 = sample_thetas[:, -1]
+
+        for i, host_property_name in enumerate(host_galaxy_property_names):
+            
+            host_property_values = data[host_property_name].to_numpy()
+            host_property_errors = data[host_property_name+"_err"].to_numpy()
+            idx_observed = (
+                (host_property_values == prep.NULL_VALUE) |
+                (host_property_errors == prep.NULL_VALUE)
+            )
+
+            observed_host_property_values = host_property_values[~idx_observed]
+
+            x_axis_max = np.abs(np.max(observed_host_property_values)) * 1.1
+            x_axis_min = -x_axis_max
+            x_values = np.linspace(x_axis_min, x_axis_max, 1000)
+
+            n_samples = cfg['plot_cfg'].get('n_samples', sample_thetas.shape[0])
+            if n_samples == 'max':
+                n_samples = sample_thetas.shape[0]
+            n_samples = min(n_samples, sample_thetas.shape[0])
+
+            host_property_name = utils.format_property_names(
+                [host_property_name], use_scientific_notation=False
+            )[0]
+            print("\n-----------------", host_property_name.upper() ,"DISTRIBUTION ---------------------\n")
+
+            pop_1_pdf_values = np.zeros((n_samples, len(x_values)))
+            pop_2_pdf_values = np.zeros((n_samples, len(x_values)))
+
+            idx_pop_1_mean = i*4
+            idx_pop_2_mean = i*4 + 1
+            idx_pop_1_std = i*4 + 2
+            idx_pop_2_std = i*4 + 3
+
+            for j in range(n_samples):
+                pop_1_pdf_values[j] = stats.norm.pdf(
+                    x_values, host_prop_par_samples[j,idx_pop_1_mean], host_prop_par_samples[j,idx_pop_1_std]
+                )
+                pop_2_pdf_values[j] = stats.norm.pdf(
+                    x_values, host_prop_par_samples[j,idx_pop_2_mean], host_prop_par_samples[j,idx_pop_2_std]
+                )
+
+            combined_pdf_values = w_1[:,np.newaxis] * pop_1_pdf_values + (1 - w_1[:,np.newaxis]) * pop_2_pdf_values
+
+            mean_pop_1_pdf_values = np.mean(pop_1_pdf_values, axis=0)
+            std_pop_1_pdf_values = np.std(pop_1_pdf_values, axis=0)
+
+            mean_pop_2_pdf_values = np.mean(pop_2_pdf_values, axis=0)
+            std_pop_2_pdf_values = np.std(pop_2_pdf_values, axis=0)
+
+            mean_combined_pdf_values = np.mean(combined_pdf_values, axis=0)
+            std_combined_pdf_values = np.std(combined_pdf_values, axis=0)
+
+            fig, ax = plt.subplots(figsize=(8, 8))
+
+            ax.hist(
+                observed_host_property_values, density=True,
+                color='k', alpha=0.5, label='Observed'
+            )
+
+            ax.plot(x_values, mean_pop_1_pdf_values, color=pop1_color, label='Pop 1')
+            ax.fill_between(
+                x_values, mean_pop_1_pdf_values - std_pop_1_pdf_values, mean_pop_1_pdf_values + std_pop_1_pdf_values,
+                color=pop1_color, alpha=0.3
+            )
+
+            ax.plot(x_values, mean_pop_2_pdf_values, color=pop2_color, label='Pop 2')
+            ax.fill_between(
+                x_values, mean_pop_2_pdf_values - std_pop_2_pdf_values, mean_pop_2_pdf_values + std_pop_2_pdf_values,
+                color=pop2_color, alpha=0.3
+            )
+
+            ax.plot(x_values, mean_combined_pdf_values, color='purple', label='Combined')
+            ax.fill_between(
+                x_values, mean_combined_pdf_values - std_combined_pdf_values, mean_combined_pdf_values + std_combined_pdf_values,
+                color='purple', alpha=0.3
+            )
+
+            ax.set_xlabel(
+                host_property_name, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize']
+            )
+            ax.set_ylabel(
+                "Probability Density", fontsize=cfg['plot_cfg']['label_kwargs']['fontsize']
+            )
+            ax.legend(fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+            fig.tight_layout()
+
+            save_path = os.path.join(
+                fig_path,
+                "host_property_distributions"
+            )
+
+            os.makedirs(save_path, exist_ok=True)
+
+            filename = f"{host_property_name}.png"
+            fig.savefig(os.path.join(save_path, filename))
+
+            plt.close('all')
+
+
+
+    print("Done!")
 
 if __name__ == "__main__":
     main()
