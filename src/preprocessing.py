@@ -122,11 +122,18 @@ def init_global_data(
     global observed_volumetric_rate_errors
     global observed_volumetric_rate_redshifts
 
-    # TODO: FIX THIS TO ACCOUNT FOR POTENTIAL DUPLICATES
-    idx_calibrator_sn = data['is_calibrator'].copy().to_numpy() != NULL_VALUE
-    calibrator_distance_moduli = data['mu_calibrator'].copy().to_numpy()[idx_calibrator_sn]
-    data.drop(['is_calibrator', 'mu_calibrator'], axis=1, inplace=True)
-    
+    calibrator_flags_available = (
+        'is_calibrator' in data.columns and 'mu_calibrator' in data.columns
+    )
+    if calibrator_flags_available:
+        idx_calibrator_sn = data['is_calibrator'].copy().to_numpy() != NULL_VALUE
+        calibrator_distance_moduli = data['mu_calibrator'].copy().to_numpy()[idx_calibrator_sn]
+        data.drop(['is_calibrator', 'mu_calibrator'], axis=1, inplace=True)
+    else:
+        idx_calibrator_sn = np.zeros(len(data), dtype=bool)
+        calibrator_distance_moduli = 0.
+
+
     global_model_cfg = cfg
 
     duplicate_uid_key = 'duplicate_uid'
@@ -140,10 +147,16 @@ def init_global_data(
         sn_observable_keys + sn_covariance_keys + ['CID'], axis=1, inplace=True
     )
 
-    if duplicate_uid_key in data.columns:
-
+    duplicate_uid_available = duplicate_uid_key in data.columns
+    if duplicate_uid_available:
         duplicate_uids = data[duplicate_uid_key].copy().unique()
         idx_not_null = duplicate_uids != NULL_VALUE
+        any_duplicates_present = np.any(idx_not_null)
+    else:
+        any_duplicates_present = False
+
+    if any_duplicates_present:
+
         duplicate_uids = duplicate_uids[idx_not_null]
 
         idx_duplicate_sn = []
@@ -172,6 +185,9 @@ def init_global_data(
         idx_duplicate_sn = []
         idx_unique_sn = np.ones((data.shape[0],), dtype=bool)
         idx_reordered_calibrator_sn = idx_calibrator_sn
+
+    if duplicate_uid_available & (not any_duplicates_present):
+        data.drop(duplicate_uid_key, axis=1, inplace=True)
 
     n_unique_sn = np.count_nonzero(idx_unique_sn) + len(idx_duplicate_sn)    
 

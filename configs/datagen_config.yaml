@@ -70,7 +70,7 @@ prep_cfg:
   redshift_lower_cutoff: 0.023
   redshift_upper_cutoff : 0.15
 
-  use_mb_err_cutoff: False
+  use_mb_err_cutoff: True
   alpha: 0.14
   beta: 2.9
   mb_err_cutoff: 0.2
