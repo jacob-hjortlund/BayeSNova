@@ -489,6 +489,7 @@ class Model():
         norm_1 = sp_special.gammainc(gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(gamma_Ebv_1)
         norm_2 = sp_special.gammainc(gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(gamma_Ebv_2)
 
+        # TODO: FIX WRT. HOW PRESETS ARE HANDLED
         if gamma_Rb_1 != NULL_VALUE:
             norm_1 *= sp_special.gammainc(gamma_Rb_1, upper_bound_Rb_1) * sp_special.gamma(gamma_Rb_1)
         if gamma_Rb_2 != NULL_VALUE:
@@ -514,9 +515,6 @@ class Model():
 
         p_1 = probs[:, 0] / norm_1
         p_2 = probs[:, 1] / norm_2
-
-        p1_nans = np.isnan(p_1)
-        p2_nans = np.isnan(p_2)
 
         return p_1, p_2, status
 
@@ -701,6 +699,7 @@ class Model():
             cosmo=cosmo
         )
 
+        # TODO: FIX WRT. HOW PRESETS ARE HANDLED
         use_gaussian_Rb = (
             gamma_Rb_1 == NULL_VALUE and
             gamma_Rb_2 == NULL_VALUE and
