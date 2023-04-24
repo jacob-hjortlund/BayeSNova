@@ -178,7 +178,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
             except Exception as e:
                 print("\nGot exception:\n")
                 print(e, "\n")
-                tau = int(cfg['emcee_cfg']['n_steps'] / 25)
+                tau = int(
+                    np.ceil(cfg['emcee_cfg']['n_steps'] / 25)
+                )
                 print("\nUsing tolerance tau:", tau, "\n")
 
             t1 = time.time()
@@ -203,17 +205,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 (medians, lower, upper, symm, [prompt_fraction]), axis=0
             )
 
-            # if i == 0:
-            #     df_array = tmp_df_array
-            # else:
-            #     df_array = np.row_stack((df_array, tmp_df_array))
-
             does_results_dataframe_exist = os.path.exists(
                 os.path.join(path, "results.csv")
             )
             if not does_results_dataframe_exist:
                 df = pd.DataFrame(
-                    tmp_df_array, columns=column_names
+                    tmp_df_array[None, :], columns=column_names
                 )
                 df.to_csv(
                     os.path.join(path, "results.csv")
@@ -223,7 +220,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
                     os.path.join(path, "results.csv")
                 )
                 df = pd.concat(
-                    [df, pd.DataFrame(tmp_df_array, columns=column_names)]
+                    [df, pd.DataFrame(tmp_df_array[None,:], columns=column_names)]
                 ).reset_index(drop=True)
                 df.to_csv(
                     os.path.join(path, "results.csv")

@@ -141,7 +141,8 @@ def create_task_name(
             "independent_par_name" in setting or
             "clearml_cfg" in setting or
             "data_cfg" in setting or
-            "continue_from_chain" in setting 
+            "continue_from_chain" in setting or
+            "n_steps" in setting
         )
 
         if ignore_setting:
