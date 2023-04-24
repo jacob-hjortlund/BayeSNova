@@ -269,6 +269,9 @@ def init_global_data(
         host_galaxy_covariances = np.where(
             host_galaxy_covariances == NULL_VALUE, default_cov_value, host_galaxy_covariances
         )
+        host_galaxy_covariances = np.array(
+            [np.diag(tmp_cov) for tmp_cov in host_galaxy_covariances]
+        )
     else:
         raise ValueError("Host galaxy properties must be provided as even columns.")
 
