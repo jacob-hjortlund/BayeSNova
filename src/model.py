@@ -626,34 +626,6 @@ class Model():
 
         return log_prob
 
-    def reduce_duplicates(
-        self, array: np.ndarray, reduction_func,
-        axis: int = None, apply_to_unique: bool = False
-    ) -> np.ndarray:
-
-        new_reduction_func = reduction_func
-        if type(axis) == int:
-            new_reduction_func = lambda x: np.apply_along_axis(
-                reduction_func, axis, x
-            )
-
-        unique_array, duplicate_array = prep.reorder_duplicates(
-            array, prep.idx_unique_sn, prep.idx_duplicate_sn
-        )
-
-        reduced_array = np.array(
-            [
-                new_reduction_func(duplicate_values) for
-                duplicate_values in duplicate_array
-            ]
-        )
-        if apply_to_unique:
-            vectorized_reduction_func = np.vectorize(reduction_func)
-            unique_array = vectorized_reduction_func(unique_array)
-        output_array = np.concatenate([unique_array, reduced_array])
-
-        return output_array
-
     def log_likelihood(
         self,
         Mb_1: float, Mb_2: float,
@@ -722,21 +694,9 @@ class Model():
             tau_Ebv_1=tau_Ebv_1, tau_Ebv_2=tau_Ebv_2,
             gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2,
         )
-
-        log_reduction_func = lambda x: np.sum(np.log(x))
-        sn_log_probs_1, sn_log_probs_2 = (
-            self.reduce_duplicates(sn_probs_1, reduction_func=log_reduction_func, apply_to_unique=True),
-            self.reduce_duplicates(sn_probs_2, reduction_func=log_reduction_func, apply_to_unique=True)
-        )
-        sn_probs_1, sn_probs_2 = (
-            self.reduce_duplicates(sn_probs_1, reduction_func=np.prod),
-            self.reduce_duplicates(sn_probs_2, reduction_func=np.prod)
-        )
-
-        reduced_status = (
-            self.reduce_duplicates(status[:,0], reduction_func=np.prod) *
-            self.reduce_duplicates(status[:,1], reduction_func=np.prod)
-        ).astype('bool')
+        log_sn_probs_1 = np.log(sn_probs_1)
+        log_sn_probs_2 = np.log(sn_probs_2)
+        reduced_status = np.all(status.astype('bool'), axis=1)
 
         idx_prior_convolution_failed = ~reduced_status
         idx_sn_prob_below_zero = (sn_probs_1 < 0.) | (sn_probs_2 < 0.)
@@ -800,37 +760,12 @@ class Model():
                 f"eta: {eta:.3f}, prompt_fraction: {prompt_fraction:.3f}\n"
             )
 
-            cid_for_failures = np.concatenate(
-                prep.reorder_duplicates(
-                    prep.sn_cids, prep.idx_unique_sn,
-                    prep.idx_duplicate_sn
-                )
-            )[idx_not_valid]
+            cid_for_failures = [idx_not_valid]
             calibrator_flag_for_failures = prep.idx_reordered_calibrator_sn[idx_not_valid]
-            observed_mb_for_failures = np.concatenate(
-                prep.reorder_duplicates(
-                    prep.sn_observables[:,0], prep.idx_unique_sn,
-                    prep.idx_duplicate_sn
-                )
-            )[idx_not_valid]
-            observed_x1_for_failures = np.concatenate(
-                prep.reorder_duplicates(
-                    prep.sn_observables[:,1], prep.idx_unique_sn,
-                    prep.idx_duplicate_sn
-                )
-            )[idx_not_valid]
-            observed_c_for_failures = np.concatenate(
-                prep.reorder_duplicates(
-                    prep.sn_observables[:,2], prep.idx_unique_sn,
-                    prep.idx_duplicate_sn
-                )
-            )[idx_not_valid]
-            observed_redshifts_for_failures = np.concatenate(
-                prep.reorder_duplicates(
-                    prep.sn_observables[:,-1], prep.idx_unique_sn,
-                    prep.idx_duplicate_sn
-                )
-            )[idx_not_valid]
+            observed_mb_for_failures = prep.sn_observables[:,0][idx_not_valid]
+            observed_x1_for_failures = prep.sn_observables[:,1][idx_not_valid]
+            observed_c_for_failures = prep.sn_observables[:,2][idx_not_valid]
+            observed_redshifts_for_failures = prep.sn_redshifts[idx_not_valid]
             
             warning_string += "\nObserved SN parameters:\n"
             for failure_cid, failure_calibrator_flag, failure_mb, failure_x1, failure_c, failure_z in zip(
@@ -866,7 +801,6 @@ class Model():
         use_physical_population_fraction = prep.global_model_cfg["use_physical_ratio"]
 
         if use_physical_population_fraction:
-            # TODO: FIX FOR DUPLICATE SN
             sn_redshifts = prep.sn_redshifts
             sn_rates = self.volumetric_sn_rates(
                 observed_redshifts=sn_redshifts,
@@ -896,24 +830,12 @@ class Model():
                 host_galaxy_means=host_galaxy_means,
                 host_galaxy_sigmas=host_galaxy_sigs,
             )
-            host_log_probs_1 = self.reduce_duplicates(
-                host_log_probs_1, reduction_func=np.sum, axis=0
-            )
-            host_log_probs_2 = self.reduce_duplicates(
-                host_log_probs_2, reduction_func=np.sum, axis=0
-            )
-            idx_property_not_observed = self.reduce_duplicates(
-                prep.host_galaxy_observables == NULL_VALUE, np.prod, axis=0
-            ).astype(bool)
         else:
             host_log_probs_1 = np.zeros((prep.n_unique_sn, 1))
             host_log_probs_2 = np.zeros((prep.n_unique_sn, 1))
-            idx_property_not_observed = np.ones(
-                (prep.n_unique_sn, 1), dtype=bool
-            )
 
-        pop_1_log_probs = log_w_1 + sn_log_probs_1 + np.sum(host_log_probs_1, axis=1)
-        pop_2_log_probs = log_w_2 + sn_log_probs_2 + np.sum(host_log_probs_2, axis=1)
+        pop_1_log_probs = log_w_1 + log_sn_probs_1 + np.sum(host_log_probs_1, axis=1)
+        pop_2_log_probs = log_w_2 + log_sn_probs_2 + np.sum(host_log_probs_2, axis=1)
         combined_log_probs = np.logaddexp(pop_1_log_probs, pop_2_log_probs)
 
         if prep.global_model_cfg['only_evaluate_calibrators']:
@@ -923,7 +845,7 @@ class Model():
             n_host_properties + (not prep.global_model_cfg['host_galaxy_cfg']['use_properties'])
         )
         idx_all_properties_not_observed = np.all(
-            idx_property_not_observed, axis=1
+            prep.idx_host_galaxy_property_not_observed, axis=1
         )
         tiled_log_w_1 = np.tile(log_w_1[:, None], [1, n_tile])
         tiled_log_w_2 = np.tile(log_w_2[:, None], [1, n_tile])
@@ -934,7 +856,7 @@ class Model():
                 tiled_log_w_2 - host_log_probs_2
             )
         )
-        log_host_membership_probs[idx_property_not_observed] = NULL_VALUE
+        log_host_membership_probs[prep.idx_host_galaxy_property_not_observed] = NULL_VALUE
 
         log_full_host_membership_probs = (
             1./np.log(10) * (
@@ -946,7 +868,7 @@ class Model():
 
         log_sn_membership_probs = (
             1./np.log(10) * (
-                log_w_1 + sn_log_probs_1 - log_w_2 - sn_log_probs_2
+                log_w_1 + log_sn_probs_1 - log_w_2 - log_sn_probs_2
             )
         )#.flatten()
         

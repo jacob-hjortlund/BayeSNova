@@ -111,6 +111,7 @@ def init_global_data(
     global global_model_cfg
     global host_galaxy_observables
     global host_galaxy_covariances
+    global idx_host_galaxy_property_not_observed
     global n_unused_host_properties
     global calibrator_distance_moduli
     global idx_calibrator_sn
@@ -205,7 +206,14 @@ def init_global_data(
         idx_reordered_calibrator_sn = np.concatenate(
             (idx_unique_calibrator_sn, idx_duplicate_calibrator_sn)
         )
-    
+
+    sn_cids = np.concatenate(
+        reorder_duplicates(
+            sn_cids, idx_unique_sn,
+            idx_duplicate_sn
+        )
+    )
+
     data.drop(duplicate_uid_key, axis=1, inplace=True, errors='ignore')
     n_unique_sn = np.count_nonzero(idx_unique_sn) + len(idx_duplicate_sn)
 
@@ -232,6 +240,9 @@ def init_global_data(
         n_unused_host_properties = 0
         host_galaxy_observables = np.zeros((0,0))
         host_galaxy_covariance_values = np.zeros((0,0))
+        idx_host_galaxy_property_not_observed = np.ones(
+                (n_unique_sn, 1), dtype=bool
+        )
 
     elif can_use_host_properties and use_host_properties:
         
@@ -272,6 +283,8 @@ def init_global_data(
         host_galaxy_covariances = np.array(
             [np.diag(tmp_cov) for tmp_cov in host_galaxy_covariances]
         )
+
+        idx_host_galaxy_property_not_observed = host_galaxy_observables == NULL_VALUE
     else:
         raise ValueError("Host galaxy properties must be provided as even columns.")
 
