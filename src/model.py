@@ -374,7 +374,7 @@ class Model():
         sig_c_1: float, sig_c_2: float,
     ) -> np.ndarray:
 
-        z = prep.sn_observables[:, 3]
+        z = prep.sn_redshifts
 
         cov = np.tile(prep.sn_covariances, (2, 1, 1, 1))
         disp_v_pec = 200. # km / s
@@ -422,10 +422,8 @@ class Model():
     ) -> np.ndarray:
         
         #global sn_observables
-        mb = prep.sn_observables[:, 0]
-        s = prep.sn_observables[:, 1]
-        c = prep.sn_observables[:, 2]
-        z = prep.sn_observables[:, 3]
+        mb, s, c = prep.sn_observables.T
+        z = prep.sn_redshifts
 
         residuals = np.zeros((2, len(mb), 3))
 
@@ -869,7 +867,7 @@ class Model():
 
         if use_physical_population_fraction:
             # TODO: FIX FOR DUPLICATE SN
-            sn_redshifts = prep.sn_observables[:,-1]
+            sn_redshifts = prep.sn_redshifts
             sn_rates = self.volumetric_sn_rates(
                 observed_redshifts=sn_redshifts,
                 cosmo=cosmo, eta=eta,
