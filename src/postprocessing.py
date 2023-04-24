@@ -317,7 +317,7 @@ def chain_plot(
 
 def membership_histogram(
     membership_quantiles: np.ndarray, titles_list: list,
-    mapper_full, idx_reordered_calibrator_sn: np.ndarray,
+    mapper_full, idx_calibrator_sn: np.ndarray,
     cfg: dict, save_path: str, n_cols: int = 2,
 ):
 
@@ -332,11 +332,11 @@ def membership_histogram(
         title = titles_list[i]
         quantiles = membership_quantiles[i,1,:]
         
-        quantiles_no_calibrators = quantiles[~idx_reordered_calibrator_sn]
+        quantiles_no_calibrators = quantiles[~idx_calibrator_sn]
         idx_not_null = quantiles_no_calibrators != NULL_VALUE
         quantiles_no_calibrators = quantiles_no_calibrators[idx_not_null]
 
-        quantiles_calibrators = quantiles[idx_reordered_calibrator_sn]
+        quantiles_calibrators = quantiles[idx_calibrator_sn]
         idx_not_null = quantiles_calibrators != NULL_VALUE
         quantiles_calibrators = quantiles_calibrators[idx_not_null]
 
@@ -469,7 +469,7 @@ def get_host_property_values(
 
 def get_host_property_split_idx(
     host_property: np.ndarray, host_property_errors: np.ndarray,
-    idx_reordered_calibrator_sn: np.ndarray,
+    idx_calibrator_sn: np.ndarray,
 ):
     
     idx_observed = (
@@ -477,8 +477,8 @@ def get_host_property_split_idx(
         (host_property_errors != NULL_VALUE)
     )
 
-    idx_not_calibrator = ~idx_reordered_calibrator_sn & idx_observed
-    idx_calibrator = idx_reordered_calibrator_sn & idx_observed
+    idx_not_calibrator = ~idx_calibrator_sn & idx_observed
+    idx_calibrator = idx_calibrator_sn & idx_observed
 
     return idx_not_calibrator, idx_calibrator
 
@@ -488,7 +488,7 @@ def observed_property_vs_membership(
     host_property_errors: np.ndarray, membership_quantiles: np.ndarray,
     colormap, colormap_norm, mapper_full,
     idx_unique_sn: np.ndarray, idx_duplicate_sn: np.ndarray,
-    idx_reordered_calibrator_sn: np.ndarray, cfg: dict, save_path: str,
+    idx_calibrator_sn: np.ndarray, cfg: dict, save_path: str,
 ):
 
     unique_host_properties, duplicate_host_properties = prep.reorder_duplicates(
@@ -526,12 +526,12 @@ def observed_property_vs_membership(
     )
 
     hubble_flow_host, calibration_host = (
-        host_property[~idx_reordered_calibrator_sn],
-        host_property[idx_reordered_calibrator_sn]
+        host_property[~idx_calibrator_sn],
+        host_property[idx_calibrator_sn]
     )
     hubble_flow_host_err, calibration_host_err = (
-        host_property_errors[~idx_reordered_calibrator_sn],
-        host_property_errors[idx_reordered_calibrator_sn]
+        host_property_errors[~idx_calibrator_sn],
+        host_property_errors[idx_calibrator_sn]
     )
     idx_hubble_flow_observed = (
         (hubble_flow_host != NULL_VALUE) &
@@ -554,8 +554,8 @@ def observed_property_vs_membership(
     print("No. of Hubble flow hosts: ", len(hubble_flow_host))
     print("No. of calibration hosts: ", len(calibration_host), "\n")
 
-    hubble_flow_membership_quantiles = membership_quantiles[:, ~idx_reordered_calibrator_sn][:, idx_hubble_flow_observed][:, idx_hubble_flow_valid]
-    calibration_membership_quantiles = membership_quantiles[:, idx_reordered_calibrator_sn][:, idx_calibration_observed][:, idx_calibration_valid]
+    hubble_flow_membership_quantiles = membership_quantiles[:, ~idx_calibrator_sn][:, idx_hubble_flow_observed][:, idx_hubble_flow_valid]
+    calibration_membership_quantiles = membership_quantiles[:, idx_calibrator_sn][:, idx_calibration_observed][:, idx_calibration_valid]
     hubble_flow_medians = hubble_flow_membership_quantiles[1, :]
     calibration_medians = calibration_membership_quantiles[1, :]
     hubble_flow_errors = np.abs(

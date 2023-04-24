@@ -105,11 +105,13 @@ def init_global_data(
     global sn_cids
     global sn_covariances
     global sn_observables
+    global sn_redshifts
     global gRb_quantiles
     global gEbv_quantiles
     global global_model_cfg
     global host_galaxy_observables
     global host_galaxy_covariances
+    global idx_host_galaxy_property_not_observed
     global n_unused_host_properties
     global calibrator_distance_moduli
     global idx_calibrator_sn
@@ -127,7 +129,7 @@ def init_global_data(
     )
     if calibrator_flags_available:
         idx_calibrator_sn = data['is_calibrator'].copy().to_numpy() != NULL_VALUE
-        calibrator_distance_moduli = data['mu_calibrator'].copy().to_numpy()[idx_calibrator_sn]
+        calibrator_distance_moduli = data['mu_calibrator'].copy().to_numpy()
         data.drop(['is_calibrator', 'mu_calibrator'], axis=1, inplace=True)
     else:
         idx_calibrator_sn = np.zeros(len(data), dtype=bool)
@@ -138,22 +140,47 @@ def init_global_data(
 
     duplicate_uid_key = 'duplicate_uid'
     selection_bias_correction_key = 'bias_corr_factor'
-    sn_observable_keys = ['mB', 'x1', 'c', 'z']
+    sn_redshift_key = 'z'
+    sn_observable_keys = ['mB', 'x1', 'c']
     sn_covariance_keys = ['x0', 'mBErr', 'x1Err', 'cErr', 'cov_x1_c', 'cov_x1_x0', 'cov_c_x0']
     sn_observables = data[sn_observable_keys].copy().to_numpy()
+    sn_redshifts = data[sn_redshift_key].copy().to_numpy().squeeze()
     sn_covariance_values = data[sn_covariance_keys].copy().to_numpy()
     sn_cids = data['CID'].copy().to_numpy()
     data.drop(
-        sn_observable_keys + sn_covariance_keys + ['CID'], axis=1, inplace=True
+        sn_observable_keys + sn_covariance_keys + ['z','CID'], axis=1, inplace=True
     )
 
+    if selection_bias_correction_key in data.columns:
+        selection_bias_correction = data[selection_bias_correction_key].copy().to_numpy()
+        idx_null = selection_bias_correction == NULL_VALUE
+        selection_bias_correction[idx_null] = 1.0
+        data.drop(selection_bias_correction_key, axis=1, inplace=True)
+    else:
+        selection_bias_correction = np.ones((data.shape[0],))
+
+    if cfg.get('use_volumetric_rates', False):
+        observed_volumetric_rates = volumetric_rates['rate'].to_numpy()
+        observed_volumetric_rate_errors = volumetric_rates['symm'].to_numpy()
+        observed_volumetric_rate_redshifts = volumetric_rates['z'].to_numpy()
+    else:
+        observed_volumetric_rates = np.zeros((0,))
+        observed_volumetric_rate_errors = np.zeros((0,))
+
+    sn_covariances = build_covariance_matrix(
+        sn_covariance_values
+    )
+
+    any_duplicates_present = False
+    idx_duplicate_sn = []
+    idx_unique_sn = np.ones((data.shape[0],), dtype=bool)
+    idx_reordered_calibrator_sn = idx_calibrator_sn
     duplicate_uid_available = duplicate_uid_key in data.columns
+
     if duplicate_uid_available:
         duplicate_uids = data[duplicate_uid_key].copy().unique()
         idx_not_null = duplicate_uids != NULL_VALUE
         any_duplicates_present = np.any(idx_not_null)
-    else:
-        any_duplicates_present = False
 
     if any_duplicates_present:
 
@@ -176,36 +203,38 @@ def init_global_data(
                 np.any(tmp_idx) for tmp_idx in idx_duplicate_calibrator_sn
             ]
         )
-        idx_reordered_calibrator_sn = np.concatenate(
+        idx_calibrator_sn = np.concatenate(
             (idx_unique_calibrator_sn, idx_duplicate_calibrator_sn)
         )
 
-        data.drop(duplicate_uid_key, axis=1, inplace=True)
-    else:
-        idx_duplicate_sn = []
-        idx_unique_sn = np.ones((data.shape[0],), dtype=bool)
-        idx_reordered_calibrator_sn = idx_calibrator_sn
+    sn_cids = np.concatenate(
+        reorder_duplicates(
+            sn_cids, idx_unique_sn,
+            idx_duplicate_sn
+        )
+    )
 
-    if duplicate_uid_available & (not any_duplicates_present):
-        data.drop(duplicate_uid_key, axis=1, inplace=True)
+    data.drop(duplicate_uid_key, axis=1, inplace=True, errors='ignore')
+    n_unique_sn = np.count_nonzero(idx_unique_sn) + len(idx_duplicate_sn)
 
-    n_unique_sn = np.count_nonzero(idx_unique_sn) + len(idx_duplicate_sn)    
+    sn_redshifts, _ = reduce_duplicates(
+        sn_redshifts[:, None], np.ones((len(data), 1,1)),
+        idx_unique_sn, idx_duplicate_sn
+    )
+    sn_redshifts = sn_redshifts.squeeze()
+    sn_observables, sn_covariances = reduce_duplicates(
+        sn_observables, sn_covariances, idx_unique_sn, idx_duplicate_sn
+    )
 
-    if selection_bias_correction_key in data.columns:
-        selection_bias_correction = data[selection_bias_correction_key].copy().to_numpy()
-        idx_null = selection_bias_correction == NULL_VALUE
-        selection_bias_correction[idx_null] = 1.0
-        data.drop(selection_bias_correction_key, axis=1, inplace=True)
-    else:
-        selection_bias_correction = np.ones((data.shape[0],))
-
-    if cfg.get('use_volumetric_rates', False):
-        observed_volumetric_rates = volumetric_rates['rate'].to_numpy()
-        observed_volumetric_rate_errors = volumetric_rates['symm'].to_numpy()
-        observed_volumetric_rate_redshifts = volumetric_rates['z'].to_numpy()
-    else:
-        observed_volumetric_rates = np.zeros((0,))
-        observed_volumetric_rate_errors = np.zeros((0,))
+    if calibrator_flags_available:
+        tmp_cov = np.ones((len(data), 1, 1))
+        idx_not_calibrator = calibrator_distance_moduli == NULL_VALUE
+        tmp_cov[idx_not_calibrator,:,:] = NULL_VALUE
+        calibrator_distance_moduli, _ = reduce_duplicates(
+            calibrator_distance_moduli[:, None], tmp_cov,
+            idx_unique_sn, idx_duplicate_sn
+        )
+        calibrator_distance_moduli = calibrator_distance_moduli[idx_calibrator_sn].squeeze()
 
     host_galaxy_cfg = cfg.get('host_galaxy_cfg', {})
     host_property_keys = host_galaxy_cfg.get('property_names', [])
@@ -216,55 +245,60 @@ def init_global_data(
         set(host_property_keys) <= set(data.columns) and
         set(host_property_err_keys) <= set(data.columns)
     )
+    
     if not use_host_properties:
         
         n_unused_host_properties = 0
         host_galaxy_observables = np.zeros((0,0))
         host_galaxy_covariance_values = np.zeros((0,0))
-    
-    elif can_use_host_properties:
+        idx_host_galaxy_property_not_observed = np.ones(
+                (n_unique_sn, 1), dtype=bool
+        )
 
-        n_unused_host_properties = (
-            len(data.columns) - len(host_property_keys) - len(host_property_err_keys)
-        ) // 2
+    elif can_use_host_properties and use_host_properties:
+        
+        n_total_properties = len(data.columns) // 2
+        n_used_host_properties = len(host_property_keys)
+        n_unused_host_properties = ( n_total_properties - n_used_host_properties )
         host_galaxy_observables = data[host_property_keys].to_numpy()
         host_galaxy_covariance_values = data[host_property_err_keys].to_numpy()
-        idx_err_below_zero = host_galaxy_covariance_values < 0.
-
-        host_galaxy_observables = np.where(
-            idx_err_below_zero,
-            NULL_VALUE,
-            host_galaxy_observables
+        host_galaxy_covariances = (
+            np.eye(host_galaxy_covariance_values.shape[1]) *
+            host_galaxy_covariance_values[:, None, :]
         )
+        host_galaxy_covariances = np.where(
+            host_galaxy_covariances == NULL_VALUE, host_galaxy_covariances, host_galaxy_covariances**2
+        )
+
+        host_galaxy_observables, tmp_galaxy_covariances = reduce_duplicates(
+            host_galaxy_observables, host_galaxy_covariances,
+            idx_unique_sn, idx_duplicate_sn
+        )
+
         host_galaxy_observables = np.concatenate(
             (
                 host_galaxy_observables,
-                np.ones((host_galaxy_observables.shape[0], n_unused_host_properties)) * NULL_VALUE
+                np.ones((n_unique_sn, n_unused_host_properties)) * NULL_VALUE
             ), axis=1
         )
         
-        host_galaxy_covariance_values = np.where(
-            idx_err_below_zero,
-            NULL_VALUE,
-            host_galaxy_covariance_values
+        default_cov_value = 1 / 2*np.pi
+        host_galaxy_covariances = np.tile(
+            np.diag(np.ones(n_total_properties) * default_cov_value),
+            (n_unique_sn, 1, 1)
         )
-        host_galaxy_covariance_values = np.concatenate(
-            (
-                host_galaxy_covariance_values,
-                np.ones((host_galaxy_covariance_values.shape[0], n_unused_host_properties)) * NULL_VALUE
-            ), axis=1
+        host_galaxy_covariances[:, :n_used_host_properties, :n_used_host_properties] = tmp_galaxy_covariances
+        host_galaxy_covariances = np.where(
+            host_galaxy_covariances == NULL_VALUE, default_cov_value, host_galaxy_covariances
         )
-        host_galaxy_covariance_values = np.where(
-            host_galaxy_covariance_values == NULL_VALUE,
-            1 / np.sqrt(2*np.pi),
-            host_galaxy_covariance_values
+        host_galaxy_covariances = np.array(
+            [np.diag(tmp_cov) for tmp_cov in host_galaxy_covariances]
         )
+
+        idx_host_galaxy_property_not_observed = host_galaxy_observables == NULL_VALUE
     else:
         raise ValueError("Host galaxy properties must be provided as even columns.")
 
-    sn_covariances, host_galaxy_covariances = build_covariance_matrix(
-        sn_covariance_values, host_galaxy_covariance_values
-    )
 
     if "prior_bounds" in cfg.keys():
         gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
@@ -285,7 +319,6 @@ def set_gamma_quantiles(cfg: dict, par: str) -> np.ndarray:
 
 def build_covariance_matrix(
     sn_cov_values: np.ndarray,
-    host_cov_values: np.ndarray = None,
 ) -> np.ndarray:
     """Given a SN covariance value array with shape (N,M), populate
     a set of covariance matrices with the shape (N,3,3). Host galaxy
@@ -301,14 +334,6 @@ def build_covariance_matrix(
     """
 
     cov_sn = np.zeros((sn_cov_values.shape[0], 3, 3))
-    if np.any(host_cov_values):
-        cov_host = np.eye(host_cov_values.shape[1]) * host_cov_values[:, None, :] ** 2
-        posdef_cov_host = utils.ensure_posdef(cov_host)
-        posdef_cov_host = np.array(
-            [np.diag(tmp_cov) for tmp_cov in posdef_cov_host]
-        )
-    else:
-        posdef_cov_host = np.zeros((0,0))
 
     cov_sn[:,0,0] = sn_cov_values[:, 1] ** 2 # omega_m^2
     cov_sn[:,1,1] = sn_cov_values[:, 2] ** 2 # omega_x^2
@@ -324,7 +349,7 @@ def build_covariance_matrix(
 
     posdef_cov_sn = utils.ensure_posdef(cov_sn)
     
-    return posdef_cov_sn, posdef_cov_host
+    return posdef_cov_sn
 
 def reorder_duplicates(
     sn_array: np.ndarray, idx_unique_sn: np.ndarray,
@@ -339,3 +364,80 @@ def reorder_duplicates(
     unique_sn_array = sn_array[idx_unique_sn].copy()
 
     return unique_sn_array, duplicate_sn_array
+
+def reduced_observables_and_covariances(
+    duplicate_covariances: np.ndarray, duplicate_observables: np.ndarray,
+):
+
+    n_duplicates = len(duplicate_covariances)
+    reduced_observables = np.zeros((n_duplicates, *duplicate_observables[0].shape[1:]))
+    reduced_covariances = np.zeros((n_duplicates, *duplicate_covariances[0].shape[1:]))
+    max_value = np.finfo(duplicate_observables[0].dtype).max
+    null_cutoff = 10**(np.log10(max_value)/10)
+
+    for i in range(n_duplicates):
+
+        duplicate_obs = duplicate_observables[i][:, :, None]
+        duplicate_covs = duplicate_covariances[i]
+        duplicate_covs = np.where(
+            duplicate_covs == NULL_VALUE, max_value, duplicate_covs
+        )
+        cov_i_inv = np.linalg.inv(duplicate_covs)
+        reduced_cov = np.linalg.inv(
+            np.sum(
+                cov_i_inv, axis=0
+            )
+        )
+
+        reduced_obs = np.matmul(
+            reduced_cov, np.sum(
+                np.matmul(cov_i_inv, duplicate_obs), axis=0
+            )
+        )
+
+        reduced_cov = np.where(
+            np.abs(reduced_cov) > null_cutoff, NULL_VALUE, reduced_cov
+        )
+        reduced_observables[i] = reduced_obs.squeeze()
+        reduced_covariances[i] = reduced_cov
+    
+    return reduced_observables, reduced_covariances
+
+def reduce_duplicates(
+    observables: np.ndarray, covariances: np.ndarray,
+    idx_unique_sn: np.ndarray, idx_duplicate_sn: np.ndarray,
+):
+    
+    not_available = len(observables) == 0
+    if not_available:
+        return observables, covariances
+
+    unique_observables, duplicate_observables = reorder_duplicates(
+        observables, idx_unique_sn, idx_duplicate_sn
+    )
+    unique_covariances, duplicate_covariances = reorder_duplicates(
+        covariances, idx_unique_sn, idx_duplicate_sn
+    )
+
+    n_duplicate_observables = len(duplicate_observables)
+    if n_duplicate_observables == 0:
+        return unique_observables, unique_covariances
+
+    else:
+        reduced_observables, reduced_covariances = reduced_observables_and_covariances(
+            duplicate_covariances, duplicate_observables
+        )
+
+        reduced_observables = np.concatenate(
+            (unique_observables, reduced_observables), axis=0
+        )
+
+        reduced_covariances = np.concatenate(
+            (unique_covariances, reduced_covariances), axis=0
+        )
+
+        return reduced_observables, reduced_covariances
+
+
+
+
