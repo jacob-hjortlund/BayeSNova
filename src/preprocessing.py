@@ -188,41 +188,18 @@ def init_global_data(
         ) // 2
         host_galaxy_observables = data[host_property_keys].to_numpy()
         host_galaxy_covariance_values = data[host_property_err_keys].to_numpy()
-        idx_err_below_zero = host_galaxy_covariance_values < 0.
-
-        host_galaxy_observables = np.where(
-            idx_err_below_zero,
-            NULL_VALUE,
-            host_galaxy_observables
+        host_galaxy_covariances = (
+            np.eye(host_galaxy_covariance_values.shape[1]) *
+            host_galaxy_covariance_values[:, None, :]
         )
-        host_galaxy_observables = np.concatenate(
-            (
-                host_galaxy_observables,
-                np.ones((host_galaxy_observables.shape[0], n_unused_host_properties)) * NULL_VALUE
-            ), axis=1
-        )
-        
-        host_galaxy_covariance_values = np.where(
-            idx_err_below_zero,
-            NULL_VALUE,
-            host_galaxy_covariance_values
-        )
-        host_galaxy_covariance_values = np.concatenate(
-            (
-                host_galaxy_covariance_values,
-                np.ones((host_galaxy_covariance_values.shape[0], n_unused_host_properties)) * NULL_VALUE
-            ), axis=1
-        )
-        host_galaxy_covariance_values = np.where(
-            host_galaxy_covariance_values == NULL_VALUE,
-            1 / np.sqrt(2*np.pi),
-            host_galaxy_covariance_values
+        host_galaxy_covariances = np.where(
+            host_galaxy_covariances == NULL_VALUE, host_galaxy_covariances, host_galaxy_covariances**2
         )
     else:
         raise ValueError("Host galaxy properties must be provided as even columns.")
 
-    sn_covariances, host_galaxy_covariances = build_covariance_matrix(
-        sn_covariance_values, host_galaxy_covariance_values
+    sn_covariances = build_covariance_matrix(
+        sn_covariance_values
     )
 
     any_duplicates_present = False
@@ -271,10 +248,31 @@ def init_global_data(
     sn_observables, sn_covariances = reduce_duplicates(
         sn_observables, sn_covariances, idx_unique_sn, idx_duplicate_sn
     )
-    host_galaxy_observables, host_galaxy_covariances = reduce_duplicates(
-        host_galaxy_observables, host_galaxy_covariances,
-        idx_unique_sn, idx_duplicate_sn
-    )
+
+    if use_host_properties:
+        host_galaxy_observables, host_galaxy_covariances = reduce_duplicates(
+            host_galaxy_observables, host_galaxy_covariances,
+            idx_unique_sn, idx_duplicate_sn
+        )
+
+        host_galaxy_observables = np.concatenate(
+            (
+                host_galaxy_observables,
+                np.ones((host_galaxy_observables.shape[0], n_unused_host_properties)) * NULL_VALUE
+            ), axis=1
+        )
+        
+        host_galaxy_covariance_values = np.concatenate(
+            (
+                host_galaxy_covariance_values,
+                np.ones((host_galaxy_covariance_values.shape[0], n_unused_host_properties)) * NULL_VALUE
+            ), axis=1
+        )
+        host_galaxy_covariance_values = np.where(
+            host_galaxy_covariance_values == NULL_VALUE,
+            1 / np.sqrt(2*np.pi),
+            host_galaxy_covariance_values
+        )
 
     if "prior_bounds" in cfg.keys():
         gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
@@ -295,7 +293,6 @@ def set_gamma_quantiles(cfg: dict, par: str) -> np.ndarray:
 
 def build_covariance_matrix(
     sn_cov_values: np.ndarray,
-    host_cov_values: np.ndarray = None,
 ) -> np.ndarray:
     """Given a SN covariance value array with shape (N,M), populate
     a set of covariance matrices with the shape (N,3,3). Host galaxy
@@ -311,14 +308,6 @@ def build_covariance_matrix(
     """
 
     cov_sn = np.zeros((sn_cov_values.shape[0], 3, 3))
-    if np.any(host_cov_values):
-        cov_host = np.eye(host_cov_values.shape[1]) * host_cov_values[:, None, :] ** 2
-        posdef_cov_host = utils.ensure_posdef(cov_host)
-        posdef_cov_host = np.array(
-            [np.diag(tmp_cov) for tmp_cov in posdef_cov_host]
-        )
-    else:
-        posdef_cov_host = np.zeros((0,0))
 
     cov_sn[:,0,0] = sn_cov_values[:, 1] ** 2 # omega_m^2
     cov_sn[:,1,1] = sn_cov_values[:, 2] ** 2 # omega_x^2
@@ -334,7 +323,7 @@ def build_covariance_matrix(
 
     posdef_cov_sn = utils.ensure_posdef(cov_sn)
     
-    return posdef_cov_sn, posdef_cov_host
+    return posdef_cov_sn
 
 def reorder_duplicates(
     sn_array: np.ndarray, idx_unique_sn: np.ndarray,
