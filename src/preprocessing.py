@@ -147,7 +147,7 @@ def init_global_data(
     sn_covariance_values = data[sn_covariance_keys].copy().to_numpy()
     sn_cids = data['CID'].copy().to_numpy()
     data.drop(
-        sn_observable_keys + sn_covariance_keys + ['CID'], axis=1, inplace=True
+        sn_observable_keys + sn_covariance_keys + ['z','CID'], axis=1, inplace=True
     )
 
     if selection_bias_correction_key in data.columns:
@@ -165,38 +165,6 @@ def init_global_data(
     else:
         observed_volumetric_rates = np.zeros((0,))
         observed_volumetric_rate_errors = np.zeros((0,))
-
-    host_galaxy_cfg = cfg.get('host_galaxy_cfg', {})
-    host_property_keys = host_galaxy_cfg.get('property_names', [])
-    host_property_err_keys = [key + "_err" for key in host_property_keys]
-
-    use_host_properties = host_galaxy_cfg.get('use_properties', False)
-    can_use_host_properties = (
-        set(host_property_keys) <= set(data.columns) and
-        set(host_property_err_keys) <= set(data.columns)
-    )
-    if not use_host_properties:
-        
-        n_unused_host_properties = 0
-        host_galaxy_observables = np.zeros((0,0))
-        host_galaxy_covariance_values = np.zeros((0,0))
-    
-    elif can_use_host_properties and use_host_properties:
-
-        n_unused_host_properties = (
-            len(data.columns) - len(host_property_keys) - len(host_property_err_keys)
-        ) // 2
-        host_galaxy_observables = data[host_property_keys].to_numpy()
-        host_galaxy_covariance_values = data[host_property_err_keys].to_numpy()
-        host_galaxy_covariances = (
-            np.eye(host_galaxy_covariance_values.shape[1]) *
-            host_galaxy_covariance_values[:, None, :]
-        )
-        host_galaxy_covariances = np.where(
-            host_galaxy_covariances == NULL_VALUE, host_galaxy_covariances, host_galaxy_covariances**2
-        )
-    else:
-        raise ValueError("Host galaxy properties must be provided as even columns.")
 
     sn_covariances = build_covariance_matrix(
         sn_covariance_values
@@ -249,8 +217,38 @@ def init_global_data(
         sn_observables, sn_covariances, idx_unique_sn, idx_duplicate_sn
     )
 
-    if use_host_properties:
-        host_galaxy_observables, host_galaxy_covariances = reduce_duplicates(
+    host_galaxy_cfg = cfg.get('host_galaxy_cfg', {})
+    host_property_keys = host_galaxy_cfg.get('property_names', [])
+    host_property_err_keys = [key + "_err" for key in host_property_keys]
+
+    use_host_properties = host_galaxy_cfg.get('use_properties', False)
+    can_use_host_properties = (
+        set(host_property_keys) <= set(data.columns) and
+        set(host_property_err_keys) <= set(data.columns)
+    )
+    
+    if not use_host_properties:
+        
+        n_unused_host_properties = 0
+        host_galaxy_observables = np.zeros((0,0))
+        host_galaxy_covariance_values = np.zeros((0,0))
+
+    elif can_use_host_properties and use_host_properties:
+        
+        n_total_properties = len(data.columns) // 2
+        n_used_host_properties = len(host_property_keys)
+        n_unused_host_properties = ( n_total_properties - n_used_host_properties )
+        host_galaxy_observables = data[host_property_keys].to_numpy()
+        host_galaxy_covariance_values = data[host_property_err_keys].to_numpy()
+        host_galaxy_covariances = (
+            np.eye(host_galaxy_covariance_values.shape[1]) *
+            host_galaxy_covariance_values[:, None, :]
+        )
+        host_galaxy_covariances = np.where(
+            host_galaxy_covariances == NULL_VALUE, host_galaxy_covariances, host_galaxy_covariances**2
+        )
+
+        host_galaxy_observables, tmp_galaxy_covariances = reduce_duplicates(
             host_galaxy_observables, host_galaxy_covariances,
             idx_unique_sn, idx_duplicate_sn
         )
@@ -258,21 +256,22 @@ def init_global_data(
         host_galaxy_observables = np.concatenate(
             (
                 host_galaxy_observables,
-                np.ones((host_galaxy_observables.shape[0], n_unused_host_properties)) * NULL_VALUE
+                np.ones((n_unique_sn, n_unused_host_properties)) * NULL_VALUE
             ), axis=1
         )
         
-        host_galaxy_covariance_values = np.concatenate(
-            (
-                host_galaxy_covariance_values,
-                np.ones((host_galaxy_covariance_values.shape[0], n_unused_host_properties)) * NULL_VALUE
-            ), axis=1
+        default_cov_value = 1 / 2*np.pi
+        host_galaxy_covariances = np.tile(
+            np.diag(np.ones(n_total_properties) * default_cov_value),
+            (n_unique_sn, 1, 1)
         )
-        host_galaxy_covariance_values = np.where(
-            host_galaxy_covariance_values == NULL_VALUE,
-            1 / np.sqrt(2*np.pi),
-            host_galaxy_covariance_values
+        host_galaxy_covariances[:, :n_used_host_properties, :n_used_host_properties] = tmp_galaxy_covariances
+        host_galaxy_covariances = np.where(
+            host_galaxy_covariances == NULL_VALUE, default_cov_value, host_galaxy_covariances
         )
+    else:
+        raise ValueError("Host galaxy properties must be provided as even columns.")
+
 
     if "prior_bounds" in cfg.keys():
         gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
@@ -346,11 +345,16 @@ def reduced_observables_and_covariances(
     n_duplicates = len(duplicate_covariances)
     reduced_observables = np.zeros((n_duplicates, *duplicate_observables[0].shape[1:]))
     reduced_covariances = np.zeros((n_duplicates, *duplicate_covariances[0].shape[1:]))
+    max_value = np.finfo(duplicate_observables[0].dtype).max
+    null_cutoff = 10**(np.log10(max_value)/10)
 
     for i in range(n_duplicates):
 
         duplicate_obs = duplicate_observables[i][:, :, None]
         duplicate_covs = duplicate_covariances[i]
+        duplicate_covs = np.where(
+            duplicate_covs == NULL_VALUE, max_value, duplicate_covs
+        )
         cov_i_inv = np.linalg.inv(duplicate_covs)
         reduced_cov = np.linalg.inv(
             np.sum(
@@ -364,6 +368,9 @@ def reduced_observables_and_covariances(
             )
         )
 
+        reduced_cov = np.where(
+            np.abs(reduced_cov) > null_cutoff, NULL_VALUE, reduced_cov
+        )
         reduced_observables[i] = reduced_obs.squeeze()
         reduced_covariances[i] = reduced_cov
     
