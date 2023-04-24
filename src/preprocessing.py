@@ -264,10 +264,14 @@ def init_global_data(
     data.drop(duplicate_uid_key, axis=1, inplace=True, errors='ignore')
     n_unique_sn = np.count_nonzero(idx_unique_sn) + len(idx_duplicate_sn)
 
-    sn_observables_tmp, sn_covariances_tmp = reduce_duplicates(
+    sn_redshifts, _ = reduce_duplicates(
+        sn_redshifts[:, None], np.ones((len(data), 1,1)),
+        idx_unique_sn, idx_duplicate_sn
+    )
+    sn_observables, sn_covariances = reduce_duplicates(
         sn_observables, sn_covariances, idx_unique_sn, idx_duplicate_sn
     )
-    host_galaxy_observables_tmp, host_galaxy_covariances_tmp = reduce_duplicates(
+    host_galaxy_observables, host_galaxy_covariances = reduce_duplicates(
         host_galaxy_observables, host_galaxy_covariances,
         idx_unique_sn, idx_duplicate_sn
     )
@@ -351,12 +355,12 @@ def reduced_observables_and_covariances(
 ):
 
     n_duplicates = len(duplicate_covariances)
-    reduced_observables = np.zeros((n_duplicates, 3))
-    reduced_covariances = np.zeros((n_duplicates, 3, 3))
+    reduced_observables = np.zeros((n_duplicates, *duplicate_observables[0].shape[1:]))
+    reduced_covariances = np.zeros((n_duplicates, *duplicate_covariances[0].shape[1:]))
 
     for i in range(n_duplicates):
 
-        duplicate_obs = duplicate_observables[i]
+        duplicate_obs = duplicate_observables[i][:, :, None]
         duplicate_covs = duplicate_covariances[i]
         cov_i_inv = np.linalg.inv(duplicate_covs)
         reduced_cov = np.linalg.inv(
@@ -365,11 +369,13 @@ def reduced_observables_and_covariances(
             )
         )
 
-        reduced_obs = reduced_cov @ np.sum(
-            cov_i_inv @ duplicate_obs, axis=0
+        reduced_obs = np.matmul(
+            reduced_cov, np.sum(
+                np.matmul(cov_i_inv, duplicate_obs), axis=0
+            )
         )
 
-        reduced_observables[i] = reduced_obs
+        reduced_observables[i] = reduced_obs.squeeze()
         reduced_covariances[i] = reduced_cov
     
     return reduced_observables, reduced_covariances
