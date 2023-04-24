@@ -147,50 +147,6 @@ def init_global_data(
         sn_observable_keys + sn_covariance_keys + ['CID'], axis=1, inplace=True
     )
 
-    duplicate_uid_available = duplicate_uid_key in data.columns
-    if duplicate_uid_available:
-        duplicate_uids = data[duplicate_uid_key].copy().unique()
-        idx_not_null = duplicate_uids != NULL_VALUE
-        any_duplicates_present = np.any(idx_not_null)
-    else:
-        any_duplicates_present = False
-
-    if any_duplicates_present:
-
-        duplicate_uids = duplicate_uids[idx_not_null]
-
-        idx_duplicate_sn = []
-        for uid in duplicate_uids:
-            idx_duplicate_sn.append(
-                data['duplicate_uid'].copy().to_numpy() == uid
-            )
-
-        idx_duplicate_sn = np.array(idx_duplicate_sn)
-        idx_unique_sn = ~np.any(idx_duplicate_sn, axis=0)
-
-        idx_unique_calibrator_sn, idx_duplicate_calibrator_sn = reorder_duplicates(
-            idx_calibrator_sn, idx_unique_sn, idx_duplicate_sn
-        )
-        idx_duplicate_calibrator_sn = np.array(
-            [
-                np.any(tmp_idx) for tmp_idx in idx_duplicate_calibrator_sn
-            ]
-        )
-        idx_reordered_calibrator_sn = np.concatenate(
-            (idx_unique_calibrator_sn, idx_duplicate_calibrator_sn)
-        )
-
-        data.drop(duplicate_uid_key, axis=1, inplace=True)
-    else:
-        idx_duplicate_sn = []
-        idx_unique_sn = np.ones((data.shape[0],), dtype=bool)
-        idx_reordered_calibrator_sn = idx_calibrator_sn
-
-    if duplicate_uid_available & (not any_duplicates_present):
-        data.drop(duplicate_uid_key, axis=1, inplace=True)
-
-    n_unique_sn = np.count_nonzero(idx_unique_sn) + len(idx_duplicate_sn)    
-
     if selection_bias_correction_key in data.columns:
         selection_bias_correction = data[selection_bias_correction_key].copy().to_numpy()
         idx_null = selection_bias_correction == NULL_VALUE
@@ -265,6 +221,45 @@ def init_global_data(
     sn_covariances, host_galaxy_covariances = build_covariance_matrix(
         sn_covariance_values, host_galaxy_covariance_values
     )
+
+    any_duplicates_present = False
+    idx_duplicate_sn = []
+    idx_unique_sn = np.ones((data.shape[0],), dtype=bool)
+    idx_reordered_calibrator_sn = idx_calibrator_sn
+    duplicate_uid_available = duplicate_uid_key in data.columns
+
+    if duplicate_uid_available:
+        duplicate_uids = data[duplicate_uid_key].copy().unique()
+        idx_not_null = duplicate_uids != NULL_VALUE
+        any_duplicates_present = np.any(idx_not_null)
+        data.drop(duplicate_uid_key, axis=1, inplace=True)
+
+    if any_duplicates_present:
+
+        duplicate_uids = duplicate_uids[idx_not_null]
+
+        idx_duplicate_sn = []
+        for uid in duplicate_uids:
+            idx_duplicate_sn.append(
+                data['duplicate_uid'].copy().to_numpy() == uid
+            )
+
+        idx_duplicate_sn = np.array(idx_duplicate_sn)
+        idx_unique_sn = ~np.any(idx_duplicate_sn, axis=0)
+
+        idx_unique_calibrator_sn, idx_duplicate_calibrator_sn = reorder_duplicates(
+            idx_calibrator_sn, idx_unique_sn, idx_duplicate_sn
+        )
+        idx_duplicate_calibrator_sn = np.array(
+            [
+                np.any(tmp_idx) for tmp_idx in idx_duplicate_calibrator_sn
+            ]
+        )
+        idx_reordered_calibrator_sn = np.concatenate(
+            (idx_unique_calibrator_sn, idx_duplicate_calibrator_sn)
+        )
+        
+    n_unique_sn = np.count_nonzero(idx_unique_sn) + len(idx_duplicate_sn)
 
     if "prior_bounds" in cfg.keys():
         gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
