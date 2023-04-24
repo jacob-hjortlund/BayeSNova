@@ -519,11 +519,9 @@ class Model():
     def independent_gaussians(
         self, means: np.ndarray, sigmas: np.ndarray
     ):
-
-        idx_not_observed = prep.host_galaxy_observables == NULL_VALUE
         
         res = np.where(
-            idx_not_observed,
+            prep.idx_host_galaxy_property_not_observed,
             0.,
             prep.host_galaxy_observables - means
         )
@@ -532,7 +530,7 @@ class Model():
             sigmas, [prep.host_galaxy_observables.shape[0], 1]
         )
         sigmas = np.where(
-            idx_not_observed,
+            prep.idx_host_galaxy_property_not_observed,
             0.,
             sigmas
         )
@@ -839,7 +837,7 @@ class Model():
         combined_log_probs = np.logaddexp(pop_1_log_probs, pop_2_log_probs)
 
         if prep.global_model_cfg['only_evaluate_calibrators']:
-            combined_log_probs = combined_log_probs[~prep.idx_reordered_calibrator_sn]
+            combined_log_probs = combined_log_probs[~prep.idx_calibrator_sn]
         
         n_tile = (
             n_host_properties + (not prep.global_model_cfg['host_galaxy_cfg']['use_properties'])

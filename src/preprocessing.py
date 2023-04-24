@@ -129,7 +129,7 @@ def init_global_data(
     )
     if calibrator_flags_available:
         idx_calibrator_sn = data['is_calibrator'].copy().to_numpy() != NULL_VALUE
-        calibrator_distance_moduli = data['mu_calibrator'].copy().to_numpy()[idx_calibrator_sn]
+        calibrator_distance_moduli = data['mu_calibrator'].copy().to_numpy()
         data.drop(['is_calibrator', 'mu_calibrator'], axis=1, inplace=True)
     else:
         idx_calibrator_sn = np.zeros(len(data), dtype=bool)
@@ -144,7 +144,7 @@ def init_global_data(
     sn_observable_keys = ['mB', 'x1', 'c']
     sn_covariance_keys = ['x0', 'mBErr', 'x1Err', 'cErr', 'cov_x1_c', 'cov_x1_x0', 'cov_c_x0']
     sn_observables = data[sn_observable_keys].copy().to_numpy()
-    sn_redshifts = data[sn_redshift_key].copy().to_numpy()
+    sn_redshifts = data[sn_redshift_key].copy().to_numpy().squeeze()
     sn_covariance_values = data[sn_covariance_keys].copy().to_numpy()
     sn_cids = data['CID'].copy().to_numpy()
     data.drop(
@@ -203,7 +203,7 @@ def init_global_data(
                 np.any(tmp_idx) for tmp_idx in idx_duplicate_calibrator_sn
             ]
         )
-        idx_reordered_calibrator_sn = np.concatenate(
+        idx_calibrator_sn = np.concatenate(
             (idx_unique_calibrator_sn, idx_duplicate_calibrator_sn)
         )
 
@@ -221,9 +221,20 @@ def init_global_data(
         sn_redshifts[:, None], np.ones((len(data), 1,1)),
         idx_unique_sn, idx_duplicate_sn
     )
+    sn_redshifts = sn_redshifts.squeeze()
     sn_observables, sn_covariances = reduce_duplicates(
         sn_observables, sn_covariances, idx_unique_sn, idx_duplicate_sn
     )
+
+    if calibrator_flags_available:
+        tmp_cov = np.ones((len(data), 1, 1))
+        idx_not_calibrator = calibrator_distance_moduli == NULL_VALUE
+        tmp_cov[idx_not_calibrator,:,:] = NULL_VALUE
+        calibrator_distance_moduli, _ = reduce_duplicates(
+            calibrator_distance_moduli[:, None], tmp_cov,
+            idx_unique_sn, idx_duplicate_sn
+        )
+        calibrator_distance_moduli = calibrator_distance_moduli[idx_calibrator_sn].squeeze()
 
     host_galaxy_cfg = cfg.get('host_galaxy_cfg', {})
     host_property_keys = host_galaxy_cfg.get('property_names', [])

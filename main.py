@@ -207,7 +207,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     
     post.membership_histogram(
         membership_quantiles, titles_list, mapper,
-        prep.idx_reordered_calibrator_sn, cfg, fig_path
+        prep.idx_calibrator_sn, cfg, fig_path
     )
 
     available_properties_names = data.keys()[::2]
@@ -225,7 +225,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         idx_not_calibrator, idx_calibrator = post.get_host_property_split_idx(
             host_property, host_property_errors,
-            prep.idx_reordered_calibrator_sn
+            prep.idx_calibrator_sn
         )
 
         formatted_property_name = utils.format_property_names(
@@ -315,8 +315,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
     membership_combinations = list(combinations(titles_list, 2))
 
     all_membership_quantiles = membership_quantiles[0]
-    idx_not_calibrator = ~prep.idx_reordered_calibrator_sn
-    idx_calibrator = prep.idx_reordered_calibrator_sn
+    idx_not_calibrator = ~prep.idx_calibrator_sn
+    idx_calibrator = prep.idx_calibrator_sn
 
     for membership_1, membership_2 in membership_combinations:
             
