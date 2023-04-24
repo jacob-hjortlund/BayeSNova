@@ -105,6 +105,7 @@ def init_global_data(
     global sn_cids
     global sn_covariances
     global sn_observables
+    global sn_redshifts
     global gRb_quantiles
     global gEbv_quantiles
     global global_model_cfg
@@ -138,9 +139,11 @@ def init_global_data(
 
     duplicate_uid_key = 'duplicate_uid'
     selection_bias_correction_key = 'bias_corr_factor'
-    sn_observable_keys = ['mB', 'x1', 'c', 'z']
+    sn_redshift_key = 'z'
+    sn_observable_keys = ['mB', 'x1', 'c']
     sn_covariance_keys = ['x0', 'mBErr', 'x1Err', 'cErr', 'cov_x1_c', 'cov_x1_x0', 'cov_c_x0']
     sn_observables = data[sn_observable_keys].copy().to_numpy()
+    sn_redshifts = data[sn_redshift_key].copy().to_numpy()
     sn_covariance_values = data[sn_covariance_keys].copy().to_numpy()
     sn_cids = data['CID'].copy().to_numpy()
     data.drop(
@@ -178,7 +181,7 @@ def init_global_data(
         host_galaxy_observables = np.zeros((0,0))
         host_galaxy_covariance_values = np.zeros((0,0))
     
-    elif can_use_host_properties:
+    elif can_use_host_properties and use_host_properties:
 
         n_unused_host_properties = (
             len(data.columns) - len(host_property_keys) - len(host_property_err_keys)
@@ -232,7 +235,6 @@ def init_global_data(
         duplicate_uids = data[duplicate_uid_key].copy().unique()
         idx_not_null = duplicate_uids != NULL_VALUE
         any_duplicates_present = np.any(idx_not_null)
-        data.drop(duplicate_uid_key, axis=1, inplace=True)
 
     if any_duplicates_present:
 
@@ -258,8 +260,17 @@ def init_global_data(
         idx_reordered_calibrator_sn = np.concatenate(
             (idx_unique_calibrator_sn, idx_duplicate_calibrator_sn)
         )
-        
+    
+    data.drop(duplicate_uid_key, axis=1, inplace=True, errors='ignore')
     n_unique_sn = np.count_nonzero(idx_unique_sn) + len(idx_duplicate_sn)
+
+    sn_observables_tmp, sn_covariances_tmp = reduce_duplicates(
+        sn_observables, sn_covariances, idx_unique_sn, idx_duplicate_sn
+    )
+    host_galaxy_observables_tmp, host_galaxy_covariances_tmp = reduce_duplicates(
+        host_galaxy_observables, host_galaxy_covariances,
+        idx_unique_sn, idx_duplicate_sn
+    )
 
     if "prior_bounds" in cfg.keys():
         gRb_quantiles = set_gamma_quantiles(cfg, 'Rb')
@@ -334,3 +345,70 @@ def reorder_duplicates(
     unique_sn_array = sn_array[idx_unique_sn].copy()
 
     return unique_sn_array, duplicate_sn_array
+
+def reduced_observables_and_covariances(
+    duplicate_covariances: np.ndarray, duplicate_observables: np.ndarray,
+):
+
+    n_duplicates = len(duplicate_covariances)
+    reduced_observables = np.zeros((n_duplicates, 3))
+    reduced_covariances = np.zeros((n_duplicates, 3, 3))
+
+    for i in range(n_duplicates):
+
+        duplicate_obs = duplicate_observables[i]
+        duplicate_covs = duplicate_covariances[i]
+        cov_i_inv = np.linalg.inv(duplicate_covs)
+        reduced_cov = np.linalg.inv(
+            np.sum(
+                cov_i_inv, axis=0
+            )
+        )
+
+        reduced_obs = reduced_cov @ np.sum(
+            cov_i_inv @ duplicate_obs, axis=0
+        )
+
+        reduced_observables[i] = reduced_obs
+        reduced_covariances[i] = reduced_cov
+    
+    return reduced_observables, reduced_covariances
+
+def reduce_duplicates(
+    observables: np.ndarray, covariances: np.ndarray,
+    idx_unique_sn: np.ndarray, idx_duplicate_sn: np.ndarray,
+):
+    
+    not_available = len(observables) == 0
+    if not_available:
+        return observables, covariances
+
+    unique_observables, duplicate_observables = reorder_duplicates(
+        observables, idx_unique_sn, idx_duplicate_sn
+    )
+    unique_covariances, duplicate_covariances = reorder_duplicates(
+        covariances, idx_unique_sn, idx_duplicate_sn
+    )
+
+    n_duplicate_observables = len(duplicate_observables)
+    if n_duplicate_observables == 0:
+        return unique_observables, unique_covariances
+
+    else:
+        reduced_observables, reduced_covariances = reduced_observables_and_covariances(
+            duplicate_covariances, duplicate_observables
+        )
+
+        reduced_observables = np.concatenate(
+            (unique_observables, reduced_observables), axis=0
+        )
+
+        reduced_covariances = np.concatenate(
+            (unique_covariances, reduced_covariances), axis=0
+        )
+
+        return reduced_observables, reduced_covariances
+
+
+
+
