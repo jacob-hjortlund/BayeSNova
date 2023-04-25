@@ -759,7 +759,7 @@ class Model():
             )
 
             cid_for_failures = [idx_not_valid]
-            calibrator_flag_for_failures = prep.idx_reordered_calibrator_sn[idx_not_valid]
+            calibrator_flag_for_failures = prep.idx_calibrator_sn[idx_not_valid]
             observed_mb_for_failures = prep.sn_observables[:,0][idx_not_valid]
             observed_x1_for_failures = prep.sn_observables[:,1][idx_not_valid]
             observed_c_for_failures = prep.sn_observables[:,2][idx_not_valid]
