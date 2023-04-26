@@ -1,5 +1,5 @@
 data_cfg:
-  path: ./data/pantheon+_zcut
+  path: ./data/old_data/pantheon+_zcut
 model_cfg:
   use_physical_ratio: True
   pars:

@@ -30,7 +30,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     prep.init_global_data(base_data, volumetric_rates, cfg['model_cfg'])
 
     # Generate redshifts
-    log10_z = np.log10(prep.sn_observables[:,-1])
+    log10_z = np.log10(prep.sn_redshifts)
     kde = stats.gaussian_kde(log10_z)
     kde_samples = kde.resample(
         cfg['simulation_cfg']['n_max'], seed
