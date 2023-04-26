@@ -3,6 +3,7 @@ import pandas as pd
 import astropy.units as u
 import src.utils as utils
 
+from typing import Tuple
 from astropy.coordinates import SkyCoord
 
 NULL_VALUE = -9999.
@@ -354,7 +355,18 @@ def build_covariance_matrix(
 def reorder_duplicates(
     sn_array: np.ndarray, idx_unique_sn: np.ndarray,
     idx_duplicate_sn: np.ndarray
-):
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Reorder duplicate SN arrays to match the order of the unique SN array.
+
+    Args:
+        sn_array (np.ndarray): Array of SN properties with shape (N,....)
+        idx_unique_sn (np.ndarray): Array of boolean indices of unique SN with shape (N,)
+        idx_duplicate_sn (np.ndarray): Array of boolean indices of duplicate SN with shape (M, N)
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: Reordered unique and duplicate SN arrays. Unique array has
+        shape (K, ...) and duplicate array is an object array with shape (M, (L_i, ...))
+    """
     
     duplicate_sn_array = []
     for idx in idx_duplicate_sn:
@@ -367,7 +379,17 @@ def reorder_duplicates(
 
 def reduced_observables_and_covariances(
     duplicate_covariances: np.ndarray, duplicate_observables: np.ndarray,
-):
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Reduce the number of observables and covariances by combining
+    duplicates.
+
+    Args:
+        duplicate_covariances (np.ndarray): Array of duplicate covariance matrices with shape (N,3,3)
+        duplicate_observables (np.ndarray): Array of duplicate observable arrays with shape (N,3)
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: Reduced covariance matrices and observables
+    """
 
     n_duplicates = len(duplicate_covariances)
     reduced_observables = np.zeros((n_duplicates, *duplicate_observables[0].shape[1:]))
