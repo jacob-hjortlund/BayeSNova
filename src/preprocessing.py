@@ -392,18 +392,25 @@ def reduced_observables_and_covariances(
     """
 
     n_duplicates = len(duplicate_covariances)
-    reduced_observables = np.zeros((n_duplicates, *duplicate_observables[0].shape[1:]))
-    reduced_covariances = np.zeros((n_duplicates, *duplicate_covariances[0].shape[1:]))
-    max_value = np.finfo(duplicate_observables[0].dtype).max
+    if n_duplicates == 0:
+        n_dimensions = 0
+    else:
+        n_dimensions = duplicate_covariances[0].shape[-1]
+
+    reduced_observables = np.zeros((n_duplicates, n_dimensions))
+    reduced_covariances = np.zeros((n_duplicates, n_dimensions, n_dimensions))
+    reduced_log_factors = np.zeros(n_duplicates)
+    max_value = np.finfo(np.float64).max
     null_cutoff = 10**(np.log10(max_value)/10)
 
     for i in range(n_duplicates):
 
-        duplicate_obs = duplicate_observables[i][:, :, None]
-        duplicate_covs = duplicate_covariances[i]
+        duplicate_obs = duplicate_observables[i][:, :, None].astype(np.float64)
+        duplicate_covs = duplicate_covariances[i].astype(np.float64)
         duplicate_covs = np.where(
             duplicate_covs == NULL_VALUE, max_value, duplicate_covs
         )
+
         cov_i_inv = np.linalg.inv(duplicate_covs)
         reduced_cov = np.linalg.inv(
             np.sum(
@@ -415,15 +422,35 @@ def reduced_observables_and_covariances(
             reduced_cov, np.sum(
                 np.matmul(cov_i_inv, duplicate_obs), axis=0
             )
+        ).squeeze()
+
+        log_factor_first_term = np.sum(
+            np.log(np.linalg.det(2 * np.pi * duplicate_covs)) +
+            np.matmul(
+                duplicate_obs.transpose(0, 2, 1),
+                np.matmul(cov_i_inv, duplicate_obs)
+            ).squeeze()
+        )
+        log_factor_second_term = (
+            np.log(np.linalg.det(2 * np.pi * reduced_cov)) +
+            np.matmul(
+                np.atleast_1d(reduced_obs).T, np.matmul(
+                    np.linalg.inv(reduced_cov), np.atleast_1d(reduced_obs)
+                )
+            )
         )
 
         reduced_cov = np.where(
             np.abs(reduced_cov) > null_cutoff, NULL_VALUE, reduced_cov
         )
-        reduced_observables[i] = reduced_obs.squeeze()
+
+        reduced_log_factors[i] = -0.5 * (
+            log_factor_first_term - log_factor_second_term
+        )
+        reduced_observables[i] = reduced_obs
         reduced_covariances[i] = reduced_cov
     
-    return reduced_observables, reduced_covariances
+    return reduced_observables, reduced_covariances, reduced_log_factors
 
 def reduce_duplicates(
     observables: np.ndarray, covariances: np.ndarray,
@@ -446,7 +473,7 @@ def reduce_duplicates(
         return unique_observables, unique_covariances
 
     else:
-        reduced_observables, reduced_covariances = reduced_observables_and_covariances(
+        reduced_observables, reduced_covariances, _ = reduced_observables_and_covariances(
             duplicate_covariances, duplicate_observables
         )
 
