@@ -15,27 +15,27 @@ NULL_VALUE = -9999.
     [
         (
             "inputs_with_replicas",
-            ( (10, 3), 4, False, False ),
+            ( (10, 3), 4, False, False, False ),
         ),
         (
             "inputs_with_replicas",
-            ( (10, 3), 0, False, False ),
+            ( (10, 3), 0, False, False, False ),
         ),
         (
             "inputs_with_replicas",
-            ( (10, 3), 10, False, False ),
+            ( (10, 3), 10, False, False, False ),
         ),
         (
             "inputs_with_replicas",
-            ( (10, 3, 3), 4, True, False ),
+            ( (10, 3, 3), 4, False, True, False ),
         ),
         (
             "inputs_with_replicas",
-            ( (10, 3, 3), 0, True, False ),
+            ( (10, 3, 3), 0, False, True, False ),
         ),
         (
             "inputs_with_replicas",
-            ( (10, 3, 3), 10, True, False ),
+            ( (10, 3, 3), 10, False, True, False ),
         ),
     ], indirect=["inputs_with_replicas"]
 )
@@ -60,22 +60,22 @@ def test_reorder_duplicates(inputs_with_replicas, cfg):
         (   
             "rng",
             "inputs_with_replicas",
-            ( (10, 3,3), 4, True, False ),
+            ( (10, 3, 3), 4, False, True, False ),
         ),
         (
             "rng",
             "inputs_with_replicas",
-            ( (10, 3,3), 0, True, False ),
+            ( (10, 3, 3), 0, False, True, False ),
         ),
         (
             "rng",
             "inputs_with_replicas",
-            ( (10, 3,3), 10, True, False ),
+            ( (10, 3, 3), 10, False, True, False ),
         ),
         (
             "rng",
             "inputs_with_replicas",
-            ( (10, 3,3), 0, True, True ),
+            ( (10, 3, 3), 0, True, True, True ),
         )      
     ], indirect=["rng","inputs_with_replicas"]
 )
