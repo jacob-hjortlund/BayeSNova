@@ -1,33 +1,75 @@
 import os
 import pytest
 import numpy as np
+#import scipy.stats as stats
 
 from typing import Tuple
 
 NULL_VALUE = -9999.
+MAX_VALUE = np.finfo(np.float64).max
+
+def multivariate_gaussian_logpdf(
+    x: np.ndarray, mean: np.ndarray, cov: np.ndarray
+) -> float:
+    """
+    Multivariate Gaussian log-pdf.
+
+    Args:
+        x (np.ndarray): Input array with shape (n_dimensions,)
+        mean (np.ndarray): Mean vector with shape (n_dimensions,)
+        cov (np.ndarray): Covariance matrix with shape (n_dimensions, n_dimensions)
+
+    Returns:
+        logpdf (float): Log-pdf
+    """
+    
+    x = x.astype(np.float64)
+    mean = mean.astype(np.float64)
+    cov = cov.astype(np.float64)
+
+    n_dimensions = x.shape[-1]
+    cov_inv = np.linalg.inv(cov)
+    
+    logpdf = -0.5 * (
+        n_dimensions * np.log(2 * np.pi) + 
+        np.linalg.slogdet(cov)[1] +
+        (x-mean).T @ cov_inv @ (x-mean)
+    )
+
+    return logpdf
 
 @pytest.fixture
 def rng():
+    """
+    Random number generator.
+
+    Returns:
+        np.random.Generator: Random number generator
+    """
+
     return np.random.default_rng(1337)
 
 @pytest.fixture
 def create_random_inputs(rng):
+
     def _create_random_inputs(
         input_shape: Tuple[int, ...], make_diagonal: bool,
         make_symmetric_and_posdef: bool
-    ):
+    ) -> np.ndarray:
         """
         Generates random inputs.
 
         Args:
             input_shape (Tuple[int, ...]): Shape of input array
-            make_diagonal (bool): Whether to make the inputs diagonal
+            make_diagonal (bool): Whether to make the inputs diagonal. Requires that
+            len(input_shape) == 2.
             make_symmetric_and_posdef (bool): Whether to make the inputs symmetric
             and positive definite
 
         Returns:
             np.ndarray: Random inputs
         """
+        #TODO: Add check for diagonal and shape match
         inputs = rng.random(input_shape)
         if make_diagonal:
             inputs = np.array([np.diag(i) for i in inputs])
@@ -41,12 +83,14 @@ def create_random_inputs(rng):
 
 @pytest.fixture
 def null_value_insertion(rng):
-    def _null_value_insertion(inputs, null_value=NULL_VALUE):
+
+    def _null_value_insertion(inputs, keep_diagonal, null_value=NULL_VALUE):
         """
         Inserts null values into inputs.
 
         Args:
             inputs (np.ndarray): Inputs
+            keep_diagonal (bool): Whether to only insert null values on the diagonal
             null_value (float): Null value. Defaults to -9999.
 
         Returns:
@@ -56,6 +100,9 @@ def null_value_insertion(rng):
         n = inputs.shape[0]
         #TODO: Generlize to 2d inputs or add check
         n_dimensions = inputs.shape[-1]
+
+        if keep_diagonal:
+            inputs = np.array([np.diag(i) for i in inputs])
 
         idx_set_null = rng.choice(
             [True, False], size=(n, n_dimensions)
@@ -75,6 +122,9 @@ def null_value_insertion(rng):
                 row_indeces = np.arange(n_dimensions)
                 idx = rng.choice(row_indeces, 1)[0]
                 inputs[i, idx] = null_value
+
+        if keep_diagonal:
+            inputs = np.array([np.diag(i) for i in inputs])
 
         return inputs
     
@@ -162,23 +212,24 @@ def inputs_with_replicas(
     create_random_inputs, null_value_insertion,
     sample_nonunique_inputs, check_generated_input
 ):
+    
     def _inputs_with_replicas(
         input_shape, n_unique, make_diagonal,
         make_symmetric_and_posdef,
         insert_null_values
     ):
         """
-        Generates inputs with replicas.
+        Creates inputs with replicas.
 
         Args:
-            input_shape (Tuple[int, ...]): Shape of input array
+            input_shape (Tuple[int, ...]): Input shape
             n_unique (int): Number of unique inputs
-            make_symmetric_and_posdef (bool): Whether to make the inputs symmetric and positive definite
-            insert_null_values (bool): Whether to diagonalize and insert null values
+            make_diagonal (bool): Make diagonal
+            make_symmetric_and_posdef (bool): Make symmetric and positive definite
+            insert_null_values (bool): Insert null values
 
         Returns:
-            Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]: Tuple of inputs,
-            unique inputs, replica inputs, replica indices, unique indices
+            Tuple[np.ndarray, np.ndarray]: Tuple of inputs and boolean replica indices
         """
         
         n = input_shape[0]
@@ -190,7 +241,7 @@ def inputs_with_replicas(
         )
 
         if insert_null_values:
-            inputs = null_value_insertion(inputs)
+            inputs = null_value_insertion(inputs, keep_diagonal=make_diagonal)
 
         idx_unique = np.ones(n, dtype=bool)
         idx_unique_indices = np.arange(n)
@@ -221,3 +272,125 @@ def inputs_with_replicas(
         return inputs, unique_inputs, nonunique_inputs, idx_unique, idx_nonunique
 
     return _inputs_with_replicas
+
+@pytest.fixture
+def create_random_observables(rng):
+
+    def _create_random_observables(covariances, null_value=NULL_VALUE):
+        """
+        Creates random observables.
+
+        Args:
+            covariances (np.ndarray): Covariances with shape (n_nonunique, n_replicas, n_dim, n_dim)
+            null_value (float, optional): Null value. Defaults to NULL_VALUE.
+
+        Returns:
+            np.ndarray: Observables with shape (n_nonunique, n_replicas, n_dim)
+        """
+
+        n = covariances.shape[0]
+        observables = np.empty(n, dtype=object)
+        for i, cov in enumerate(covariances):
+
+            idx_null_values = np.array(
+                [
+                    np.diag(cov_i) == null_value for cov_i in cov
+                ]
+            )
+
+            obs_i = rng.normal(size=idx_null_values.shape)
+            obs_i[idx_null_values] = null_value
+            observables[i] = obs_i
+        
+        return observables
+    
+    return _create_random_observables
+
+@pytest.fixture
+def observables_and_covariances(
+    inputs_with_replicas, create_random_observables,
+):
+    
+    def _observables_and_covariances(
+        covariance_shape, n_unique,
+        make_diagonal, make_symmetric_and_posdef,
+        insert_null_values
+    ):
+        """
+        Generates observables and covariances.
+
+        Args:
+            input_shape (Tuple[int, ...]): Shape of input array
+            n_unique (int): Number of unique inputs
+            n_observables (int): Number of observables
+            n_replicas (int): Number of replicas
+            make_diagonal (bool): Whether to make the inputs diagonal
+            make_symmetric_and_posdef (bool): Whether to make the inputs symmetric and positive definite
+            insert_null_values (bool): Whether to diagonalize and insert null values
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Tuple of observables, covariances
+        """
+        _, _, covariances, _, _ = inputs_with_replicas(
+            covariance_shape, n_unique, make_diagonal,
+            make_symmetric_and_posdef, insert_null_values
+        )
+
+        observables = create_random_observables(covariances)
+
+        return observables, covariances
+    
+    return _observables_and_covariances
+
+@pytest.fixture
+def expected_multivariate_gaussians(rng):
+
+    def _expected_multivariate_gaussians(
+        observables, covariances, null_value=NULL_VALUE,
+        max_value=MAX_VALUE
+    ):
+        """
+        Calculates expected multivariate Gaussian log probabilities.
+
+        Args:
+            observables (np.ndarray): Observables with shape (n_nonunique, n_replicas, n_dim)
+            covariances (np.ndarray): Covariances with shape (n_nonunique, n_replicas, n_dim, n_dim)
+            null_value (float, optional): Null value. Defaults to NULL_VALUE.
+            max_value (float, optional): Max value. Defaults to MAX_VALUE.
+
+        Returns:
+            np.ndarray: Expected multivariate Gaussian log probabilities with shape (n_nonunique,)
+        """
+        
+        n = observables.shape[0]
+        if n == 0:
+            n_dimensions = 0
+        else:
+            n_dimensions = observables[0].shape[1]
+
+        for i in range(n):
+            observables[i] = np.where(
+                observables[i] == null_value, 0., observables[i]
+            )
+            covariances[i] = np.where(
+                covariances[i] == null_value, max_value, covariances[i]
+            )
+    
+        means = rng.normal(size=(n, n_dimensions))
+
+        expected_log_probs = np.array(
+            [
+                np.sum(
+                    [
+                        multivariate_gaussian_logpdf(
+                            obs_i, mean=mean, cov=cov_i
+                        ) for obs_i, cov_i in zip(obs, cov)
+                    ]
+                ) for obs, mean, cov in zip(observables, means, covariances)
+            ]
+        )
+
+        return means, expected_log_probs
+    
+    return _expected_multivariate_gaussians
+
