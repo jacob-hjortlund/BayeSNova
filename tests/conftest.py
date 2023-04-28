@@ -8,7 +8,7 @@ NULL_VALUE = -9999.
 
 @pytest.fixture
 def rng():
-    return np.random.default_rng(42)
+    return np.random.default_rng(1337)
 
 @pytest.fixture
 def inputs_with_replicas(rng):
@@ -43,6 +43,11 @@ def inputs_with_replicas(rng):
                 if np.all(inputs[i] == NULL_VALUE):
                     idx = rng.choice(np.arange(input_shape[-1]), 1)[0]
                     inputs[i, idx] = rng.random(1)
+            if np.all(inputs != NULL_VALUE):
+                for i in range(n):
+                    idx = rng.choice(np.arange(input_shape[-1]), 1)[0]
+                    inputs[i, idx] = NULL_VALUE
+
             inputs = np.array([np.diag(i) for i in inputs])
         
         else:

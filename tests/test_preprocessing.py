@@ -93,18 +93,27 @@ def test_reduced_observables_and_covariances(
     else:
         n_dimensions = nonunique_covariances[0].shape[-1]
 
-    nonunique_observables = np.array(
-        [
-            rng.normal(size=(cov.shape[0], n_dimensions)) for
-            cov in nonunique_covariances
-        ], dtype=object
-    )
+    nonunique_observables = []
+    for cov in nonunique_covariances:
+        idx_null = (
+            np.array(
+                [np.diag(tmp_cov) for tmp_cov in cov]
+            ) == NULL_VALUE
+        )
+        tmp_obs = rng.normal(size=idx_null.shape)
+        tmp_obs[idx_null] = NULL_VALUE
+        nonunique_observables.append(tmp_obs)
+    nonunique_observables = np.array(nonunique_observables, dtype=object)
     mean = rng.normal(size=(n_dimensions,))
 
     max_value = np.finfo(np.float64).max
     expected_log_pdf = np.zeros(n_nonunique)
     for i in range(n_nonunique):
         for obs, cov in zip(nonunique_observables[i], nonunique_covariances[i]):
+
+            obs = np.where(
+                obs == NULL_VALUE, 0., obs
+            )
 
             cov = np.where(
                 cov == NULL_VALUE, max_value, cov
@@ -121,17 +130,18 @@ def test_reduced_observables_and_covariances(
     output_log_pdf = np.zeros(n_nonunique)
     for i in range(n_nonunique):
 
+        obs = np.where(
+            reduced_observables[i] == NULL_VALUE, 0., reduced_observables[i]
+        )
+
         cov = np.where(
             reduced_covariances[i] == NULL_VALUE, max_value, reduced_covariances[i]
         )
 
         output_log_pdf[i] = stats.multivariate_normal.logpdf(
-            reduced_observables[i], mean=mean, cov=cov,
+            obs, mean=mean, cov=cov,
             allow_singular=True
         ) + reduced_log_factors[i]
-
-    if np.any(np.isinf(output_log_pdf)):
-        breakpoint()
     
     assert np.allclose(expected_log_pdf, output_log_pdf)
 

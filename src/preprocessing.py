@@ -400,8 +400,9 @@ def reduced_observables_and_covariances(
     reduced_observables = np.zeros((n_duplicates, n_dimensions))
     reduced_covariances = np.zeros((n_duplicates, n_dimensions, n_dimensions))
     reduced_log_factors = np.zeros(n_duplicates)
+    float64_log10max = np.log10(np.finfo(np.float64).max)
     max_value = np.finfo(np.float64).max
-    null_cutoff = 10**(np.log10(max_value)/10)
+    null_cutoff = 10**(float64_log10max/10)
 
     for i in range(n_duplicates):
 
@@ -425,14 +426,16 @@ def reduced_observables_and_covariances(
         ).squeeze()
 
         log_factor_first_term = np.sum(
-            np.log(np.linalg.det(2 * np.pi * duplicate_covs)) +
+            n_dimensions * np.log(2 * np.pi) * np.ones(duplicate_obs.shape[0]) +
+            np.linalg.slogdet(duplicate_covs)[1] +
             np.matmul(
                 duplicate_obs.transpose(0, 2, 1),
                 np.matmul(cov_i_inv, duplicate_obs)
             ).squeeze()
         )
         log_factor_second_term = (
-            np.log(np.linalg.det(2 * np.pi * reduced_cov)) +
+            n_dimensions * np.log(2 * np.pi) +
+            np.linalg.slogdet(reduced_cov)[1] +
             np.matmul(
                 np.atleast_1d(reduced_obs).T, np.matmul(
                     np.linalg.inv(reduced_cov), np.atleast_1d(reduced_obs)
