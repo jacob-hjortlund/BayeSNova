@@ -400,9 +400,7 @@ def reduced_observables_and_covariances(
     reduced_observables = np.zeros((n_duplicates, n_dimensions))
     reduced_covariances = np.zeros((n_duplicates, n_dimensions, n_dimensions))
     reduced_log_factors = np.zeros(n_duplicates)
-    float64_log10max = np.log10(np.finfo(np.float64).max)
     max_value = np.finfo(np.float64).max
-    null_cutoff = 10**(float64_log10max/10)
 
     for i in range(n_duplicates):
 
@@ -441,10 +439,6 @@ def reduced_observables_and_covariances(
                     np.linalg.inv(reduced_cov), np.atleast_1d(reduced_obs)
                 )
             )
-        )
-
-        reduced_cov = np.where(
-            np.abs(reduced_cov) > null_cutoff, NULL_VALUE, reduced_cov
         )
 
         reduced_log_factors[i] = -0.5 * (
