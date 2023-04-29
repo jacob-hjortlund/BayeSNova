@@ -7,6 +7,7 @@ from typing import Tuple
 from astropy.coordinates import SkyCoord
 
 NULL_VALUE = -9999.
+MAX_VALUE = np.finfo(np.float64).max
 
 # --------------- PANTHEON/SUPERCAL DATA PREPROCESSING --------------- #
 
@@ -258,17 +259,24 @@ def init_global_data(
 
     elif can_use_host_properties and use_host_properties:
         
+        default_obs_value = NULL_VALUE
+        default_cov_value = MAX_VALUE
         n_total_properties = len(data.columns) // 2
         n_used_host_properties = len(host_property_keys)
         n_unused_host_properties = ( n_total_properties - n_used_host_properties )
+
         host_galaxy_observables = data[host_property_keys].to_numpy()
+        host_galaxy_observables = np.where(
+            host_galaxy_observables == NULL_VALUE, default_obs_value, host_galaxy_observables
+        )
+
         host_galaxy_covariance_values = data[host_property_err_keys].to_numpy()
         host_galaxy_covariances = (
             np.eye(host_galaxy_covariance_values.shape[1]) *
             host_galaxy_covariance_values[:, None, :]
         )
         host_galaxy_covariances = np.where(
-            host_galaxy_covariances == NULL_VALUE, host_galaxy_covariances, host_galaxy_covariances**2
+            host_galaxy_covariances == NULL_VALUE, MAX_VALUE, host_galaxy_covariances**2
         )
 
         host_galaxy_observables, tmp_galaxy_covariances = reduce_duplicates(
@@ -283,7 +291,6 @@ def init_global_data(
             ), axis=1
         )
         
-        default_cov_value = 1 / 2*np.pi
         host_galaxy_covariances = np.tile(
             np.diag(np.ones(n_total_properties) * default_cov_value),
             (n_unique_sn, 1, 1)
@@ -400,14 +407,13 @@ def reduced_observables_and_covariances(
     reduced_observables = np.zeros((n_duplicates, n_dimensions))
     reduced_covariances = np.zeros((n_duplicates, n_dimensions, n_dimensions))
     reduced_log_factors = np.zeros(n_duplicates)
-    max_value = np.finfo(np.float64).max
 
     for i in range(n_duplicates):
 
         duplicate_obs = duplicate_observables[i][:, :, None].astype(np.float64)
         duplicate_covs = duplicate_covariances[i].astype(np.float64)
         duplicate_covs = np.where(
-            duplicate_covs == NULL_VALUE, max_value, duplicate_covs
+            duplicate_covs == NULL_VALUE, MAX_VALUE, duplicate_covs
         )
 
         cov_i_inv = np.linalg.inv(duplicate_covs)

@@ -520,11 +520,7 @@ class Model():
         self, means: np.ndarray, sigmas: np.ndarray
     ):
         
-        res = np.where(
-            prep.idx_host_galaxy_property_not_observed,
-            0.,
-            prep.host_galaxy_observables - means
-        )
+        res = prep.host_galaxy_observables - means
 
         sigmas = np.tile(
             sigmas, [prep.host_galaxy_observables.shape[0], 1]
