@@ -65,7 +65,7 @@ def Ebv_integral_body(
 
     # # calculate prob
     r_inv_cov_r = det_m1 * (r1 * r1 * A1 + r2 * r2 * A5 + r3 * r3 * A9 + 2 * (r1 * r2 * A2 + r1 * r3 * A3 + r2 * r3 * A6))
-    value = np.exp(-0.5 * r_inv_cov_r - x) * x**exponent * det_m1**0.5
+    value = np.exp(-0.5 * r_inv_cov_r - x) * x**exponent * det_m1**0.5 * (2 * np.pi)**(-0.5)
 
     return value
 
