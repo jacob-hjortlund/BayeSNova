@@ -6,6 +6,8 @@ import src.cosmology_utils as cosmo_utils
 
 from astropy.units import Gyr
 
+MAX_VALUE = np.finfo(np.float64).max
+
 def sample_batch_mvn(
     mean: np.ndarray,
     cov: np.ndarray,
@@ -230,23 +232,17 @@ class SNGenerator():
                 z=z, eta=eta, prompt_fraction=prompt_fraction
             )
 
+            sn_rates = np.clip(sn_rates, 0., MAX_VALUE)
+
             pop_1_probability = sn_rates[:,-1] / sn_rates[:, 0]
         else:
             pop_1_probability = np.ones_like(z) * self.cfg['pars']['w']
             sn_rates = np.ones((n_sn, 3)) * np.nan
         
         pop_2_probability = 1. - pop_1_probability
-        if np.any(pop_2_probability < 0.):
-            idx_below_zero = pop_2_probability < 0.
-            values = pop_2_probability[idx_below_zero]
-            print("\nPop 2 probability below zero:\n")
-            print(values)
-            print("\n")
-
-            pop_2_probability = np.clip(pop_2_probability, 0., 1.)
 
         true_population = stats.binom.rvs(
-            n=1, p=np.abs(pop_2_probability), random_state=self.cfg['seed']
+            n=1, p=pop_2_probability, random_state=self.cfg['seed']
         )
         sample_idx = np.column_stack([
             np.zeros(n_sn) == true_population,
