@@ -236,8 +236,17 @@ class SNGenerator():
             sn_rates = np.ones((n_sn, 3)) * np.nan
         
         pop_2_probability = 1. - pop_1_probability
+        if np.any(pop_2_probability < 0.):
+            idx_below_zero = pop_2_probability < 0.
+            values = pop_2_probability[idx_below_zero]
+            print("\nPop 2 probability below zero:\n")
+            print(values)
+            print("\n")
+
+            pop_2_probability = np.clip(pop_2_probability, 0., 1.)
+
         true_population = stats.binom.rvs(
-            n=1, p=pop_2_probability, random_state=self.cfg['seed']
+            n=1, p=np.abs(pop_2_probability), random_state=self.cfg['seed']
         )
         sample_idx = np.column_stack([
             np.zeros(n_sn) == true_population,
