@@ -9,6 +9,28 @@ from astropy.coordinates import SkyCoord
 NULL_VALUE = -9999.
 MAX_VALUE = np.finfo(np.float64).max
 
+global sn_cids
+global sn_covariances
+global sn_observables
+global sn_redshifts
+global gRb_quantiles
+global gEbv_quantiles
+global global_model_cfg
+global host_galaxy_observables
+global host_galaxy_covariances
+global idx_host_galaxy_property_not_observed
+global n_unused_host_properties
+global calibrator_distance_moduli
+global idx_calibrator_sn
+global idx_reordered_calibrator_sn
+global idx_duplicate_sn
+global idx_unique_sn
+global n_unique_sn
+global selection_bias_correction
+global observed_volumetric_rates
+global observed_volumetric_rate_errors
+global observed_volumetric_rate_redshifts
+
 # --------------- PANTHEON/SUPERCAL DATA PREPROCESSING --------------- #
 
 def identify_duplicate_sn(
@@ -103,28 +125,6 @@ def init_global_data(
     data: pd.pandas.DataFrame, volumetric_rates: pd.pandas.DataFrame,
     cfg: dict
 ) -> tuple:
-
-    global sn_cids
-    global sn_covariances
-    global sn_observables
-    global sn_redshifts
-    global gRb_quantiles
-    global gEbv_quantiles
-    global global_model_cfg
-    global host_galaxy_observables
-    global host_galaxy_covariances
-    global idx_host_galaxy_property_not_observed
-    global n_unused_host_properties
-    global calibrator_distance_moduli
-    global idx_calibrator_sn
-    global idx_reordered_calibrator_sn
-    global idx_duplicate_sn
-    global idx_unique_sn
-    global n_unique_sn
-    global selection_bias_correction
-    global observed_volumetric_rates
-    global observed_volumetric_rate_errors
-    global observed_volumetric_rate_redshifts
 
     calibrator_flags_available = (
         'is_calibrator' in data.columns and 'mu_calibrator' in data.columns

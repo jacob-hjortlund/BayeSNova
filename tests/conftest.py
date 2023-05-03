@@ -1,7 +1,8 @@
 import os
 import pytest
 import numpy as np
-#import scipy.stats as stats
+import scipy.integrate as integrate
+import scipy.special as special
 
 from typing import Tuple
 
@@ -38,6 +39,23 @@ def multivariate_gaussian_logpdf(
 
     return logpdf
 
+def gamma_logpdf(x: np.ndarray, a: float, b: float = 1) -> float:
+    """
+    Gamma log-pdf.
+
+    Args:
+        x (np.ndarray): Input array with shape (n_dimensions,)
+        a (float): Shape parameter
+        b (float): Rate parameter. Defaults to 1.
+
+    Returns:
+        logpdf (float): Log-pdf
+    """
+
+    logpdf = (a-1) * np.log(x) - b * x - a * np.log(b) - special.gammaln(a)
+
+    return logpdf
+
 @pytest.fixture
 def rng():
     """
@@ -48,6 +66,22 @@ def rng():
     """
 
     return np.random.default_rng(1337)
+
+@pytest.fixture
+def dict2class():
+    """
+    Converts dictionary to class.
+
+    Returns:
+        Dict2Class: Class
+    """
+
+    class Dict2Class(object):
+        def __init__(self, dictionary):
+            for key in dictionary:
+                setattr(self, key, dictionary[key])
+
+    return Dict2Class
 
 @pytest.fixture
 def create_random_inputs(rng):
@@ -289,18 +323,22 @@ def create_random_observables(rng):
         """
 
         n = covariances.shape[0]
-        observables = np.empty(n, dtype=object)
-        for i, cov in enumerate(covariances):
+        null_values_present = np.any(covariances == null_value)
+        if null_values_present:
+            observables = np.empty(n, dtype=object)
+            for i, cov in enumerate(covariances):
 
-            idx_null_values = np.array(
-                [
-                    np.diag(cov_i) == null_value for cov_i in cov
-                ]
-            )
+                idx_null_values = np.array(
+                    [
+                        np.diag(cov_i) == null_value for cov_i in cov
+                    ]
+                )
 
-            obs_i = rng.normal(size=idx_null_values.shape)
-            obs_i[idx_null_values] = null_value
-            observables[i] = obs_i
+                obs_i = rng.normal(size=idx_null_values.shape)
+                obs_i[idx_null_values] = null_value
+                observables[i] = obs_i
+        else:
+            observables = rng.normal(size=covariances.shape[:-1])
         
         return observables
     
@@ -331,7 +369,7 @@ def observables_and_covariances(
         Returns:
             Tuple[np.ndarray, np.ndarray]: Tuple of observables, covariances
         """
-        _, _, covariances, _, _ = inputs_with_replicas(
+        _, covariances, _, _, _ = inputs_with_replicas(
             covariance_shape, n_unique, make_diagonal,
             make_symmetric_and_posdef, insert_null_values
         )
@@ -394,3 +432,66 @@ def expected_multivariate_gaussians(rng):
     
     return _expected_multivariate_gaussians
 
+@pytest.fixture
+def expected_mvg_gamma_convolution():
+
+    def _expected_mvg_gamma_convolution(
+        observables, covariances, Rb, sig_Rb,
+        tau_Ebv, gamma_Ebv, upper_bound
+    ):
+        """
+        Calculates expected multivariate Gaussian-Gamma convolution log probabilities.
+
+        Args:
+            observables (np.ndarray): Observables with shape (n, n_dim)
+            covariances (np.ndarray): Covariances with shape (n, n_dim, n_dim)
+            Rb (float): Rb
+            sig_Rb (float): sig_Rb
+            tau_Ebv (float): tau_Ebv
+            gamma_Ebv (float): gamma_Ebv
+            upper_bound (float): Upper bound
+
+        Returns:
+            np.ndarray: Expected multivariate Gaussian-Gamma convolution log probabilities with shape (n,)
+        """
+        
+        def integral(
+            x, obs, mean, cov, Rb, sig_Rb, tau_Ebv, gamma_Ebv
+        ):  
+            
+            mean[0] += Rb * tau_Ebv * x
+            mean[2] += tau_Ebv * x
+            cov[0, 0] += tau_Ebv**2 * sig_Rb**2 * x**2
+
+            mvg_log_pdf = multivariate_gaussian_logpdf(
+                obs, mean=mean, cov=cov
+            )
+            gamma_log_pdf = gamma_logpdf(
+                x, gamma_Ebv
+            )
+
+            return np.exp(mvg_log_pdf + gamma_log_pdf)
+        
+        if len(covariances.shape) > 2:
+            n = covariances.shape[0]
+        else:
+            n = 1
+            covariances = np.expand_dims(covariances, axis=0)
+            observables = np.expand_dims(observables, axis=0)
+        n_dimensions = covariances.shape[-1]
+
+        means = np.zeros(n_dimensions)
+        outputs = np.zeros(n)
+
+        for i in range(n):
+            outputs[i], _ = integrate.quad(
+                integral, 0., upper_bound, args=(
+                    observables[i], means, covariances[i],
+                    Rb, sig_Rb, tau_Ebv, gamma_Ebv
+                )
+            )
+        
+        return outputs
+    
+    return _expected_mvg_gamma_convolution
+        
