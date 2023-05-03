@@ -142,8 +142,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
     except Exception as e:
         print("\nGot exception:\n")
         print(e, "\n")
-        tau = cfg['emcee_cfg']['default_tau']
-        print("\nUsing default tau:", tau, "\n")
+        tau = int(
+            np.ceil(cfg['emcee_cfg']['n_steps'] / int(cfg['emcee_cfg']['tau_tol']))
+        )
+        print(f"\nUsing tau={tau} for tolerance {int(cfg['emcee_cfg']['tau_tol'])}\n")
 
     burnin = np.max(
         [int(5 * tau), int(cfg['emcee_cfg']['default_burnin'])]
