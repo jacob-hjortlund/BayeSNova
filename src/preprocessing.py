@@ -129,12 +129,14 @@ def init_global_data(
     global sn_cids
     global sn_covariances
     global sn_observables
+    global sn_log_factors
     global sn_redshifts
     global gRb_quantiles
     global gEbv_quantiles
     global global_model_cfg
     global host_galaxy_observables
     global host_galaxy_covariances
+    global host_galaxy_log_factors
     global idx_host_galaxy_property_not_observed
     global n_unused_host_properties
     global calibrator_distance_moduli
@@ -241,12 +243,12 @@ def init_global_data(
     data.drop(duplicate_uid_key, axis=1, inplace=True, errors='ignore')
     n_unique_sn = np.count_nonzero(idx_unique_sn) + len(idx_duplicate_sn)
 
-    sn_redshifts, _ = reduce_duplicates(
+    sn_redshifts, _, _ = reduce_duplicates(
         sn_redshifts[:, None], np.ones((len(data), 1,1)),
         idx_unique_sn, idx_duplicate_sn
     )
     sn_redshifts = sn_redshifts.squeeze()
-    sn_observables, sn_covariances = reduce_duplicates(
+    sn_observables, sn_covariances, sn_log_factors = reduce_duplicates(
         sn_observables, sn_covariances, idx_unique_sn, idx_duplicate_sn
     )
 
@@ -254,7 +256,7 @@ def init_global_data(
         tmp_cov = np.ones((len(data), 1, 1))
         idx_not_calibrator = calibrator_distance_moduli == NULL_VALUE
         tmp_cov[idx_not_calibrator,:,:] = NULL_VALUE
-        calibrator_distance_moduli, _ = reduce_duplicates(
+        calibrator_distance_moduli, _, _ = reduce_duplicates(
             calibrator_distance_moduli[:, None], tmp_cov,
             idx_unique_sn, idx_duplicate_sn
         )
@@ -275,6 +277,7 @@ def init_global_data(
         n_unused_host_properties = 0
         host_galaxy_observables = np.zeros((0,0))
         host_galaxy_covariance_values = np.zeros((0,0))
+        host_galaxy_log_factors = np.zeros(n_unique_sn)
         idx_host_galaxy_property_not_observed = np.ones(
                 (n_unique_sn, 1), dtype=bool
         )
@@ -301,7 +304,7 @@ def init_global_data(
             host_galaxy_covariances == NULL_VALUE, MAX_VALUE, host_galaxy_covariances**2
         )
 
-        host_galaxy_observables, tmp_galaxy_covariances = reduce_duplicates(
+        host_galaxy_observables, tmp_galaxy_covariances, host_galaxy_log_factors = reduce_duplicates(
             host_galaxy_observables, host_galaxy_covariances,
             idx_unique_sn, idx_duplicate_sn
         )
@@ -378,7 +381,15 @@ def build_covariance_matrix(
     cov_sn[:,2,1] = cov_sn[:,1,2]
 
     posdef_cov_sn = utils.ensure_posdef(cov_sn)
-    
+
+    singular_values = np.linalg.svd(posdef_cov_sn)[1]
+    max_singular_value = np.max(singular_values, axis=1)
+    min_singular_value = np.min(singular_values, axis=1)
+    idx_singular_value_ratio = min_singular_value / max_singular_value < 1e-5    
+    idx_condition = -np.log10(np.linalg.cond(posdef_cov_sn)) < np.log10(np.finfo(np.float64).eps)
+    idx_almost_singular = np.logical_or(idx_singular_value_ratio, idx_condition)
+    posdef_cov_sn[idx_almost_singular] = posdef_cov_sn[idx_almost_singular] + np.diag(np.ones(3)*1e-10)
+
     return posdef_cov_sn
 
 def reorder_duplicates(
@@ -437,9 +448,14 @@ def reduced_observables_and_covariances(
         duplicate_covs = np.where(
             duplicate_covs == NULL_VALUE, MAX_VALUE, duplicate_covs
         )
+        max_in_covs = np.any(duplicate_covs == MAX_VALUE)
+        if max_in_covs:
+            inv_function = np.linalg.inv
+        else:
+            inv_function = np.linalg.pinv
 
-        cov_i_inv = np.linalg.inv(duplicate_covs)
-        reduced_cov = np.linalg.inv(
+        cov_i_inv = inv_function(duplicate_covs)
+        reduced_cov = inv_function(
             np.sum(
                 cov_i_inv, axis=0
             )
@@ -464,7 +480,7 @@ def reduced_observables_and_covariances(
             np.linalg.slogdet(reduced_cov)[1] +
             np.matmul(
                 np.atleast_1d(reduced_obs).T, np.matmul(
-                    np.linalg.inv(reduced_cov), np.atleast_1d(reduced_obs)
+                    inv_function(reduced_cov), np.atleast_1d(reduced_obs)
                 )
             )
         )
@@ -493,12 +509,14 @@ def reduce_duplicates(
         covariances, idx_unique_sn, idx_duplicate_sn
     )
 
+    n_unique_sn = len(unique_observables)
     n_duplicate_observables = len(duplicate_observables)
+    log_factors = np.zeros(n_unique_sn)
     if n_duplicate_observables == 0:
-        return unique_observables, unique_covariances
+        return unique_observables, unique_covariances, log_factors
 
     else:
-        reduced_observables, reduced_covariances, normalizations = reduced_observables_and_covariances(
+        reduced_observables, reduced_covariances, duplicate_log_factors = reduced_observables_and_covariances(
             duplicate_covariances, duplicate_observables
         )
 
@@ -510,7 +528,11 @@ def reduce_duplicates(
             (unique_covariances, reduced_covariances), axis=0
         )
 
-        return reduced_observables, reduced_covariances, normalizations
+        log_factors = np.concatenate(
+            (log_factors, duplicate_log_factors), axis=0
+        )
+
+        return reduced_observables, reduced_covariances, log_factors
 
 
 
