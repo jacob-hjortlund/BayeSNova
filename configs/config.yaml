@@ -203,9 +203,11 @@ clearml_cfg:
 plot_cfg:
   n_samples: max
   smooth: 1.
-  smooth1d: 1.
+  #smooth1d: 1.
   label_kwargs:
     fontsize: 16
+  hist_kwargs:
+    density: True
   property_ranges:
     local_u-g:
       lower: 0.25

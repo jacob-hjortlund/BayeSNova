@@ -1,6 +1,7 @@
 import os
 import time
 import corner
+import omegaconf
 import numpy as np
 import pandas as pd
 import emcee as em
@@ -12,6 +13,33 @@ import src.preprocessing as prep
 from matplotlib.colors import Normalize
 
 NULL_VALUE = -9999.
+
+def doane_bin_count(data: np.ndarray) -> np.ndarray:
+    """
+    Doane's formula for the number of bins in a histogram.
+
+    Args:
+        data (np.ndarray): Data to be binned. Has shape (N,...).
+
+    Returns:
+        np.ndarray: Number of bins for each column of data.
+    """
+    
+    if len(data.shape) == 1:
+        data = data.reshape(-1, 1)
+    
+    N, _= data.shape
+    sigma_g1 = np.sqrt(
+        6 * (N-2) / ((N+1) * (N+3))
+    )
+    skewness = np.mean(
+        (data - np.mean(data, axis=0))**3 / np.std(data, axis=0)**3,
+        axis=0
+    )
+    bin_count = 1 + np.log2(N) + np.log2(1 + np.abs(skewness) / sigma_g1)
+    bin_count = np.ceil(bin_count).astype(int)
+
+    return bin_count
 
 def mcmc_statistics(
     log_posterior, backend, tau: int, burnin: int,
@@ -243,6 +271,7 @@ def corner_plot(
     cfg: dict, save_path: str,
 ):
     
+    cfg = omegaconf.OmegaConf.to_container(cfg)
     n_shared = len(cfg['model_cfg']['shared_par_names'])
     n_independent = len(cfg['model_cfg']['independent_par_names'])
     idx_end_independent = sample_thetas.shape[1] - len(cfg['model_cfg']['cosmology_par_names']) - (not cfg['model_cfg']['use_physical_ratio'])
@@ -270,7 +299,10 @@ def corner_plot(
             sx_list += [extra_params]
         sx = np.concatenate(sx_list, axis=-1)
 
-        fig_pop_2 = corner.corner(data=sx, color=pop2_color, **cfg['plot_cfg'])
+        n_bins = doane_bin_count(sx) * 5
+        fig_pop_2 = corner.corner(
+            data=sx, bins=n_bins, color=pop2_color, **cfg['plot_cfg']
+        )
     
     if extra_params_present:
         extra_params = sample_thetas[:, idx_end_independent:]
@@ -279,7 +311,11 @@ def corner_plot(
         fx_list = [fx, extra_params]
         fx = np.concatenate(fx_list, axis=-1)
 
-    fig_pop_1 = corner.corner(data=fx, fig=fig_pop_2, color=pop1_color, labels=labels, **cfg['plot_cfg'])
+    n_bins = doane_bin_count(fx) * 5
+    fig_pop_1 = corner.corner(
+        data=fx, bins=n_bins, fig=fig_pop_2,
+        color=pop1_color, labels=labels, **cfg['plot_cfg']
+    )
     fig_pop_1.tight_layout()
     fig_pop_1.savefig(
         os.path.join(save_path, cfg['emcee_cfg']['run_name']+"_corner.png")
@@ -425,7 +461,6 @@ def scatter_plot(
 
     return figure, axes
 
-
 def get_host_property_values(
     host_property: np.ndarray, host_property_errors: np.ndarray,
     idx_unique_sn: np.ndarray, idx_duplicate_sn: np.ndarray,
@@ -481,7 +516,6 @@ def get_host_property_split_idx(
     idx_calibrator = idx_calibrator_sn & idx_observed
 
     return idx_not_calibrator, idx_calibrator
-
 
 def observed_property_vs_membership(
     membership_name: str, property_name: str, host_property: np.ndarray,
