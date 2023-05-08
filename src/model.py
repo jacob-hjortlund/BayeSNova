@@ -8,7 +8,7 @@ import astropy.cosmology as apy_cosmo
 
 from functools import partial
 from astropy.units import Gyr
-from NumbaQuadpack import quadpack_sig, dqags
+from NumbaQuadpack import quadpack_sig, dqags, ldqag
 
 import src.preprocessing as prep
 import src.cosmology_utils as cosmo_utils
@@ -44,9 +44,9 @@ def Ebv_integral_body(
     A5 = i1 * i9 - i3 * i3
     A6 = i2 * i3 - i1 * i6
     A9 = i1 * i5 - i2 * i2
-    det_m1 = 1. / (i1 * A1 + i2 * A2 + i3 * A3)
+    det = i1 * A1 + i2 * A2 + i3 * A3
 
-    if det_m1 < 0:
+    if det < 0:
         cov = np.array([
             [i1, i2, i3],
             [i4, i5, i6],
@@ -61,11 +61,13 @@ def Ebv_integral_body(
         A5 = i1 * i9 - i3 * i3
         A6 = i2 * i3 - i1 * i6
         A9 = i1 * i5 - i2 * i2
-        det_m1 = 1. / (i1 * A1 + i2 * A2 + i3 * A3)
+        det = i1 * A1 + i2 * A2 + i3 * A3
+    
+    logdet = np.log(det)
 
     # # calculate prob
-    r_inv_cov_r = det_m1 * (r1 * r1 * A1 + r2 * r2 * A5 + r3 * r3 * A9 + 2 * (r1 * r2 * A2 + r1 * r3 * A3 + r2 * r3 * A6))
-    value = np.exp(-0.5 * r_inv_cov_r - x) * x**exponent * det_m1**0.5 * (2 * np.pi)**(-0.5)
+    r_inv_cov_r = 1./det * (r1 * r1 * A1 + r2 * r2 * A5 + r3 * r3 * A9 + 2 * (r1 * r2 * A2 + r1 * r3 * A3 + r2 * r3 * A6))
+    value = -0.5 * r_inv_cov_r - x + exponent * np.log(x) - 0.5 * logdet - 0.5 * np.log(2 * np.pi)
 
     return value
 
@@ -116,7 +118,7 @@ def _Ebv_prior_convolution(
 ):
 
     n_sn = len(cov_1)
-    probs = np.zeros((n_sn, 2))
+    logprobs = np.zeros((n_sn, 2))
     status = np.ones((n_sn, 2), dtype='bool')
     params_1 = np.array([Rb_1, sig_Rb_1, Ebv_1, tau_Ebv_1, gamma_Ebv_1])
     params_2 = np.array([Rb_2, sig_Rb_2, Ebv_2, tau_Ebv_2, gamma_Ebv_2])
@@ -134,20 +136,20 @@ def _Ebv_prior_convolution(
         )).copy()
         tmp_params_2.astype(np.float64)
         
-        prob_1, _, s1 = dqags(
+        logprob_1, _, s1, _ = ldqag(
             Ebv_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
         )
 
-        prob_2, _, s2 = dqags(
+        logprob_2, _, s2, _ = ldqag(
             Ebv_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
         )
 
-        probs[i, 0] = prob_1
-        probs[i, 1] = prob_2
+        logprobs[i, 0] = logprob_1
+        logprobs[i, 1] = logprob_2
         status[i, 0] = s1
         status[i, 1] = s2
 
-    return probs, status
+    return logprobs, status
 
 # ---------- RB/E(B-V) PRIOR DOUBLE INTEGRAL ------------
 
@@ -227,7 +229,7 @@ def Ebv_Rb_integral(y, data):
         (_data, np.array([y]))
     )
 
-    inner_value, _, _  = dqags(
+    inner_value, _, _ , _ = dqags(
         Rb_integral_ptr, _data[-2], _data[-1], _new_data
     )
 
@@ -276,11 +278,11 @@ def _Ebv_Rb_prior_convolution(
         )).copy()
         tmp_params_2.astype(np.float64)
 
-        prob_1, _, s1 = dqags(
+        prob_1, _, s1, _ = dqags(
             Ebv_Rb_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
         )
 
-        prob_2, _, s2 = dqags(
+        prob_2, _, s2, _ = dqags(
             Ebv_Rb_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
         )
 
@@ -484,8 +486,10 @@ class Model():
             prep.gEbv_quantiles, gamma_Ebv_1, gamma_Ebv_2, "Ebv"
         )
 
-        norm_1 = sp_special.gammainc(gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(gamma_Ebv_1)
-        norm_2 = sp_special.gammainc(gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(gamma_Ebv_2)
+        #norm_1 = sp_special.gammainc(gamma_Ebv_1, upper_bound_Ebv_1) * sp_special.gamma(gamma_Ebv_1)
+        #norm_2 = sp_special.gammainc(gamma_Ebv_2, upper_bound_Ebv_2) * sp_special.gamma(gamma_Ebv_2)
+        norm_1 = np.log(sp_special.gammainc(gamma_Ebv_1, upper_bound_Ebv_1)) + sp_special.loggamma(gamma_Ebv_1)
+        norm_2 = np.log(sp_special.gammainc(gamma_Ebv_2, upper_bound_Ebv_2)) + sp_special.loggamma(gamma_Ebv_2)
 
         # TODO: FIX WRT. HOW PRESETS ARE HANDLED
         if gamma_Rb_1 != NULL_VALUE:
@@ -493,7 +497,7 @@ class Model():
         if gamma_Rb_2 != NULL_VALUE:
             norm_2 *= sp_special.gammainc(gamma_Rb_2, upper_bound_Rb_2) * sp_special.gamma(gamma_Rb_2)
 
-        probs, status = self.convolution_fn(
+        logprobs, status = self.convolution_fn(
             cov_1=covs_1, cov_2=covs_2, res_1=residuals_1, res_2=residuals_2,
             Rb_1=Rb_1, Rb_2=Rb_2,
             sig_Rb_1=sig_Rb_1, sig_Rb_2=sig_Rb_2,
@@ -511,10 +515,10 @@ class Model():
             shift_Rb=shift_Rb, selection_bias_correction=prep.selection_bias_correction,
         )
 
-        p_1 = probs[:, 0] / norm_1
-        p_2 = probs[:, 1] / norm_2
+        logp_1 = logprobs[:, 0] - norm_1
+        logp_2 = logprobs[:, 1] - norm_2
 
-        return p_1, p_2, status
+        return logp_1, logp_2, status
 
     def independent_gaussians(
         self, means: np.ndarray, sigmas: np.ndarray
@@ -676,7 +680,7 @@ class Model():
         else:
             self.convolution_fn = _Ebv_Rb_prior_convolution
         
-        sn_probs_1, sn_probs_2, status = self.prior_convolutions(
+        log_sn_probs_1, log_sn_probs_2, status = self.prior_convolutions(
             covs_1=sn_cov_1, covs_2=sn_cov_2,
             residuals_1=sn_residuals_1, residuals_2=sn_residuals_2,
             Rb_1=Rb_1, Rb_2=Rb_2,
@@ -688,42 +692,34 @@ class Model():
             tau_Ebv_1=tau_Ebv_1, tau_Ebv_2=tau_Ebv_2,
             gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2,
         )
-        log_sn_probs_1 = np.log(sn_probs_1)
-        log_sn_probs_2 = np.log(sn_probs_2)
         reduced_status = np.all(status.astype('bool'), axis=1)
 
         idx_prior_convolution_failed = ~reduced_status
-        idx_sn_prob_below_zero = (sn_probs_1 < 0.) | (sn_probs_2 < 0.)
         idx_prob_not_finite = (
-            ~np.isfinite(sn_probs_1) | ~np.isfinite(sn_probs_2)
+            ~np.isfinite(log_sn_probs_1) | ~np.isfinite(log_sn_probs_2)
         )
         idx_not_valid = (
             idx_prior_convolution_failed |
-            idx_sn_prob_below_zero |
             idx_prob_not_finite
         )
         sn_prob_not_valid = np.any(idx_not_valid)
         if sn_prob_not_valid:
             
             n_convolution_failed = np.sum(idx_prior_convolution_failed)
-            n_sn_prob_below_zero = np.sum(idx_sn_prob_below_zero)
             n_prob_not_finite = np.sum(idx_prob_not_finite)
 
             warning_string = (
                 "\n --------- Failure in SN prior convolution --------- \n" +
                 f"\nNo. of SN with failed convolutions: {n_convolution_failed}\n" +
-                f"No. of SN with negative probabilities: {n_sn_prob_below_zero}\n" +
                 f"No. of SN with non-finite probabilities: {n_prob_not_finite}\n"
             )
             failure_in_pop_1 = (
                 np.any(~status[:,0]) or
-                np.any(sn_probs_1 < 0.) or
-                np.any(~np.isfinite(sn_probs_1))
+                np.any(~np.isfinite(log_sn_probs_1))
             )
             failure_in_pop_2 = (
                 np.any(~status[:,1]) or
-                np.any(sn_probs_2 < 0.) or
-                np.any(~np.isfinite(sn_probs_2))
+                np.any(~np.isfinite(log_sn_probs_2))
             )
 
             if failure_in_pop_1:
@@ -814,7 +810,7 @@ class Model():
 
             w_vector = sn_rates[:, -1] / sn_rates[:, 0]
         else:
-            w_vector = np.ones_like(sn_probs_1) * w
+            w_vector = np.ones_like(log_sn_probs_1) * w
         log_w_1 = np.log(w_vector)
         log_w_2 = np.log(1-w_vector)
 
