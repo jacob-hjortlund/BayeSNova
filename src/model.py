@@ -715,11 +715,11 @@ class Model():
             )
             failure_in_pop_1 = (
                 np.any(~status[:,0]) or
-                np.any(~np.isfinite(sn_probs_1))
+                np.any(~np.isfinite(log_sn_probs_1))
             )
             failure_in_pop_2 = (
                 np.any(~status[:,1]) or
-                np.any(~np.isfinite(sn_probs_2))
+                np.any(~np.isfinite(log_sn_probs_2))
             )
 
             if failure_in_pop_1:
@@ -810,7 +810,7 @@ class Model():
 
             w_vector = sn_rates[:, -1] / sn_rates[:, 0]
         else:
-            w_vector = np.ones_like(sn_probs_1) * w
+            w_vector = np.ones_like(log_sn_probs_1) * w
         log_w_1 = np.log(w_vector)
         log_w_2 = np.log(1-w_vector)
 
