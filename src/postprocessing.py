@@ -299,7 +299,8 @@ def corner_plot(
             sx_list += [extra_params]
         sx = np.concatenate(sx_list, axis=-1)
 
-        n_bins = doane_bin_count(sx) * 5
+        n_bins = doane_bin_count(sx)
+        cfg['plot_cfg']['hist_kwargs']['color'] = pop2_color
         fig_pop_2 = corner.corner(
             data=sx, bins=n_bins, color=pop2_color, **cfg['plot_cfg']
         )
@@ -311,7 +312,8 @@ def corner_plot(
         fx_list = [fx, extra_params]
         fx = np.concatenate(fx_list, axis=-1)
 
-    n_bins = doane_bin_count(fx) * 5
+    n_bins = doane_bin_count(fx)
+    cfg['plot_cfg']['hist_kwargs']['color'] = pop1_color
     fig_pop_1 = corner.corner(
         data=fx, bins=n_bins, fig=fig_pop_2,
         color=pop1_color, labels=labels, **cfg['plot_cfg']

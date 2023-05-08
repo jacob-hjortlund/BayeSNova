@@ -203,7 +203,7 @@ clearml_cfg:
 plot_cfg:
   n_samples: max
   smooth: 1.
-  #smooth1d: 1.
+  hist_bin_factor: 3.
   label_kwargs:
     fontsize: 16
   hist_kwargs:
