@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import astropy.cosmology as apy_cosmo
 
 from astropy.units import Gyr
-from NumbaQuadpack import quadpack_sig, dqags
+from NumbaQuadpack import quadpack_sig, dqags, ldqag
 from diffrax import diffeqsolve, Tsit5, ODETerm, SaveAt, PIDController
 
 H0_CONVERSION_FACTOR = 0.001022
@@ -220,7 +220,7 @@ def N_delayed_integrand(zp, args):
     z, eta, H0 = args[:3]
     lookback_time_args = args[2:]
 
-    tau, _, _ = dqags(lookback_time_integral_ptr, z, zp, lookback_time_args)
+    tau, _, _, _ = dqags(lookback_time_integral_ptr, z, zp, lookback_time_args)
     jacobian = lookback_time_integrand(zp, lookback_time_args)
     value = SFH(zp, H0) * dtd_delayed(tau, H0, eta) * jacobian
 

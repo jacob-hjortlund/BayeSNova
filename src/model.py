@@ -8,7 +8,7 @@ import astropy.cosmology as apy_cosmo
 
 from functools import partial
 from astropy.units import Gyr
-from NumbaQuadpack import quadpack_sig, dqags
+from NumbaQuadpack import quadpack_sig, dqags, ldqag
 
 import src.preprocessing as prep
 import src.cosmology_utils as cosmo_utils
@@ -134,11 +134,11 @@ def _Ebv_prior_convolution(
         )).copy()
         tmp_params_2.astype(np.float64)
         
-        prob_1, _, s1 = dqags(
+        prob_1, _, s1, _ = dqags(
             Ebv_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
         )
 
-        prob_2, _, s2 = dqags(
+        prob_2, _, s2, _ = dqags(
             Ebv_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
         )
 
@@ -227,7 +227,7 @@ def Ebv_Rb_integral(y, data):
         (_data, np.array([y]))
     )
 
-    inner_value, _, _  = dqags(
+    inner_value, _, _ , _ = dqags(
         Rb_integral_ptr, _data[-2], _data[-1], _new_data
     )
 
@@ -276,11 +276,11 @@ def _Ebv_Rb_prior_convolution(
         )).copy()
         tmp_params_2.astype(np.float64)
 
-        prob_1, _, s1 = dqags(
+        prob_1, _, s1, _ = dqags(
             Ebv_Rb_integral_ptr, lower_bound_Ebv_1, upper_bound_Ebv_1, tmp_params_1
         )
 
-        prob_2, _, s2 = dqags(
+        prob_2, _, s2, _ = dqags(
             Ebv_Rb_integral_ptr, lower_bound_Ebv_2, upper_bound_Ebv_2, tmp_params_2
         )
 
