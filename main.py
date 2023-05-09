@@ -173,7 +173,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     print("\n-------- POSTERIOR / MARGINALIZED DIST COMPARISON -----------\n")
 
-    par_names, host_galaxy_par_names = post.get_par_names(cfg)
+    par_names = post.get_par_names(cfg)
     if using_MPI_and_is_master or using_multiprocessing or no_pool:
 
         par_quantiles, symmetrized_stds = post.map_mmap_comparison(
@@ -183,15 +183,16 @@ def main(cfg: omegaconf.DictConfig) -> None:
     print("\n-------- PARAM VALUES / ERRORS / Z-SCORES -----------\n")
 
     post.parameter_values(
-        par_quantiles, symmetrized_stds, par_names,
-        host_galaxy_par_names, cfg, path, clearml_logger
+        par_quantiles, symmetrized_stds, shared_host_galaxy_par_names,
+        independent_host_galaxy_par_names, par_names, cfg, path, clearml_logger
     )
 
     print("\n----------------- PLOTS ---------------------\n")
     labels = (
         cfg['model_cfg']['shared_par_names'] +
+        shared_host_galaxy_par_names +
         cfg['model_cfg']['independent_par_names'] +
-        host_galaxy_par_names +
+        independent_host_galaxy_par_names +
         cfg['model_cfg']['cosmology_par_names'] +
         (not cfg['model_cfg']['use_physical_ratio']) * [cfg['model_cfg']['ratio_par_name']]
     )
@@ -199,13 +200,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
     os.makedirs(fig_path, exist_ok=True)
 
     membership_quantiles = post.get_membership_quantiles(
-        backend, burnin, tau, prep.n_unused_host_properties,
-        cfg['model_cfg']
+        backend, burnin, tau, cfg['model_cfg']
     )
 
-    cm, cm_norm, mapper, pop1_color, pop2_color = post.setup_colormap(
-        membership_quantiles, cfg
-    )
+    (
+        cm, cm_norm, mapper, pop1_color, pop2_color
+    ) = post.setup_colormap(membership_quantiles)
 
     post.corner_plot(
         sample_thetas, pop1_color, pop2_color, labels, cfg, fig_path
@@ -215,7 +215,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
         titles_list.append("All Host Properties")
         titles_list += utils.format_property_names(
-            cfg['model_cfg']['host_galaxy_cfg']['property_names']
+            cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
         )
     
     post.membership_histogram(
@@ -440,7 +440,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
         
         use_physical_ratio = cfg['model_cfg']['use_physical_ratio']
-        host_galaxy_property_names = cfg['model_cfg']['host_galaxy_cfg']['property_names']
+        host_galaxy_property_names = cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
         n_host_galaxy_properties = len(host_galaxy_property_names)
         n_host_galaxy_pars = 4 * n_host_galaxy_properties
         n_cosmology_pars = len(cfg['model_cfg']['cosmology_par_names'])
