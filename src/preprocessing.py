@@ -138,7 +138,8 @@ def init_global_data(
     global host_galaxy_covariances
     global host_galaxy_log_factors
     global idx_host_galaxy_property_not_observed
-    global n_unused_host_properties
+    global n_independent_host_properties
+    global n_shared_host_properties
     global calibrator_distance_moduli
     global idx_calibrator_sn
     global idx_reordered_calibrator_sn
@@ -263,8 +264,20 @@ def init_global_data(
         calibrator_distance_moduli = calibrator_distance_moduli[idx_calibrator_sn].squeeze()
 
     host_galaxy_cfg = cfg.get('host_galaxy_cfg', {})
-    host_property_keys = host_galaxy_cfg.get('property_names', [])
-    host_property_err_keys = [key + "_err" for key in host_property_keys]
+    independent_host_property_keys = host_galaxy_cfg.get('independent_property_names', [])
+    independent_host_property_err_keys = [
+        key + "_err" for key in independent_host_property_keys
+    ]
+    shared_host_property_keys = host_galaxy_cfg.get('shared_property_names', [])
+    shared_host_property_err_keys = [
+        key + "_err" for key in shared_host_property_keys
+    ]
+    host_property_keys = (
+        independent_host_property_keys + shared_host_property_keys
+    )
+    host_property_err_keys = (
+        independent_host_property_err_keys + shared_host_property_err_keys
+    )
 
     use_host_properties = host_galaxy_cfg.get('use_properties', False)
     can_use_host_properties = (
@@ -274,7 +287,8 @@ def init_global_data(
     
     if not use_host_properties:
         
-        n_unused_host_properties = 0
+        n_independent_host_properties = 0
+        n_shared_host_properties = 0
         host_galaxy_observables = np.zeros((0,0))
         host_galaxy_covariance_values = np.zeros((0,0))
         host_galaxy_log_factors = np.zeros(n_unique_sn)
@@ -284,46 +298,27 @@ def init_global_data(
 
     elif can_use_host_properties and use_host_properties:
         
-        default_obs_value = NULL_VALUE
-        default_cov_value = MAX_VALUE
-        n_total_properties = len(data.columns) // 2
-        n_used_host_properties = len(host_property_keys)
-        n_unused_host_properties = ( n_total_properties - n_used_host_properties )
+        n_independent_host_properties = len(independent_host_property_keys)
+        n_shared_host_properties = len(shared_host_property_keys)
 
         host_galaxy_observables = data[host_property_keys].to_numpy()
-        host_galaxy_observables = np.where(
-            host_galaxy_observables == NULL_VALUE, default_obs_value, host_galaxy_observables
-        )
-
         host_galaxy_covariance_values = data[host_property_err_keys].to_numpy()
+        host_galaxy_covariance_values = np.where(
+            host_galaxy_covariance_values != NULL_VALUE,
+            host_galaxy_covariance_values**2 + host_galaxy_cfg['error_floor']**2,
+            MAX_VALUE,
+        )
         host_galaxy_covariances = (
             np.eye(host_galaxy_covariance_values.shape[1]) *
             host_galaxy_covariance_values[:, None, :]
         )
-        host_galaxy_covariances = np.where(
-            host_galaxy_covariances == NULL_VALUE, MAX_VALUE, host_galaxy_covariances**2
-        )
 
-        host_galaxy_observables, tmp_galaxy_covariances, host_galaxy_log_factors = reduce_duplicates(
+
+        host_galaxy_observables, host_galaxy_covariances, host_galaxy_log_factors = reduce_duplicates(
             host_galaxy_observables, host_galaxy_covariances,
             idx_unique_sn, idx_duplicate_sn
         )
-
-        host_galaxy_observables = np.concatenate(
-            (
-                host_galaxy_observables,
-                np.ones((n_unique_sn, n_unused_host_properties)) * NULL_VALUE
-            ), axis=1
-        )
         
-        host_galaxy_covariances = np.tile(
-            np.diag(np.ones(n_total_properties) * default_cov_value),
-            (n_unique_sn, 1, 1)
-        )
-        host_galaxy_covariances[:, :n_used_host_properties, :n_used_host_properties] = tmp_galaxy_covariances
-        host_galaxy_covariances = np.where(
-            host_galaxy_covariances == NULL_VALUE, default_cov_value, host_galaxy_covariances
-        )
         host_galaxy_covariances = np.array(
             [np.diag(tmp_cov) for tmp_cov in host_galaxy_covariances]
         )
@@ -448,14 +443,9 @@ def reduced_observables_and_covariances(
         duplicate_covs = np.where(
             duplicate_covs == NULL_VALUE, MAX_VALUE, duplicate_covs
         )
-        max_in_covs = np.any(duplicate_covs == MAX_VALUE)
-        if max_in_covs:
-            inv_function = np.linalg.inv
-        else:
-            inv_function = np.linalg.pinv
 
-        cov_i_inv = inv_function(duplicate_covs)
-        reduced_cov = inv_function(
+        cov_i_inv = np.linalg.pinv(duplicate_covs)
+        reduced_cov = np.linalg.pinv(
             np.sum(
                 cov_i_inv, axis=0
             )
@@ -480,7 +470,7 @@ def reduced_observables_and_covariances(
             np.linalg.slogdet(reduced_cov)[1] +
             np.matmul(
                 np.atleast_1d(reduced_obs).T, np.matmul(
-                    inv_function(reduced_cov), np.atleast_1d(reduced_obs)
+                    np.linalg.pinv(reduced_cov), np.atleast_1d(reduced_obs)
                 )
             )
         )
