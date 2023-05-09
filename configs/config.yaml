@@ -26,14 +26,16 @@ model_cfg:
   ]
   host_galaxy_cfg:
     use_properties: False
-    covariance_null_value: 1000.
-    property_names: [
+    error_floor: 0.0001
+    independent_property_names: []
+    shared_property_names: [
       local_u-g,
       local_mass,
       local_ssfr,
       global_u-g,
       global_mass,
-      global_ssfr
+      global_ssfr,
+      t
     ]
     init_values:
       local_u-g:
