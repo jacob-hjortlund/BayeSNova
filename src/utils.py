@@ -265,8 +265,8 @@ def gen_pop_par_names(par_names):
 
 def theta_to_dict(
     theta: np.ndarray, shared_par_names: list, independent_par_names: list,
-    n_host_galaxy_observables: int, n_unused_host_properties: int, ratio_par_name: str,
-    cosmology_par_names: list, use_physical_ratio: bool,
+    n_independent_host_galaxy_properties: int, n_shared_host_galaxy_properties: int,
+    ratio_par_name: str, cosmology_par_names: list, use_physical_ratio: bool,
 ) -> dict:
 
     extended_shared_par_names = gen_pop_par_names(shared_par_names)
@@ -290,8 +290,8 @@ def theta_to_dict(
         extended_missing_par_names + cosmology_par_names + (not use_physical_ratio) * [ratio_par_name]
     )
 
-    n_shared_pars = len(shared_par_names)
-    n_independent_pars = 2 * len(independent_par_names) + 4 * n_host_galaxy_observables
+    n_shared_pars = len(shared_par_names) + 2 * n_shared_host_galaxy_properties
+    n_independent_pars = 2 * len(independent_par_names) + 4 * n_independent_host_galaxy_properties
     n_cosmology_pars = len(cosmology_par_names)
 
     no_pars = n_shared_pars + n_independent_pars + n_cosmology_pars + (not use_physical_ratio) 
@@ -303,8 +303,8 @@ def theta_to_dict(
     shared_pars, independent_pars = extend_theta(theta, n_shared_pars, n_cosmology_pars, use_physical_ratio)
     missing_pars = [NULL_VALUE] * len(extended_missing_par_names)
     par_list = [
-        shared_pars,
-        independent_pars[:n_independent_pars - 4 * n_host_galaxy_observables],
+        shared_pars[:2 * n_shared_pars - 4 * n_shared_host_galaxy_properties],
+        independent_pars[:n_independent_pars - 4 * n_independent_host_galaxy_properties],
         missing_pars,
     ]
     if not use_physical_ratio:
@@ -312,22 +312,17 @@ def theta_to_dict(
     pars = np.concatenate(par_list)
     arg_dict = {name: par for name, par in zip(par_names, pars)}
 
-    n_unused_host_properties = 2 * n_unused_host_properties
-    arg_dict['host_galaxy_means'] = np.zeros(n_unused_host_properties)
-    arg_dict['host_galaxy_sigs'] = np.zeros(n_unused_host_properties)
-
-    if n_host_galaxy_observables > 0:
-        host_pars = np.array(
-            independent_pars[-4 * n_host_galaxy_observables:]
-        )
-        idx_means = np.array([True, True, False, False] * n_host_galaxy_observables)
-        idx_sigs = np.array([False, False, True, True] * n_host_galaxy_observables)
-        arg_dict['host_galaxy_means'] = np.concatenate(
-            (host_pars[idx_means], np.zeros(n_unused_host_properties))
-        )
-        arg_dict['host_galaxy_sigs'] = np.concatenate(
-            (host_pars[idx_sigs], np.zeros(n_unused_host_properties))
-        )
+    shared_host_pars = np.array(shared_pars[2 * n_shared_pars - 4 * n_shared_host_galaxy_properties:])
+    independent_host_pars = np.array(
+        independent_pars[n_independent_pars - 4 * n_independent_host_galaxy_properties:]
+    )
+    host_pars = np.concatenate([shared_host_pars, independent_host_pars])
+    idx_means = np.array(
+        [True, True, False, False] * (n_independent_host_galaxy_properties + n_shared_host_galaxy_properties)
+    )
+    idx_sigs = ~idx_means
+    arg_dict['host_galaxy_means'] = host_pars[idx_means]
+    arg_dict['host_galaxy_sigs'] = host_pars[idx_sigs]
     
     for i in range(n_cosmology_pars):
         idx = -1 * (not use_physical_ratio) - n_cosmology_pars + i

@@ -902,14 +902,11 @@ class Model():
 
     def __call__(self, theta: np.ndarray) -> float:
 
-        n_host_galaxy_observables = (
-            prep.host_galaxy_observables.shape[1] - prep.n_unused_host_properties
-        )
         param_dict = utils.theta_to_dict(
             theta=theta, shared_par_names=prep.global_model_cfg.shared_par_names,
             independent_par_names=prep.global_model_cfg.independent_par_names,
-            n_host_galaxy_observables=n_host_galaxy_observables,
-            n_unused_host_properties=prep.n_unused_host_properties,
+            n_independent_host_galaxy_properties=prep.n_independent_host_properties,
+            n_shared_host_galaxy_properties=prep.n_shared_host_properties,
             ratio_par_name=prep.global_model_cfg.ratio_par_name,
             cosmology_par_names=prep.global_model_cfg.cosmology_par_names,
             use_physical_ratio=prep.global_model_cfg.use_physical_ratio,
