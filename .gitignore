@@ -4,6 +4,7 @@ Documents/
 radeks_code/
 run.sh
 NumbaQuadpack/
+NumbaLogQuadpack/
 .vscode/
 __pycache__/
 outputs/
