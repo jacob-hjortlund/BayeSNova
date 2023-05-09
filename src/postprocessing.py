@@ -288,7 +288,9 @@ def corner_plot(
     idx_end_independent = sample_thetas.shape[1] - len(cfg['model_cfg']['cosmology_par_names']) - (not cfg['model_cfg']['use_physical_ratio'])
     extra_params_present = idx_end_independent != sample_thetas.shape[1]
 
-    fx = sample_thetas[:, :n_shared]
+    labels = labels.copy()
+    labels[n_shared - 2 * prep.n_shared_host_properties:n_shared] = []
+    fx = sample_thetas[:, :n_shared - 2 * prep.n_shared_host_properties]
     fig_pop_2 = None
 
     # Handling in case of independent parameters
@@ -300,7 +302,7 @@ def corner_plot(
         )
 
         sx_list = [
-            sample_thetas[:, :n_shared],
+            sample_thetas[:, :n_shared - 2 * prep.n_shared_host_properties],
             sample_thetas[:, n_shared+1:idx_end_independent:2]
         ]
         if extra_params_present:
@@ -310,17 +312,17 @@ def corner_plot(
             sx_list += [extra_params]
         sx = np.concatenate(sx_list, axis=-1)
 
-        ranges = [
-            (np.min(sx[:, i]), np.max(sx[:, i])) for i in range(sx.shape[1])
-        ]
-        for parameter in cfg['plot_cfg']['corner_cfg_ranges'].keys():
-            if parameter in labels:
-                i = labels.index(parameter)
-                ranges[i] = (
-                    cfg['plot_cfg']['corner_cfg_ranges'][parameter]['lower'],
-                    cfg['plot_cfg']['corner_cfg_ranges'][parameter]['upper']
-                )
-        cfg['plot_cfg']['corner_cfg']['range'] = ranges
+        # ranges_2 = [
+        #     (np.min(sx[:, i]), np.max(sx[:, i])) for i in range(sx.shape[1])
+        # ]
+        # for parameter in cfg['plot_cfg']['corner_cfg_ranges'].keys():
+        #     if parameter in labels:
+        #         i = labels.index(parameter)
+        #         ranges_2[i] = (
+        #             cfg['plot_cfg']['corner_cfg_ranges'][parameter]['lower'],
+        #             cfg['plot_cfg']['corner_cfg_ranges'][parameter]['upper']
+        #         )
+        # cfg['plot_cfg']['corner_cfg']['range'] = ranges_2
 
         cfg['plot_cfg']['corner_cfg']['hist_kwargs']['color'] = pop2_color
         n_bins = doane_bin_count(sx)
@@ -336,17 +338,18 @@ def corner_plot(
         fx_list = [fx, extra_params]
         fx = np.concatenate(fx_list, axis=-1)
 
-    ranges = [
-        (np.min(fx[:, i]), np.max(fx[:, i])) for i in range(fx.shape[1])
-    ]
-    for parameter in cfg['plot_cfg']['corner_cfg_ranges'].keys():
-        if parameter in labels:
-            i = labels.index(parameter)
-            ranges[i] = (
-                cfg['plot_cfg']['corner_cfg_ranges'][parameter]['lower'],
-                cfg['plot_cfg']['corner_cfg_ranges'][parameter]['upper']
-            )
-    cfg['plot_cfg']['corner_cfg']['range'] = ranges
+    # ranges_1 = [
+    #     (np.min(fx[:, i]), np.max(fx[:, i])) for i in range(fx.shape[1])
+    # ]
+
+    # for parameter in cfg['plot_cfg']['corner_cfg_ranges'].keys():
+    #     if parameter in labels:
+    #         i = labels.index(parameter)
+    #         ranges_1[i] = (
+    #             cfg['plot_cfg']['corner_cfg_ranges'][parameter]['lower'],
+    #             cfg['plot_cfg']['corner_cfg_ranges'][parameter]['upper']
+    #         )
+    # cfg['plot_cfg']['corner_cfg']['range'] = ranges_1
 
     cfg['plot_cfg']['corner_cfg']['hist_kwargs']['color'] = pop1_color
     n_bins = doane_bin_count(fx)
