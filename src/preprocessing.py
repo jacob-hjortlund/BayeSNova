@@ -323,7 +323,9 @@ def init_global_data(
             [np.diag(tmp_cov) for tmp_cov in host_galaxy_covariances]
         )
 
-        idx_host_galaxy_property_not_observed = host_galaxy_observables == NULL_VALUE
+        idx_host_galaxy_property_not_observed = (
+            host_galaxy_observables[:, :n_independent_host_properties] == NULL_VALUE
+        )
     else:
         raise ValueError("Host galaxy properties must be provided as even columns.")
 
