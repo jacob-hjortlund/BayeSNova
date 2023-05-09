@@ -305,6 +305,15 @@ class Model():
         value = 0.
         stretch_1_par = prep.global_model_cfg.stretch_par_name + "_1"
         stretch_2_par = prep.global_model_cfg.stretch_par_name + "_2"
+        galaxy_means_names = np.repeat(
+            np.array(
+                prep.global_model_cfg.host_galaxy_cfg.shared_property_names +
+                prep.global_model_cfg.host_galaxy_cfg.independent_property_names
+            ), 2
+        )
+        galaxy_sig_names = [
+            "sig_" + name for name in galaxy_means_names
+        ]
         if prep.global_model_cfg.stretch_par_name in prep.global_model_cfg.independent_par_names:
             stretch_independent = True
         else:
@@ -317,18 +326,24 @@ class Model():
                 continue
             
             if value_key == 'host_galaxy_means':
-                if np.any(
-                    (par_dict[value_key] <= -20) | (par_dict[value_key] >= 20)
-                ):
-                    value += -np.inf
-                    break
+                for mean_value, par_name in zip(par_dict[value_key], galaxy_means_names):
+                    is_in_priors = par_name in prep.global_model_cfg.prior_bounds.keys()
+                    if is_in_priors:
+                        value += utils.uniform(
+                            mean_value, **prep.global_model_cfg.prior_bounds[par_name]
+                        )
+                    else:
+                        continue
 
             if value_key == 'host_galaxy_sigs':
-                if np.any(
-                    (par_dict[value_key] < 0.) | (par_dict[value_key] >= 20.)
-                ):
-                    value += -np.inf
-                    break
+                for sigma_value, par_name in zip(par_dict[value_key], galaxy_sig_names):
+                    is_in_priors = par_name in prep.global_model_cfg.prior_bounds.keys()
+                    if is_in_priors:
+                        value += utils.uniform(
+                            sigma_value, **prep.global_model_cfg.prior_bounds[par_name]
+                        )
+                    else:
+                        continue
             
             # TODO: Remove 3-deep conditionals bleeeeh
             bounds_key = ""
@@ -917,7 +932,7 @@ class Model():
 
             using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
-                3 + prep.host_galaxy_observables.shape[1] +
+                3 + prep.n_independent_host_properties +
                 (not using_host_galaxy_properties)
             )
             outputs = (
