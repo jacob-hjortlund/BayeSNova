@@ -793,7 +793,7 @@ class Model():
 
             using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
-                3 + prep.host_galaxy_observables.shape[1] +
+                3 + prep.n_independent_host_properties +
                 (not using_host_galaxy_properties)
             )
             outputs = (
@@ -829,8 +829,8 @@ class Model():
         log_w_1 = np.log(w_vector)
         log_w_2 = np.log(1-w_vector)
 
-        n_host_properties = host_galaxy_means.shape[0] // 2
-        if n_host_properties > 0:
+        use_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
+        if use_host_galaxy_properties:
             host_log_probs_1, host_log_probs_2 = self.host_galaxy_log_probs(
                 host_galaxy_means=host_galaxy_means,
                 host_galaxy_sigmas=host_galaxy_sigs,
@@ -847,29 +847,31 @@ class Model():
             combined_log_probs = combined_log_probs[~prep.idx_calibrator_sn]
         
         n_tile = (
-            n_host_properties + (not prep.global_model_cfg['host_galaxy_cfg']['use_properties'])
+            prep.n_independent_host_properties + (not use_host_galaxy_properties)
         )
-        idx_all_properties_not_observed = np.all(
-            prep.idx_host_galaxy_property_not_observed, axis=1
+        idx_all_independent_properties_not_observed = np.all(
+            prep.idx_host_galaxy_property_not_observed[:, prep.n_shared_host_properties:], axis=1
         )
         tiled_log_w_1 = np.tile(log_w_1[:, None], [1, n_tile])
         tiled_log_w_2 = np.tile(log_w_2[:, None], [1, n_tile])
 
         log_host_membership_probs = (
             1./np.log(10) * (
-                tiled_log_w_1 + host_log_probs_1 -
-                tiled_log_w_2 - host_log_probs_2
+                tiled_log_w_1 + host_log_probs_1[:, prep.n_shared_host_properties:] -
+                tiled_log_w_2 - host_log_probs_2[:, prep.n_shared_host_properties:]
             )
         )
-        log_host_membership_probs[prep.idx_host_galaxy_property_not_observed] = NULL_VALUE
+        log_host_membership_probs[
+            prep.idx_host_galaxy_property_not_observed[:, prep.n_shared_host_properties:]
+        ] = NULL_VALUE
 
         log_full_host_membership_probs = (
             1./np.log(10) * (
-                log_w_1 + np.sum(host_log_probs_1, axis=1) -
-                log_w_2 - np.sum(host_log_probs_2, axis=1)
+                log_w_1 + np.sum(host_log_probs_1[:, prep.n_shared_host_properties:], axis=1) -
+                log_w_2 - np.sum(host_log_probs_2[:, prep.n_shared_host_properties:], axis=1)
             )
         )#.flatten()
-        log_full_host_membership_probs[idx_all_properties_not_observed] = NULL_VALUE
+        log_full_host_membership_probs[idx_all_independent_properties_not_observed] = NULL_VALUE
 
         log_sn_membership_probs = (
             1./np.log(10) * (
@@ -903,7 +905,7 @@ class Model():
             )
             using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
-                3 + prep.host_galaxy_observables.shape[1] +
+                3 + prep.n_independent_host_properties +
                 (not using_host_galaxy_properties)
             )
             outputs = (
