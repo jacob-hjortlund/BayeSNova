@@ -273,10 +273,10 @@ def init_global_data(
         key + "_err" for key in shared_host_property_keys
     ]
     host_property_keys = (
-        independent_host_property_keys + shared_host_property_keys
+        shared_host_property_keys + independent_host_property_keys
     )
     host_property_err_keys = (
-        independent_host_property_err_keys + shared_host_property_err_keys
+        shared_host_property_err_keys + independent_host_property_err_keys
     )
 
     use_host_properties = host_galaxy_cfg.get('use_properties', False)
