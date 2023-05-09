@@ -195,11 +195,16 @@ def prior_initialisation(
     priors: dict, preset_init_values: dict, shared_par_names: list,
     independent_par_names: list, ratio_par_name: str,
     cosmology_par_names: list, use_physical_ratio: bool,
-    use_host_galaxy_properties: bool, host_galaxy_par_names: list,
-    host_galaxy_init_values: dict,
+    use_host_galaxy_properties: bool,
+    shared_host_galaxy_par_names: list,
+    independent_host_galaxy_par_names: list,
 ):
 
+    if use_host_galaxy_properties:
+        shared_par_names = shared_par_names + shared_host_galaxy_par_names
+        independent_par_names = independent_par_names + independent_host_galaxy_par_names
     par_names = shared_par_names + independent_par_names + cosmology_par_names
+
     if not use_physical_ratio:
         par_names.append(ratio_par_name)
     init_values = []
@@ -231,20 +236,10 @@ def prior_initialisation(
     init_par_list = [
         shared_init_pars, independent_init_pars, cosmology_init_pars
     ]
+
     if not use_physical_ratio:
         init_par_list.append([init_values[-1]])
-
-    host_init_values = []
-    for host_par in host_galaxy_par_names:
-        if host_par in host_galaxy_init_values.keys():
-            host_init_values += host_galaxy_init_values[host_par]['means']
-            host_init_values += host_galaxy_init_values[host_par]['sigmas']
-        else:
-            raise ValueError(f"{host_par} not in host galaxy init values. Check your config")
-        
-    if use_host_galaxy_properties:
-            insert_idx = len(init_par_list)-len(cosmology_par_names) - (not use_physical_ratio)
-            init_par_list.insert(insert_idx,host_init_values)
+    
     init_pars = np.concatenate(init_par_list)
 
     # Check if stretch is shared and correct to account for prior

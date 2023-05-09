@@ -134,6 +134,41 @@ model_cfg:
     gamma_Ebv:
       lower: 1.
       upper: 20.
+    local_u-g:
+      lower: -10.
+      upper: 10.
+    sig_local_u-g:
+      lower: 0.
+    local_mass:
+      lower: -100.
+      upper: 100.
+    sig_local_mass:
+      lower: 0.
+    local_ssfr:
+      lower: -100.
+      upper: 100.
+    sig_local_ssfr:
+      lower: 0.
+    global_u-g:
+      lower: -10.
+      upper: 10.
+    sig_global_u-g:
+      lower: 0.
+    global_mass:
+      lower: -100.
+      upper: 100.
+    sig_global_mass:
+      lower: 0.
+    global_ssfr:
+      lower: -100.
+      upper: 100.
+    sig_global_ssfr:
+      lower: 0.
+    t:
+      lower: -10.
+      upper: 10.
+    sig_t:
+      lower: 0.
     w:
       lower: 0.12
       upper: 0.88
@@ -166,6 +201,20 @@ model_cfg:
     tau_Rb: 0.3
     gamma_Rb: 5.5
     shift_Rb: 1.5
+    local_u-g: 1.25
+    sig_local_u-g: 0.1
+    local_mass: 9.
+    sig_local_mass: 0.5
+    local_ssfr: -10.
+    sig_local_ssfr: 1.
+    global_u-g: 1.25
+    sig_global_u-g: 0.1
+    global_mass: 10.
+    sig_global_mass: 1.
+    global_ssfr: -10.
+    sig_global_ssfr: 1.
+    t: 2.
+    sig_t: 3.
     Om0: 0.3
     w0: -1.
     wa: 0.

@@ -34,7 +34,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         os.path.split(cfg['data_cfg']['train_path'])[1].split(".")[0]
     ]
     if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
-        tags += cfg['model_cfg']['host_galaxy_cfg']['property_names']
+        tags += cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
     tags += cfg['clearml_cfg']['tags']
 
     using_MPI_and_is_master = cfg['emcee_cfg']['pool_type'] == 'MPI' and MPI.COMM_WORLD.rank == 0
@@ -67,6 +67,17 @@ def main(cfg: omegaconf.DictConfig) -> None:
         volumetric_rates = None
 
     prep.init_global_data(data, volumetric_rates, cfg['model_cfg'])
+    
+    shared_host_galaxy_par_names = [None] * 2 * prep.n_shared_host_properties
+    independent_host_galaxy_par_names = [None] * 2 * prep.n_independent_host_properties
+    shared_host_galaxy_par_names[::2] = cfg['model_cfg']['host_galaxy_cfg']['shared_property_names']
+    shared_host_galaxy_par_names[1::2] = [
+        "sig_" + name for name in cfg['model_cfg']['host_galaxy_cfg']['shared_property_names']
+    ]
+    independent_host_galaxy_par_names[::2] = cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
+    independent_host_galaxy_par_names[1::2] = [
+        "sig_" + name for name in cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
+    ]
 
     log_prob = model.Model()
 
@@ -85,7 +96,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
             cfg['model_cfg']['prior_bounds'], cfg['model_cfg']['init_values'], cfg['model_cfg']['shared_par_names'],
             cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name'], cfg['model_cfg']['cosmology_par_names'],
             cfg['model_cfg']['use_physical_ratio'], cfg['model_cfg']['host_galaxy_cfg']['use_properties'],
-            cfg['model_cfg']['host_galaxy_cfg']['property_names'], cfg['model_cfg']['host_galaxy_cfg']['init_values'], 
+            shared_host_galaxy_par_names, independent_host_galaxy_par_names,  
         )
         init_theta = init_theta + 3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'], len(init_theta))
         _ = log_prob(init_theta[0]) # call func once befor loop to jit compile
