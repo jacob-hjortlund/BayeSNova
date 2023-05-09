@@ -202,12 +202,19 @@ clearml_cfg:
   task_type: 'training'
 plot_cfg:
   n_samples: max
-  smooth: 1.
-  #smooth1d: 1.
   label_kwargs:
     fontsize: 16
-  hist_kwargs:
-    density: True
+  corner_cfg:
+    smooth: 1.
+    hist_bin_factor: 2.
+    label_kwargs:
+      fontsize: 16
+    hist_kwargs:
+      density: True
+  corner_cfg_ranges:
+    gamma_Ebv:
+      lower: 1.
+      upper: 9.
   property_ranges:
     local_u-g:
       lower: 0.25

@@ -271,7 +271,8 @@ def corner_plot(
     cfg: dict, save_path: str,
 ):
     
-    cfg = omegaconf.OmegaConf.to_container(cfg)
+    if type(cfg) != dict:
+        cfg = omegaconf.OmegaConf.to_container(cfg)
     n_shared = len(cfg['model_cfg']['shared_par_names'])
     n_independent = len(cfg['model_cfg']['independent_par_names'])
     idx_end_independent = sample_thetas.shape[1] - len(cfg['model_cfg']['cosmology_par_names']) - (not cfg['model_cfg']['use_physical_ratio'])
@@ -299,9 +300,23 @@ def corner_plot(
             sx_list += [extra_params]
         sx = np.concatenate(sx_list, axis=-1)
 
-        n_bins = doane_bin_count(sx) * 5
+        ranges = [
+            (np.min(sx[:, i]), np.max(sx[:, i])) for i in range(sx.shape[1])
+        ]
+        for parameter in cfg['plot_cfg']['corner_cfg_ranges'].keys():
+            if parameter in labels:
+                i = labels.index(parameter)
+                ranges[i] = (
+                    cfg['plot_cfg']['corner_cfg_ranges'][parameter]['lower'],
+                    cfg['plot_cfg']['corner_cfg_ranges'][parameter]['upper']
+                )
+        cfg['plot_cfg']['corner_cfg']['range'] = ranges
+
+        cfg['plot_cfg']['corner_cfg']['hist_kwargs']['color'] = pop2_color
+        n_bins = doane_bin_count(sx)
         fig_pop_2 = corner.corner(
-            data=sx, bins=n_bins, color=pop2_color, **cfg['plot_cfg']
+            data=sx, color=pop2_color, n_bins=n_bins,
+            **cfg['plot_cfg']['corner_cfg']
         )
     
     if extra_params_present:
@@ -311,11 +326,26 @@ def corner_plot(
         fx_list = [fx, extra_params]
         fx = np.concatenate(fx_list, axis=-1)
 
-    n_bins = doane_bin_count(fx) * 5
+    ranges = [
+        (np.min(fx[:, i]), np.max(fx[:, i])) for i in range(fx.shape[1])
+    ]
+    for parameter in cfg['plot_cfg']['corner_cfg_ranges'].keys():
+        if parameter in labels:
+            i = labels.index(parameter)
+            ranges[i] = (
+                cfg['plot_cfg']['corner_cfg_ranges'][parameter]['lower'],
+                cfg['plot_cfg']['corner_cfg_ranges'][parameter]['upper']
+            )
+    cfg['plot_cfg']['corner_cfg']['range'] = ranges
+
+    cfg['plot_cfg']['corner_cfg']['hist_kwargs']['color'] = pop1_color
+    n_bins = doane_bin_count(fx)
     fig_pop_1 = corner.corner(
-        data=fx, bins=n_bins, fig=fig_pop_2,
-        color=pop1_color, labels=labels, **cfg['plot_cfg']
+        data=fx, fig=fig_pop_2, bins=n_bins,
+        labels=labels, color=pop1_color,
+        **cfg['plot_cfg']['corner_cfg']
     )
+    fig_pop_1 = fig_pop_2
     fig_pop_1.tight_layout()
     fig_pop_1.savefig(
         os.path.join(save_path, cfg['emcee_cfg']['run_name']+"_corner.png")
