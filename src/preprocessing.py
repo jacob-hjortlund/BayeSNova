@@ -443,9 +443,14 @@ def reduced_observables_and_covariances(
         duplicate_covs = np.where(
             duplicate_covs == NULL_VALUE, MAX_VALUE, duplicate_covs
         )
+        max_value_in_cov = np.any(duplicate_covs == MAX_VALUE)
+        if max_value_in_cov:
+            inv_function = np.linalg.inv
+        else:
+            inv_function = np.linalg.pinv
 
-        cov_i_inv = np.linalg.pinv(duplicate_covs)
-        reduced_cov = np.linalg.pinv(
+        cov_i_inv = inv_function(duplicate_covs)
+        reduced_cov = inv_function(
             np.sum(
                 cov_i_inv, axis=0
             )
@@ -470,7 +475,7 @@ def reduced_observables_and_covariances(
             np.linalg.slogdet(reduced_cov)[1] +
             np.matmul(
                 np.atleast_1d(reduced_obs).T, np.matmul(
-                    np.linalg.pinv(reduced_cov), np.atleast_1d(reduced_obs)
+                    inv_function(reduced_cov), np.atleast_1d(reduced_obs)
                 )
             )
         )
