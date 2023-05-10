@@ -4,6 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 import astropy.units as u
+from astropy.cosmology import Planck18
 from astropy.coordinates import SkyCoord
 
 import src.preprocessing as prep
@@ -169,6 +170,25 @@ def main(cfg: omegaconf.DictConfig) -> None:
         idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
         idx_to_keep = (
             catalog[peak_date_err_column_name].to_numpy() < cfg['prep_cfg']['peak_date_err_cutoff']
+        ) | idx_calibrator
+        n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
+        catalog = catalog.loc[idx_to_keep]
+        catalog = catalog.reset_index(drop=True)
+        print(f"Number of SNe filtered: {n_sn_filtered}")
+        print(f"Number of SNe remaining: {len(catalog)}")
+        print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
+
+    if cfg['prep_cfg']['use_tripp_residual_cutoff']:
+        print("\nApplying Tripp residual cutoff...\n")
+        mb_tripp = (
+            cfg['prep_cfg']['Mb'] + Planck18.distmod(catalog['z'].to_numpy()).value -
+            cfg['prep_cfg']['alpha'] * catalog['x1'].to_numpy() +
+            cfg['prep_cfg']['beta'] * catalog['c'].to_numpy()
+        )
+        tripp_residual = catalog['mB'].to_numpy() - mb_tripp
+        idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
+        idx_to_keep = (
+            np.abs(tripp_residual) < cfg['prep_cfg']['tripp_residual_cutoff']
         ) | idx_calibrator
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
         catalog = catalog.loc[idx_to_keep]
