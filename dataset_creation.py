@@ -48,6 +48,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 'CEPH_DIST': 'mu_calibrator'
             }
         )
+        catalog['is_calibrator'] = catalog['is_calibrator'].where(
+            catalog['is_calibrator'] == 1, NULL_VALUE
+        )
         n_calibrator_sn = np.sum(catalog['is_calibrator'].to_numpy() == 1)
         print(f"Number of calibrator SNe: {n_calibrator_sn}\n")
     else:
