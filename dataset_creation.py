@@ -89,7 +89,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print("\nApplying mB err cutoff...\n")
         alpha = cfg['prep_cfg']['alpha']
         beta = cfg['prep_cfg']['beta']
-        mu_err_column_name = 'MUERR'
+        mu_err_column_name = ['MUERR' if 'MUERR' in catalog.columns else 'MU_SH0ES_ERR_DIAG'][0]
         idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
         x1_err_column_name = 'x1Err'
         c_err_column_name = 'cErr'

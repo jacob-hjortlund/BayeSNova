@@ -67,7 +67,7 @@ prep_cfg:
   apparent_mag_bias_correction_err_column_name: 'biasCorErr_m_b'
 
   use_redshift_cutoff: True
-  redshift_lower_cutoff: 0.023
+  redshift_lower_cutoff: 0.0233
   redshift_upper_cutoff : 0.15
 
   use_mb_err_cutoff: True
