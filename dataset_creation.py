@@ -300,7 +300,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 catalog[host_property] = NULL_VALUE
                 catalog[host_property_err] = NULL_VALUE
                 new_column_names += [host_property, host_property_err]
-            
+
             idx_already_set = catalog[host_property] != NULL_VALUE
             if host_property in ['global_mass', 'local_mass']:
                 idx_invalid = (
@@ -326,6 +326,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 if np.sum(idx_match) > 0:
                     catalog.loc[idx_match, host_property] = jones_catalog.loc[i, host_property]
                     catalog.loc[idx_match, host_property_err] = jones_catalog.loc[i, host_property_err]
+
+            idx_negative_errors = catalog[host_property_err] < 0
+            catalog.loc[idx_negative_errors, host_property_err] = NULL_VALUE
 
             idx_either_null = (
                 (catalog[host_property] == NULL_VALUE) | (catalog[host_property_err] == NULL_VALUE)
