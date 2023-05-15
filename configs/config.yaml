@@ -8,6 +8,7 @@ model_cfg:
   stretch_par_name: s
   use_physical_ratio: False
   use_volumetric_rates: False
+  use_log_factors: False
   cosmology_par_names: []
   shared_par_names: [
     alpha,

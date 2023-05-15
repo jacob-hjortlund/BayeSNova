@@ -826,7 +826,10 @@ class Model():
 
         pop_1_log_probs = log_w_1 + log_sn_probs_1 + np.sum(host_log_probs_1, axis=1) 
         pop_2_log_probs = log_w_2 + log_sn_probs_2 + np.sum(host_log_probs_2, axis=1)
-        combined_log_probs = np.logaddexp(pop_1_log_probs, pop_2_log_probs) + prep.sn_log_factors + prep.host_galaxy_log_factors
+        log_factors = prep.global_model_cfg['use_log_factors'] * (
+            prep.sn_log_factors + prep.host_galaxy_log_factors
+        )
+        combined_log_probs = np.logaddexp(pop_1_log_probs, pop_2_log_probs) + log_factors
 
         if prep.global_model_cfg['only_evaluate_calibrators']:
             combined_log_probs = combined_log_probs[~prep.idx_calibrator_sn]
