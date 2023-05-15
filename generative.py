@@ -84,23 +84,23 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         fig, ax = plt.subplots(ncols=4, figsize=(20, 5))
         fig.suptitle(title, fontsize=16)
-        ax[0].hist(log10_z, bins=100, histtype='step', density=True, label='data')
-        ax[0].hist(kde_samples[0], bins=100, histtype='step', density=True, label='sim')
+        ax[0].hist(log10_z, bins='doane', histtype='step', density=True, label='data')
+        ax[0].hist(kde_samples[0], bins='doane', histtype='step', density=True, label='sim')
         ax[0].set_xlabel(r'log$_{10}$(z)', fontsize=14)
         ax[0].legend(fontsize=14)
 
-        ax[1].hist(prep.sn_observables[:,0], bins=100, histtype='step', density=True, label='data')
+        ax[1].hist(prep.sn_observables[:,0], bins='doane', histtype='step', density=True, label='data')
         ax[1].hist(observables[:,0], bins=100, histtype='step', density=True, label='sim')
         ax[1].set_xlabel('mb', fontsize=14)
         ax[1].legend(fontsize=14)
 
-        ax[2].hist(prep.sn_observables[:,1], bins=100, histtype='step', density=True, label='data')
+        ax[2].hist(prep.sn_observables[:,1], bins='doane', histtype='step', density=True, label='data')
         ax[2].hist(observables[:,1], bins=100, histtype='step', density=True, label='sim')
         ax[2].set_xlabel('x1', fontsize=14)
         ax[2].legend(fontsize=14)
 
-        ax[3].hist(prep.sn_observables[:,2], bins=100, histtype='step', density=True, label='data')
-        ax[3].hist(observables[:,2], bins=100, histtype='step', density=True, label='sim')
+        ax[3].hist(prep.sn_observables[:,2], bins='doane', histtype='step', density=True, label='data')
+        ax[3].hist(observables[:,2], bins='doane', histtype='step', density=True, label='sim')
         ax[3].set_xlabel('c', fontsize=14)
         ax[3].legend(fontsize=14)
 

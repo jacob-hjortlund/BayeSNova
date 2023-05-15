@@ -44,11 +44,11 @@ def uncertainty(observables, covariance, pars, symm_errors):
     Mb_err = symm_errors[0]
     alpha_err = symm_errors[1]
     beta_err = symm_errors[2]
-    
+
     var = (
-        covariance[0,0] + Mb_err**2 + x1 * (covariance[1,1] + alpha_err**2) + 
-        c * (covariance[2,2] + beta_err**2) - 2 * beta * covariance[0,2] +
-        2 * alpha * covariance[0,1] - 2 * alpha * beta * covariance[1,2]
+        covariance[:,0,0] + Mb_err**2 + x1 * (covariance[:,1,1] + alpha_err**2) + 
+        c * (covariance[:,2,2] + beta_err**2) - 2 * beta * covariance[:,0,2] +
+        2 * alpha * covariance[:,0,1] - 2 * alpha * beta * covariance[:,1,2]
     )
 
     return np.sqrt(var)
@@ -67,7 +67,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
     global covariance
     global observables
 
-    prompt_fractions = np.linspace(0.01, 0.99, 100)
+    if cfg['model_cfg']['use_physical_ratios']:
+        prompt_fractions = np.linspace(0.01, 0.99, 100)
+    else:
+        prompt_fractions = ['constant']
     init_idx = cfg['emcee_cfg']['init_idx']
     n_runs = cfg['emcee_cfg']['n_runs']
 
@@ -96,29 +99,44 @@ def main(cfg: omegaconf.DictConfig) -> None:
             t0 = time.time()
 
             prompt_fraction = prompt_fractions[init_idx+i]
-            train_path = os.path.join(
-                cfg['data_cfg']['train_path'],
-                str(cfg['emcee_cfg']['sim_number']),
-                f"prompt_fraction_{prompt_fraction:.2f}"
-            )
+            
+            if cfg['data_cfg']['train_is_sim']:
+                train_path = os.path.join(
+                    cfg['data_cfg']['train_path'],
+                    str(cfg['emcee_cfg']['sim_number']),
+                    f"prompt_fraction_{prompt_fraction:.2f}"
+                )
 
-            save_path = os.path.join(
-                path, train_path.split(os.sep)[-1]
-            )
+                train_data_path = os.path.join(
+                    train_path, "partial_sample.csv"
+                )
+                save_path = os.path.join(
+                    path, train_path.split(os.sep)[-1]
+                )
+            else:
+                train_path = cfg['data_cfg']['train_path']
+                train_data_path = train_path
+                save_path = path
+
 
             os.makedirs(save_path, exist_ok=True)
 
             # Init data
+            print(train_data_path)
             data = pd.read_csv(
-                os.path.join(train_path, "partial_sample.csv"),
-                sep=cfg['data_cfg']['sep']
+                train_data_path,
+                sep=cfg['data_cfg']['train_sep']
             )
 
             if cfg['emcee_cfg']['use_full_sample']:
-                full = pd.read_csv(
-                    os.path.join(train_path, "full_sample.csv"),
-                    sep=cfg['data_cfg']['sep']
+                full_path = cfg['data_cfg'].get(
+                    'full_path',                    
+                    os.path.join(train_path, "full_sample.csv")
                 )
+                full = pd.read_csv(
+                    full_path, sep=cfg['data_cfg']['full_sep']
+                )
+
                 idx_pop_1 = full['true_class'].to_numpy() == 1.
 
                 mb_full_1 = full['mb'].to_numpy()[idx_pop_1]
@@ -131,19 +149,30 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 c_full_2 = full['c'].to_numpy()[~idx_pop_1]
                 z_full_2 = full['z'].to_numpy()[~idx_pop_1]
 
-            covariance = np.load(
-                os.path.join(train_path, "covariance.npy"),
-            )
+            if cfg['data_cfg']['train_is_sim']:
+                covariance = np.load(
+                    os.path.join(train_path, "covariance.npy"),
+                )
 
-            observables_keys = ['mb', 'x1', 'c', 'z']
-            observables = data[observables_keys].to_numpy()
+                observables_keys = ['mb', 'x1', 'c', 'z']
+                observables = data[observables_keys].to_numpy()
 
-            mb = observables[:, 0]
-            x1 = observables[:, 1]
-            c = observables[:, 2]
-            z = observables[:, 3]
+                mb = observables[:, 0]
+                x1 = observables[:, 1]
+                c = observables[:, 2]
+                z = observables[:, 3]
+            else:
+                prep.init_global_data(data, None, cfg['model_cfg'])
+                mb = prep.sn_observables[:, 0]
+                x1 = prep.sn_observables[:, 1]
+                c = prep.sn_observables[:, 2]
+                z = prep.sn_redshifts
+                observables = np.concatenate(
+                    [prep.sn_observables, prep.sn_redshifts[:, None]], axis=1
+                )
+                covariance = prep.sn_covariances
             
-            print(f"\n----------------------------Current prompt fraction: {prompt_fraction:.2f}\n-------------------------------\n")
+            print(f"\n----------------------------Current prompt fraction: {prompt_fraction}\n-------------------------------\n")
 
             init_values = np.array([
                 cfg['model_cfg']['init_values'][par] for par in cfg['model_cfg']['pars']
@@ -244,6 +273,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 w0=par_dict['w0'], wa=par_dict['wa']
             )
 
+            if covariance.shape[0] == 2:
+                covariance = np.tile(covariance, (observables.shape[0], 1, 1))
+
             mu_tripp = dist_mod(
                 observables, Mb=par_dict['Mb'],
                 alpha=par_dict['alpha'], beta=par_dict['beta'],
@@ -262,9 +294,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 cosmo=cosmo
             )
             mag_residual = mb-mag_tripp
-            mag_err = np.sqrt(covariance[0, 0])
-            x1_err = np.ones(len(x1)) * np.sqrt(covariance[1, 1])
-            c_err = np.ones(len(c)) * np.sqrt(covariance[2, 2])
+            mag_err = np.sqrt(covariance[:, 0, 0])
+            x1_err = np.sqrt(covariance[:,1, 1])
+            c_err = np.sqrt(covariance[:,2, 2])
 
             if cfg['emcee_cfg']['use_full_sample']:
 
@@ -339,10 +371,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
             ax[1].set_xlabel(r"$c$", fontsize=16)
 
             if cfg['emcee_cfg']['use_full_sample']:
-                cs_x1 = ax[0].contour(xx_x1, yy_resx, f_x1_1, colors='r')
-                cs_c = ax[0].contour(xx_x1, yy_resx, f_x1_2, colors='b')
-                cs_x1 = ax[1].contour(xx_c, yy_resc, f_c_1, colors='r')
-                cs_c = ax[1].contour(xx_c, yy_resc, f_c_2, colors='b')
+                cs_x1 = ax[0].contour(xx_x1, yy_resx, f_x1_1, colors='r', levels=20)
+                cs_c = ax[0].contour(xx_x1, yy_resx, f_x1_2, colors='b', levels=20)
+                cs_x1 = ax[1].contour(xx_c, yy_resc, f_c_1, colors='r', levels=20)
+                cs_c = ax[1].contour(xx_c, yy_resc, f_c_2, colors='b', levels=20)
 
             fig.tight_layout()
             fig.savefig(

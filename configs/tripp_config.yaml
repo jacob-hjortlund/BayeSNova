@@ -1,7 +1,11 @@
 data_cfg:
     train_path: ./data/simulated_data/
-    sep: ','
+    full_path: Null
+    train_sep: ' '
+    full_sep: ','
+    train_is_sim: True
 model_cfg:
+    use_physical_ratios: True
     pars: [Mb,alpha,beta,sig_int,Om0,w0]
     preset_values: 
         H0: 70.
@@ -13,9 +17,9 @@ model_cfg:
         alpha: 0.128
         beta: 3.1
         sig_int: 0.12
-        Om0: 0.3
-        w0: -1.
-        wa: 0.
+        # Om0: 0.3
+        # w0: -1.
+        # wa: 0.
     prior_bounds: 
         Mb: 
             lower: -23.
@@ -44,7 +48,7 @@ emcee_cfg:
     save_path: ./results/simulated_data
     extra_path: ''
     use_full_sample: True
-    init_idx: 43
-    n_runs: 2
+    init_idx: 0
+    n_runs: 1
     sim_number: 0
     pool_type: ''
