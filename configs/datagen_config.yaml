@@ -75,9 +75,10 @@ prep_cfg:
   beta: 2.9
   mb_err_cutoff: 0.2
 
-  use_tripp_residual_cutoff: True
+  use_tripp_residual_err_cutoff: True
   Mb: -19.253
-  tripp_residual_cutoff: 0.6
+  intrinsic_scatter: 0.12
+  tripp_residual_err_cutoff: 3.5
 
   use_x1_cutoff: True
   x1_cutoff: 3.0

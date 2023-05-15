@@ -92,13 +92,18 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print("\nApplying mB err cutoff...\n")
         alpha = cfg['prep_cfg']['alpha']
         beta = cfg['prep_cfg']['beta']
-        mu_err_column_name = ['MUERR' if 'MUERR' in catalog.columns else 'MU_SH0ES_ERR_DIAG'][0]
         idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
         x1_err_column_name = 'x1Err'
         c_err_column_name = 'cErr'
+        disp_v_pec = 200. # km / s
+        c = 300000. # km / s
+        mu_err = catalog['z'].to_numpy()**(-1) * (
+            (5. / np.log(10.))
+            * (disp_v_pec / c)
+        )
         err = np.sqrt(
             (   
-                catalog[mu_err_column_name].to_numpy() ** 2 +
+                mu_err ** 2 +
                 (alpha * catalog[x1_err_column_name].to_numpy()) ** 2 +
                 (beta * catalog[c_err_column_name].to_numpy()) ** 2
             )
@@ -181,17 +186,29 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print(f"Number of SNe remaining: {len(catalog)}")
         print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
 
-    if cfg['prep_cfg']['use_tripp_residual_cutoff']:
-        print("\nApplying Tripp residual cutoff...\n")
+    if cfg['prep_cfg']['use_tripp_residual_err_cutoff']:
+        print("\nApplying Tripp residual error cutoff...\n")
+        disp_v_pec = 200. # km / s
+        c = 300000. # km / s
+        mu_err = catalog['z'].to_numpy()**(-1) * (
+            (5. / np.log(10.))
+            * (disp_v_pec / c)
+        )
         mb_tripp = (
             cfg['prep_cfg']['Mb'] + Planck18.distmod(catalog['z'].to_numpy()).value -
             cfg['prep_cfg']['alpha'] * catalog['x1'].to_numpy() +
             cfg['prep_cfg']['beta'] * catalog['c'].to_numpy()
         )
         tripp_residual = catalog['mB'].to_numpy() - mb_tripp
+        mb_tripp_err = np.sqrt(
+            mu_err**2 +
+            cfg['prep_cfg']['alpha']**2 * catalog['x1Err'].to_numpy()**2 +
+            cfg['prep_cfg']['beta']**2 * catalog['cErr'].to_numpy()**2
+        )
+        mb_tripp_err = np.sqrt(mb_tripp_err**2 + cfg['prep_cfg']['intrinsic_scatter']**2)
         idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
         idx_to_keep = (
-            np.abs(tripp_residual) < cfg['prep_cfg']['tripp_residual_cutoff']
+            np.abs(tripp_residual) / mb_tripp_err < cfg['prep_cfg']['tripp_residual_err_cutoff']
         ) | idx_calibrator
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
         catalog = catalog.loc[idx_to_keep]
