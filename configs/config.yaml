@@ -9,6 +9,7 @@ model_cfg:
   use_physical_ratio: False
   use_volumetric_rates: False
   use_log_factors: False
+  use_log_space_integral: False
   cosmology_par_names: []
   shared_par_names: [
     alpha,
