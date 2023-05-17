@@ -441,6 +441,41 @@ def _Ebv_Rb_prior_convolution(
 
 # ---------- MODEL CLASS ------------
 
+def ultranest_prior_generator(
+    cfg: dict,
+):
+    
+    prior_bounds = cfg['prior_bounds']
+    def _prior_transform(cube):
+        
+        params = cube.copy()
+        
+        n_shared_pars = len(cfg['shared_par_names'])
+
+        for i, par_name in enumerate(cfg['shared_par_names']):
+            params[i] = (
+                cube[i] * (
+                    prior_bounds[par_name]['upper'] - prior_bounds[par_name]['lower']
+                ) + prior_bounds[par_name]['lower']
+            )
+        
+        for i, par_name in enumerate(cfg['independent_par_names']):
+            params[n_shared_pars + i:n_shared_pars+2*i+1] = (
+                cube[n_shared_pars + i:n_shared_pars+2*i+1] * (
+                    prior_bounds[par_name]['upper'] - prior_bounds[par_name]['lower']
+                ) + prior_bounds[par_name]['lower']
+            )
+        
+        params[-1] = (
+            cube[-1] * (
+                prior_bounds['w']['upper'] - prior_bounds['w']['lower']
+            ) + prior_bounds['w']['lower']
+        )
+    
+        return params
+
+    return _prior_transform
+
 class Model():
 
     def __init__(self) -> None:
