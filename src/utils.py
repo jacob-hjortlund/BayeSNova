@@ -208,15 +208,21 @@ def prior_initialisation(
         if par in preset_init_values.keys():
             init_par = preset_init_values[par]
         elif par in priors.keys():
-            bounds = priors[par]
-            if len(bounds) == 2:
-                init_par = (bounds["lower"] + bounds["upper"]) / 2
-            elif "lower" in bounds.keys():
-                init_par = bounds["lower"] + np.random.uniform()
-            elif "upper" in bounds.keys():
-                init_par = bounds["upper"] - np.random.uniform()
+            if "upper" in priors[par].keys() or "lower" in priors[par].keys():
+                bounds = priors[par]
+                if len(bounds) == 2:
+                    init_par = (bounds["lower"] + bounds["upper"]) / 2
+                elif "lower" in bounds.keys():
+                    init_par = bounds["lower"] + np.random.uniform()
+                elif "upper" in bounds.keys():
+                    init_par = bounds["upper"] - np.random.uniform()
+            elif "mean" in priors[par].keys() and "std" in priors[par].keys():
+                init_par = np.random.normal(
+                    priors[par]["mean"], priors[par]["std"]
+                )
             else:
                 raise ValueError(f"{par} in prior config but bounds not defined. Check your config")
+        
         else:
             init_par = 0.
         init_values.append(init_par)

@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 import numba as nb
 import src.utils as utils
+import scipy.stats as stats
 import scipy.special as sp_special
 import astropy.cosmology as apy_cosmo
 
@@ -499,7 +500,11 @@ class Model():
                 bounds_key = value_key
             
             is_in_priors = bounds_key in prep.global_model_cfg.prior_bounds.keys()
-            if is_in_priors:
+            is_uniform = (
+                "upper" in prep.global_model_cfg.prior_bounds.get(bounds_key, {}).keys() or 
+                "lower" in prep.global_model_cfg.prior_bounds.get(bounds_key, {}).keys()
+            )
+            if is_in_priors and is_uniform:
                 par_value = par_dict[value_key]
                 is_dtd_rate = bounds_key == 'eta'
                 if is_dtd_rate:
@@ -507,6 +512,13 @@ class Model():
                 value += utils.uniform(
                     par_value, **prep.global_model_cfg.prior_bounds[bounds_key]
                 )
+            elif is_in_priors and not is_uniform:
+                value += stats.norm.logpdf(
+                    par_dict[value_key], loc=prep.global_model_cfg.prior_bounds[bounds_key]['mean'],
+                    scale=prep.global_model_cfg.prior_bounds[bounds_key]['std']
+                )
+            else:
+                continue
 
             if np.isinf(value):
                 break
