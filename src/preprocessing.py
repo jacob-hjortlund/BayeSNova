@@ -341,8 +341,9 @@ def set_gamma_quantiles(cfg: dict, par: str) -> np.ndarray:
 
     if cfg.get(par + "_integral_upper_bound", None) == NULL_VALUE:
         quantiles = utils.create_gamma_quantiles(
-            cfg['prior_bounds']['gamma_' + par]['lower'],
-            cfg['prior_bounds']['gamma_' + par]['upper'],
+            1., 20.,
+            #cfg['prior_bounds']['gamma_' + par]['lower'],
+            #cfg['prior_bounds']['gamma_' + par]['upper'],
             cfg['resolution_g' + par], cfg['cdf_limit_g' + par]
         )
     else:

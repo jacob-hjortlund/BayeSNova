@@ -451,27 +451,39 @@ def ultranest_prior_generator(
         params = cube.copy()
         
         n_shared_pars = len(cfg['shared_par_names'])
+        log_pars = [
+            'sig_s', 'sig_c', 'tau_Ebv', 'gamma_Ebv', 'Rb'
+        ]
 
         for i, par_name in enumerate(cfg['shared_par_names']):
-            params[i] = (
-                cube[i] * (
-                    prior_bounds[par_name]['upper'] - prior_bounds[par_name]['lower']
-                ) + prior_bounds[par_name]['lower']
-            )
-        
-        for i, par_name in enumerate(cfg['independent_par_names']):
-            if par_name == 's':
-                params[n_shared_pars + 2 * i] = (
-                    cube[n_shared_pars + 2 * i] * (
+            if "upper" in prior_bounds[par_name].keys():
+                params[i] = (
+                    cube[i] * (
                         prior_bounds[par_name]['upper'] - prior_bounds[par_name]['lower']
                     ) + prior_bounds[par_name]['lower']
                 )
-                params[n_shared_pars + 2 * i + 1] = (
-                    cube[n_shared_pars + 2 * i + 1] * (
-                        prior_bounds[par_name]['upper'] - params[n_shared_pars + 2 * i]
-                    ) + params[n_shared_pars + 2 * i]
-                )
             else:
+                params[i] = (
+                    prior_bounds[par_name]['mean'] +
+                    sp_special.ndtri(cube[i]) * prior_bounds[par_name]['std']
+                )
+            if par_name in log_pars:
+                params[i] = np.exp(params[i])
+                
+        
+        for i, par_name in enumerate(cfg['independent_par_names']):
+            # if par_name == 's':
+            #     params[n_shared_pars + 2 * i] = (
+            #         cube[n_shared_pars + 2 * i] * (
+            #             prior_bounds[par_name]['upper'] - prior_bounds[par_name]['lower']
+            #         ) + prior_bounds[par_name]['lower']
+            #     )
+            #     params[n_shared_pars + 2 * i + 1] = (
+            #         cube[n_shared_pars + 2 * i + 1] * (
+            #             prior_bounds[par_name]['upper'] - params[n_shared_pars + 2 * i]
+            #         ) + params[n_shared_pars + 2 * i]
+            #     )
+            if "upper" in prior_bounds[par_name].keys():
                 lower_i = n_shared_pars + 2 * i
                 upper_i = n_shared_pars + 2 * (i+1)
                 params[lower_i:upper_i] = (
@@ -479,6 +491,15 @@ def ultranest_prior_generator(
                         prior_bounds[par_name]['upper'] - prior_bounds[par_name]['lower']
                     ) + prior_bounds[par_name]['lower']
                 )
+            else:
+                lower_i = n_shared_pars + 2 * i
+                upper_i = n_shared_pars + 2 * (i+1)
+                params[lower_i:upper_i] = (
+                    prior_bounds[par_name]['mean'] +
+                    sp_special.ndtri(cube[lower_i:upper_i]) * prior_bounds[par_name]['std']
+                )
+            if par_name in log_pars:
+                params[lower_i:upper_i] = np.exp(params[lower_i:upper_i])
         
         params[-1] = (
             cube[-1] * (
@@ -1121,28 +1142,30 @@ class Model():
             use_physical_ratio=prep.global_model_cfg['use_physical_ratio'],
         )
 
-        log_prior = self.log_prior(param_dict)
-        if np.isinf(log_prior):
+        if param_dict['s_1'] > param_dict['s_2']:
+            return -1e300 * np.abs(param_dict['s_1'] - param_dict['s_2'])
+        # log_prior = self.log_prior(param_dict)
+        # if np.isinf(log_prior):
 
-            using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
-            number_of_blobs = (
-                3 + prep.host_galaxy_observables.shape[1] +
-                (not using_host_galaxy_properties)
-            )
-            outputs = (
-                (-np.inf,) + 
-                tuple(number_of_blobs * [np.ones(prep.n_unique_sn) * np.nan])
-            )
+        #     using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
+        #     number_of_blobs = (
+        #         3 + prep.host_galaxy_observables.shape[1] +
+        #         (not using_host_galaxy_properties)
+        #     )
+        #     outputs = (
+        #         (-np.inf,) + 
+        #         tuple(number_of_blobs * [np.ones(prep.n_unique_sn) * np.nan])
+        #     )
 
-            return np.finfo(np.float64).min #outputs
+        #     return np.finfo(np.float64).min #outputs
         
-        # TODO: Update to handle cosmology
-        if prep.global_model_cfg['use_sigmoid']:
-            param_dict = utils.apply_sigmoid(
-                param_dict, sigmoid_cfg=prep.global_model_cfg.sigmoid_cfg,
-                independent_par_names=prep.global_model_cfg.independent_par_names,
-                ratio_par_name=prep.global_model_cfg.ratio_par_name
-            )
+        # # TODO: Update to handle cosmology
+        # if prep.global_model_cfg['use_sigmoid']:
+        #     param_dict = utils.apply_sigmoid(
+        #         param_dict, sigmoid_cfg=prep.global_model_cfg.sigmoid_cfg,
+        #         independent_par_names=prep.global_model_cfg.independent_par_names,
+        #         ratio_par_name=prep.global_model_cfg.ratio_par_name
+        #     )
 
         preset_values = prep.global_model_cfg['preset_values']
         for par in preset_values.keys():

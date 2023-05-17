@@ -94,34 +94,52 @@ model_cfg:
     shift_Rb: 0.
   prior_bounds:
     Mb:
-      lower: -100.
-      upper: 100.
+      # lower: -100.
+      # upper: 100.
+      mean: -19.45
+      std: 0.5
     alpha:
-      lower: -5.
-      upper: 5.
+      # lower: -5.
+      # upper: 5.
+      mean: -0.186
+      std: 0.1
     beta:
-      lower: 1.
-      upper: 5.
+      # lower: 1.
+      # upper: 5.
+      mean: 3.1
+      std: 0.5
     s:
-      lower: -100.
-      upper: 100.
+      # lower: -100.
+      # upper: 100.
+      mean: -0.15
+      std: 0.5
     sig_s:
-      lower: 0.
-      upper: 10.
+      # lower: 0.
+      # upper: 10.
+      mean: -0.15
+      std: 0.5
     c:
-      lower: -100.
-      upper: 100.
+      # lower: -100.
+      # upper: 100.
+      mean: 0.05
+      std: 0.5
     sig_c: 
-      lower: 0.
-      upper: 10.
+      # lower: 0.
+      # upper: 10.
+      mean: -1.22
+      std: 0.5
     sig_int:
       lower: 0.
     Rb:
-      lower: 1.
-      upper: 10.
+      # lower: 1.
+      # upper: 10.
+      mean: 0.61
+      std: 0.5
     sig_Rb:
-      lower: 0.
-      upper: 5.
+      # lower: 0.
+      # upper: 5.
+      mean: 0.
+      std: 0.5
     tau_Rb:
       lower: 0.
     gamma_Rb:
@@ -133,11 +151,15 @@ model_cfg:
       lower: 0.
       upper: 10.
     tau_Ebv:
-      lower: 0.
-      upper: 10.
+      # lower: 0.
+      # upper: 10.
+      mean: -1.6
+      std: 0.5
     gamma_Ebv:
-      lower: 1.
-      upper: 20.
+      # lower: 1.
+      # upper: 20.
+      mean: 0.51
+      std: 0.5
     w:
       lower: 0.12
       upper: 0.88
