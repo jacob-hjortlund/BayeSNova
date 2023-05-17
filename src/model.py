@@ -460,11 +460,25 @@ def ultranest_prior_generator(
             )
         
         for i, par_name in enumerate(cfg['independent_par_names']):
-            params[n_shared_pars + i:n_shared_pars+2*i+1] = (
-                cube[n_shared_pars + i:n_shared_pars+2*i+1] * (
-                    prior_bounds[par_name]['upper'] - prior_bounds[par_name]['lower']
-                ) + prior_bounds[par_name]['lower']
-            )
+            if par_name == 's':
+                params[n_shared_pars + 2 * i] = (
+                    cube[n_shared_pars + 2 * i] * (
+                        prior_bounds[par_name]['upper'] - prior_bounds[par_name]['lower']
+                    ) + prior_bounds[par_name]['lower']
+                )
+                params[n_shared_pars + 2 * i + 1] = (
+                    cube[n_shared_pars + 2 * i + 1] * (
+                        prior_bounds[par_name]['upper'] - params[n_shared_pars + 2 * i]
+                    ) + params[n_shared_pars + 2 * i]
+                )
+            else:
+                lower_i = n_shared_pars + 2 * i
+                upper_i = n_shared_pars + 2 * (i+1)
+                params[lower_i:upper_i] = (
+                    cube[lower_i:upper_i] * (
+                        prior_bounds[par_name]['upper'] - prior_bounds[par_name]['lower']
+                    ) + prior_bounds[par_name]['lower']
+                )
         
         params[-1] = (
             cube[-1] * (
@@ -484,9 +498,9 @@ class Model():
     def log_prior(self, par_dict: dict) -> float:
         
         value = 0.
-        stretch_1_par = prep.global_model_cfg.stretch_par_name + "_1"
-        stretch_2_par = prep.global_model_cfg.stretch_par_name + "_2"
-        if prep.global_model_cfg.stretch_par_name in prep.global_model_cfg.independent_par_names:
+        stretch_1_par = prep.global_model_cfg['stretch_par_name'] + "_1"
+        stretch_2_par = prep.global_model_cfg['stretch_par_name'] + "_2"
+        if prep.global_model_cfg['stretch_par_name'] in prep.global_model_cfg['independent_par_names']:
             stretch_independent = True
         else:
             stretch_independent = False
@@ -519,8 +533,8 @@ class Model():
                 ) and stretch_independent
             )
 
-            is_not_ratio_par_name = value_key != prep.global_model_cfg.ratio_par_name
-            is_not_cosmology_par_name = not value_key in prep.global_model_cfg.cosmology_par_names
+            is_not_ratio_par_name = value_key != prep.global_model_cfg['ratio_par_name']
+            is_not_cosmology_par_name = not value_key in prep.global_model_cfg['cosmology_par_names']
             split_value_key = is_not_ratio_par_name and is_not_cosmology_par_name
 
             if is_independent_stretch:
@@ -533,14 +547,14 @@ class Model():
             else:
                 bounds_key = value_key
             
-            is_in_priors = bounds_key in prep.global_model_cfg.prior_bounds.keys()
+            is_in_priors = bounds_key in prep.global_model_cfg['prior_bounds'].keys()
             if is_in_priors:
                 par_value = par_dict[value_key]
                 is_dtd_rate = bounds_key == 'eta'
                 if is_dtd_rate:
                     par_value = np.log10(par_value)
                 value += utils.uniform(
-                    par_value, **prep.global_model_cfg.prior_bounds[bounds_key]
+                    par_value, **prep.global_model_cfg['prior_bounds'][bounds_key]
                 )
 
             if np.isinf(value):
@@ -687,16 +701,16 @@ class Model():
             Ebv_1=Ebv_1, Ebv_2=Ebv_2,
             tau_Ebv_1=tau_Ebv_1, tau_Ebv_2=tau_Ebv_2,
             gamma_Ebv_1=gamma_Ebv_1, gamma_Ebv_2=gamma_Ebv_2,
-            lower_bound_Rb_1=prep.global_model_cfg.Rb_integral_lower_bound,
-            lower_bound_Rb_2=prep.global_model_cfg.Rb_integral_lower_bound,
+            lower_bound_Rb_1=prep.global_model_cfg['Rb_integral_lower_bound'],
+            lower_bound_Rb_2=prep.global_model_cfg['Rb_integral_lower_bound'],
             upper_bound_Rb_1=upper_bound_Rb_1, upper_bound_Rb_2=upper_bound_Rb_2,
-            lower_bound_Ebv_1=prep.global_model_cfg.Ebv_integral_lower_bound,
-            lower_bound_Ebv_2=prep.global_model_cfg.Ebv_integral_lower_bound,
+            lower_bound_Ebv_1=prep.global_model_cfg['Ebv_integral_lower_bound'],
+            lower_bound_Ebv_2=prep.global_model_cfg['Ebv_integral_lower_bound'],
             upper_bound_Ebv_1=upper_bound_Ebv_1, upper_bound_Ebv_2=upper_bound_Ebv_2,
             shift_Rb=shift_Rb, selection_bias_correction=prep.selection_bias_correction,
         )
         
-        if not prep.global_model_cfg.use_log_space_integral:
+        if not prep.global_model_cfg['use_log_space_integral']:
             logprobs = np.log(logprobs)
 
         logp_1 = logprobs[:, 0] - norm_1
@@ -860,7 +874,7 @@ class Model():
         )
 
         if use_gaussian_Rb:
-            if prep.global_model_cfg.use_log_space_integral:
+            if prep.global_model_cfg['use_log_space_integral']:
                 self.convolution_fn = _Ebv_prior_log_convolution
             else:
                 self.convolution_fn= _Ebv_prior_convolution
@@ -892,88 +906,88 @@ class Model():
         sn_prob_not_valid = np.any(idx_not_valid)
         if sn_prob_not_valid:
             
-            n_convolution_failed = np.sum(idx_prior_convolution_failed)
-            n_prob_not_finite = np.sum(idx_prob_not_finite)
+            # n_convolution_failed = np.sum(idx_prior_convolution_failed)
+            # n_prob_not_finite = np.sum(idx_prob_not_finite)
 
-            warning_string = (
-                "\n --------- Failure in SN prior convolution --------- \n" +
-                f"\nNo. of SN with failed convolutions: {n_convolution_failed}\n" +
-                f"No. of SN with non-finite probabilities: {n_prob_not_finite}\n"
-            )
-            failure_in_pop_1 = (
-                np.any(~status[:,0]) or
-                np.any(~np.isfinite(log_sn_probs_1))
-            )
-            failure_in_pop_2 = (
-                np.any(~status[:,1]) or
-                np.any(~np.isfinite(log_sn_probs_2))
-            )
+            # warning_string = (
+            #     "\n --------- Failure in SN prior convolution --------- \n" +
+            #     f"\nNo. of SN with failed convolutions: {n_convolution_failed}\n" +
+            #     f"No. of SN with non-finite probabilities: {n_prob_not_finite}\n"
+            # )
+            # failure_in_pop_1 = (
+            #     np.any(~status[:,0]) or
+            #     np.any(~np.isfinite(log_sn_probs_1))
+            # )
+            # failure_in_pop_2 = (
+            #     np.any(~status[:,1]) or
+            #     np.any(~np.isfinite(log_sn_probs_2))
+            # )
 
-            if failure_in_pop_1:
-                warning_string += (
-                    "\nFailure(s) occured in population 1.\n" +
-                    f"Mb: {Mb_1:.3f}, x1: {s_1:.3f}, c: {c_1:.3f},\n" +
-                    f"alpha: {alpha_1:.3f}, beta: {beta_1:.3f},\n" +
-                    f"sig_int: {sig_int_1:.3f}, sig_s: {sig_s_1:.3f}, sig_c: {sig_c_1:.3f},\n" +
-                    f"Rb: {Rb_1:.3f}, sig_Rb: {sig_Rb_1:.3f},\n" +
-                    f"tau_Rb: {tau_Rb_1:.3f}, gamma_Rb: {gamma_Rb_1:.3f}, shift_Rb: {shift_Rb:.3f},\n" +
-                    f"Ebv: {Ebv_1:.3f}, tau_Ebv: {tau_Ebv_1:.3f}, gamma_Ebv: {gamma_Ebv_1:.3f}\n"
-                )
+            # if failure_in_pop_1:
+            #     warning_string += (
+            #         "\nFailure(s) occured in population 1.\n" +
+            #         f"Mb: {Mb_1:.3f}, x1: {s_1:.3f}, c: {c_1:.3f},\n" +
+            #         f"alpha: {alpha_1:.3f}, beta: {beta_1:.3f},\n" +
+            #         f"sig_int: {sig_int_1:.3f}, sig_s: {sig_s_1:.3f}, sig_c: {sig_c_1:.3f},\n" +
+            #         f"Rb: {Rb_1:.3f}, sig_Rb: {sig_Rb_1:.3f},\n" +
+            #         f"tau_Rb: {tau_Rb_1:.3f}, gamma_Rb: {gamma_Rb_1:.3f}, shift_Rb: {shift_Rb:.3f},\n" +
+            #         f"Ebv: {Ebv_1:.3f}, tau_Ebv: {tau_Ebv_1:.3f}, gamma_Ebv: {gamma_Ebv_1:.3f}\n"
+            #     )
             
-            if failure_in_pop_2:
-                warning_string += (
-                    "\nFailure(s) occured in population 2.\n" +
-                    f"Mb: {Mb_2:.3f}, x1: {s_2:.3f}, c: {c_2:.3f},\n" +
-                    f"alpha: {alpha_2:.3f}, beta: {beta_2:.3f},\n" +
-                    f"sig_int: {sig_int_2:.3f}, sig_s: {sig_s_2:.3f}, sig_c: {sig_c_2:.3f},\n" +
-                    f"Rb: {Rb_2:.3f}, sig_Rb: {sig_Rb_2:.3f},\n" +
-                    f"tau_Rb: {tau_Rb_2:.3f}, gamma_Rb: {gamma_Rb_2:.3f}, shift_Rb: {shift_Rb:.3f},\n" +
-                    f"Ebv: {Ebv_2:.3f}, tau_Ebv: {tau_Ebv_2:.3f}, gamma_Ebv: {gamma_Ebv_2:.3f}\n"
-                )
+            # if failure_in_pop_2:
+            #     warning_string += (
+            #         "\nFailure(s) occured in population 2.\n" +
+            #         f"Mb: {Mb_2:.3f}, x1: {s_2:.3f}, c: {c_2:.3f},\n" +
+            #         f"alpha: {alpha_2:.3f}, beta: {beta_2:.3f},\n" +
+            #         f"sig_int: {sig_int_2:.3f}, sig_s: {sig_s_2:.3f}, sig_c: {sig_c_2:.3f},\n" +
+            #         f"Rb: {Rb_2:.3f}, sig_Rb: {sig_Rb_2:.3f},\n" +
+            #         f"tau_Rb: {tau_Rb_2:.3f}, gamma_Rb: {gamma_Rb_2:.3f}, shift_Rb: {shift_Rb:.3f},\n" +
+            #         f"Ebv: {Ebv_2:.3f}, tau_Ebv: {tau_Ebv_2:.3f}, gamma_Ebv: {gamma_Ebv_2:.3f}\n"
+            #     )
 
-            warning_string += (
-                "\nCosmology parameters used:\n" +
-                f"H0: {H0:.3f}, Om0: {Om0:.3f}, w0: {w0:.3f}, wa: {wa}\n" +
-                f"eta: {eta:.3f}, prompt_fraction: {prompt_fraction:.3f}\n"
-            )
+            # warning_string += (
+            #     "\nCosmology parameters used:\n" +
+            #     f"H0: {H0:.3f}, Om0: {Om0:.3f}, w0: {w0:.3f}, wa: {wa}\n" +
+            #     f"eta: {eta:.3f}, prompt_fraction: {prompt_fraction:.3f}\n"
+            # )
 
-            cid_for_failures = [idx_not_valid]
-            calibrator_flag_for_failures = prep.idx_calibrator_sn[idx_not_valid]
-            observed_mb_for_failures = prep.sn_observables[:,0][idx_not_valid]
-            observed_x1_for_failures = prep.sn_observables[:,1][idx_not_valid]
-            observed_c_for_failures = prep.sn_observables[:,2][idx_not_valid]
-            observed_redshifts_for_failures = prep.sn_redshifts[idx_not_valid]
+            # cid_for_failures = [idx_not_valid]
+            # calibrator_flag_for_failures = prep.idx_calibrator_sn[idx_not_valid]
+            # observed_mb_for_failures = prep.sn_observables[:,0][idx_not_valid]
+            # observed_x1_for_failures = prep.sn_observables[:,1][idx_not_valid]
+            # observed_c_for_failures = prep.sn_observables[:,2][idx_not_valid]
+            # observed_redshifts_for_failures = prep.sn_redshifts[idx_not_valid]
             
-            warning_string += "\nObserved SN parameters:\n"
-            for failure_cid, failure_calibrator_flag, failure_mb, failure_x1, failure_c, failure_z in zip(
-                cid_for_failures, calibrator_flag_for_failures,
-                observed_mb_for_failures, observed_x1_for_failures,
-                observed_c_for_failures, observed_redshifts_for_failures
-            ):
-                warning_string += (
-                    f"\ncid: {failure_cid}\n" +
-                    f"calibrator: {failure_calibrator_flag}\n" +
-                    f"mb: {failure_mb}\n" +
-                    f"x1: {failure_x1}\n" +
-                    f"c: {failure_c}\n" +
-                    f"redshift: {failure_z}\n"
-                )
+            # warning_string += "\nObserved SN parameters:\n"
+            # for failure_cid, failure_calibrator_flag, failure_mb, failure_x1, failure_c, failure_z in zip(
+            #     cid_for_failures, calibrator_flag_for_failures,
+            #     observed_mb_for_failures, observed_x1_for_failures,
+            #     observed_c_for_failures, observed_redshifts_for_failures
+            # ):
+            #     warning_string += (
+            #         f"\ncid: {failure_cid}\n" +
+            #         f"calibrator: {failure_calibrator_flag}\n" +
+            #         f"mb: {failure_mb}\n" +
+            #         f"x1: {failure_x1}\n" +
+            #         f"c: {failure_c}\n" +
+            #         f"redshift: {failure_z}\n"
+            #     )
 
-            warning_string += "\n ----------------------------------------------- \n"
+            # warning_string += "\n ----------------------------------------------- \n"
 
-            warnings.warn(warning_string)
+            # warnings.warn(warning_string)
 
-            using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
-            number_of_blobs = (
-                3 + prep.host_galaxy_observables.shape[1] +
-                (not using_host_galaxy_properties)
-            )
-            outputs = (
-                (-np.inf,) + 
-                tuple(number_of_blobs * [np.ones(prep.n_unique_sn) * np.nan])
-            )
+            # using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
+            # number_of_blobs = (
+            #     3 + prep.host_galaxy_observables.shape[1] +
+            #     (not using_host_galaxy_properties)
+            # )
+            # outputs = (
+            #     (-np.inf,) + 
+            #     tuple(number_of_blobs * [np.ones(prep.n_unique_sn) * np.nan])
+            # )
 
-            return outputs
+            return np.finfo(np.float64).min #outputs
         
         use_physical_population_fraction = prep.global_model_cfg["use_physical_ratio"]
 
@@ -1065,12 +1079,13 @@ class Model():
         else:
             log_prob = np.sum(combined_log_probs)
 
-        outputs = (
-            (log_prob, log_full_membership_probs, log_sn_membership_probs, log_full_host_membership_probs) +
-            tuple(
-                [log_host_membership_probs[:, i].flatten() for i in range(log_host_membership_probs.shape[1])]
-            )
-        )
+        outputs = log_prob
+        # (
+        #     (log_prob, log_full_membership_probs, log_sn_membership_probs, log_full_host_membership_probs) +
+        #     tuple(
+        #         [log_host_membership_probs[:, i].flatten() for i in range(log_host_membership_probs.shape[1])]
+        #     )
+        # )
 
         if not np.isfinite(log_prob):
             warnings.warn(
@@ -1081,10 +1096,11 @@ class Model():
                 3 + prep.host_galaxy_observables.shape[1] +
                 (not using_host_galaxy_properties)
             )
-            outputs = (
-                (-np.inf,) + 
-                tuple(number_of_blobs * [np.ones(prep.n_unique_sn) * np.nan])
-            )
+            outputs = np.finfo(np.float64).min
+            # (
+            #     (-np.inf,) + 
+            #     tuple(number_of_blobs * [np.ones(prep.n_unique_sn) * np.nan])
+            # )
         
         self.convolution_fn = None
 
@@ -1096,13 +1112,13 @@ class Model():
             prep.host_galaxy_observables.shape[1] - prep.n_unused_host_properties
         )
         param_dict = utils.theta_to_dict(
-            theta=theta, shared_par_names=prep.global_model_cfg.shared_par_names,
-            independent_par_names=prep.global_model_cfg.independent_par_names,
+            theta=theta, shared_par_names=prep.global_model_cfg['shared_par_names'],
+            independent_par_names=prep.global_model_cfg['independent_par_names'],
             n_host_galaxy_observables=n_host_galaxy_observables,
             n_unused_host_properties=prep.n_unused_host_properties,
-            ratio_par_name=prep.global_model_cfg.ratio_par_name,
-            cosmology_par_names=prep.global_model_cfg.cosmology_par_names,
-            use_physical_ratio=prep.global_model_cfg.use_physical_ratio,
+            ratio_par_name=prep.global_model_cfg['ratio_par_name'],
+            cosmology_par_names=prep.global_model_cfg['cosmology_par_names'],
+            use_physical_ratio=prep.global_model_cfg['use_physical_ratio'],
         )
 
         log_prior = self.log_prior(param_dict)
@@ -1118,17 +1134,17 @@ class Model():
                 tuple(number_of_blobs * [np.ones(prep.n_unique_sn) * np.nan])
             )
 
-            return outputs
+            return np.finfo(np.float64).min #outputs
         
         # TODO: Update to handle cosmology
-        if prep.global_model_cfg.use_sigmoid:
+        if prep.global_model_cfg['use_sigmoid']:
             param_dict = utils.apply_sigmoid(
                 param_dict, sigmoid_cfg=prep.global_model_cfg.sigmoid_cfg,
                 independent_par_names=prep.global_model_cfg.independent_par_names,
                 ratio_par_name=prep.global_model_cfg.ratio_par_name
             )
 
-        preset_values = prep.global_model_cfg.preset_values
+        preset_values = prep.global_model_cfg['preset_values']
         for par in preset_values.keys():
             current_value = param_dict.get(par, None)
             is_null = current_value == NULL_VALUE

@@ -96,6 +96,9 @@ model_cfg:
     Mb:
       lower: -100.
       upper: 100.
+    alpha:
+      lower: -5.
+      upper: 5.
     beta:
       lower: 1.
       upper: 5.
@@ -131,6 +134,7 @@ model_cfg:
       upper: 10.
     tau_Ebv:
       lower: 0.
+      upper: 10.
     gamma_Ebv:
       lower: 1.
       upper: 20.
