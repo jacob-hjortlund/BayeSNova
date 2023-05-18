@@ -500,22 +500,36 @@ class Model():
                 bounds_key = value_key
             
             is_in_priors = bounds_key in prep.global_model_cfg.prior_bounds.keys()
-            is_uniform = (
-                "upper" in prep.global_model_cfg.prior_bounds.get(bounds_key, {}).keys() or 
-                "lower" in prep.global_model_cfg.prior_bounds.get(bounds_key, {}).keys()
+            is_gaussian = (
+                "mean" in prep.global_model_cfg.prior_bounds.get(bounds_key, {}).keys() or 
+                "std" in prep.global_model_cfg.prior_bounds.get(bounds_key, {}).keys()
             )
-            if is_in_priors and is_uniform:
+            is_uniform = (
+                "lower" in prep.global_model_cfg.prior_bounds.get(bounds_key, {}).keys() or
+                "upper" in prep.global_model_cfg.prior_bounds.get(bounds_key, {}).keys()
+            )
+            if is_in_priors and is_gaussian:
+                lower = prep.global_model_cfg.prior_bounds[bounds_key].get('lower', -np.inf)
+                upper = prep.global_model_cfg.prior_bounds[bounds_key].get('upper', np.inf)
+                a = (
+                    (lower - prep.global_model_cfg.prior_bounds[bounds_key]['mean']) /
+                    prep.global_model_cfg.prior_bounds[bounds_key]['std']
+                )
+                b = (
+                    (upper - prep.global_model_cfg.prior_bounds[bounds_key]['mean']) /
+                    prep.global_model_cfg.prior_bounds[bounds_key]['std']
+                )
+                value += stats.truncnorm.logpdf(
+                    par_dict[value_key], a=a, b=b, loc=prep.global_model_cfg.prior_bounds[bounds_key]['mean'],
+                    scale=prep.global_model_cfg.prior_bounds[bounds_key]['std']
+                )
+            if is_in_priors and is_uniform and not is_gaussian:
                 par_value = par_dict[value_key]
                 is_dtd_rate = bounds_key == 'eta'
                 if is_dtd_rate:
                     par_value = np.log10(par_value)
                 value += utils.uniform(
                     par_value, **prep.global_model_cfg.prior_bounds[bounds_key]
-                )
-            elif is_in_priors and not is_uniform:
-                value += stats.norm.logpdf(
-                    par_dict[value_key], loc=prep.global_model_cfg.prior_bounds[bounds_key]['mean'],
-                    scale=prep.global_model_cfg.prior_bounds[bounds_key]['std']
                 )
             else:
                 continue

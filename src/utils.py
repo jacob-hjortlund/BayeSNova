@@ -208,7 +208,30 @@ def prior_initialisation(
         if par in preset_init_values.keys():
             init_par = preset_init_values[par]
         elif par in priors.keys():
-            if "upper" in priors[par].keys() or "lower" in priors[par].keys():
+            is_gaussian = (
+                "mean" in priors[par].keys() and
+                "std" in priors[par].keys()
+            )
+            is_uniform = (
+                "lower" in priors[par].keys() and
+                "upper" in priors[par].keys()
+            )
+            if is_gaussian:
+                lower = priors[par].get("lower", -np.inf)
+                upper = priors[par].get("upper", np.inf)
+                a = (
+                    (lower - priors[par]['mean']) /
+                    priors[par]['std']
+                )
+                b = (
+                    (upper - priors[par]['mean']) /
+                    priors[par]['std']
+                )
+                init_par = sp_stats.truncnorm.rvs(
+                    a, b, loc=priors[par]["mean"],
+                    scale=priors[par]["std"]
+                )
+            elif is_uniform:
                 bounds = priors[par]
                 if len(bounds) == 2:
                     init_par = (bounds["lower"] + bounds["upper"]) / 2
@@ -216,10 +239,6 @@ def prior_initialisation(
                     init_par = bounds["lower"] + np.random.uniform()
                 elif "upper" in bounds.keys():
                     init_par = bounds["upper"] - np.random.uniform()
-            elif "mean" in priors[par].keys() and "std" in priors[par].keys():
-                init_par = np.random.normal(
-                    priors[par]["mean"], priors[par]["std"]
-                )
             else:
                 raise ValueError(f"{par} in prior config but bounds not defined. Check your config")
         
