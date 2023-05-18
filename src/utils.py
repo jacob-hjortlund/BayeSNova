@@ -2,7 +2,9 @@ import sys
 import tqdm
 import yaml
 import time
+import operator
 import omegaconf
+import functools
 import numpy as np
 import numba as nb
 import emcee as em
@@ -131,11 +133,62 @@ def create_task_name(
         default_cfg = yaml.safe_load(f)
 
     diff_dict = diff.DeepDiff(default_cfg, cfg)
-    if not 'values_changed' in diff_dict.keys():
-        return 'default_cfg'
 
     changes = []
-    for setting in diff_dict['values_changed'].keys():
+
+    for setting in diff_dict.get('dictionary_item_added',[]):
+        setting_keys = setting.replace('[','')
+        setting_keys = setting_keys.replace(']','')
+        setting_keys = setting_keys.split("'")[1::2]
+        setting_value = functools.reduce(
+            operator.getitem, setting_keys, cfg
+        )
+        setting_str = (
+            '_'.join(setting_keys[1:]) + '-' + str(setting_value)
+        )
+        changes.append(setting_str)
+    
+    for setting in diff_dict.get('dictionary_item_removed',{}):
+        setting_keys = setting.replace('[','')
+        setting_keys = setting_keys.replace(']','')
+        setting_keys = setting_keys.split("'")[1::2]
+        setting_str = (
+            '_'.join(setting_keys[1:]) + '-del'
+        )
+        changes.append(setting_str)
+
+    for setting in diff_dict.get('iterable_item_removed',{}).keys():
+        item_removed = diff_dict['iterable_item_removed'][setting]
+        fixed_value_no_pop = cfg['model_cfg']['preset_values'].get(item_removed, None)
+        fixed_value_1 = cfg['model_cfg']['preset_values'].get(item_removed+'_1', None)
+        fixed_value_2 = cfg['model_cfg']['preset_values'].get(item_removed+'_2', None)
+        
+        not_in_shared = not item_removed in cfg['model_cfg']['shared_par_names']
+        not_in_independent = not item_removed in cfg['model_cfg']['independent_par_names']
+        is_preset = not_in_shared and not_in_independent
+
+        is_pop_value = fixed_value_no_pop is None
+        is_shared = fixed_value_1 == fixed_value_2
+        if is_preset and is_pop_value and is_shared:
+            setting_str = (
+                item_removed + "-" + str(fixed_value_1)
+            )
+            changes.append(setting_str)
+        elif is_preset and is_pop_value and not is_shared:
+            setting_str = (
+                item_removed + '_1' + "-" + str(fixed_value_1) + 
+                item_removed + '_2' + "-" + str(fixed_value_2)
+            )
+            changes.append(setting_str)
+        elif is_preset and not is_pop_value:
+            setting_str = (
+                item_removed + "-" + str(fixed_value_no_pop)
+            )
+            changes.append(setting_str)
+        else:
+            continue
+
+    for setting in diff_dict.get('values_changed',{}).keys():
 
         ignore_setting = (
             "independent_par_name" in setting or
@@ -149,17 +202,19 @@ def create_task_name(
             continue
         setting_str = '['+"[".join(setting.split('[')[2:])
         new_value = str(diff_dict['values_changed'][setting]['new_value'])
-        if "shared_par_name" in setting:
-            changes.append(new_value)
-        else:
-            changes.append(
-                setting_str + '-' + new_value
-            )
+        changes.append(
+            setting_str + '-' + new_value
+        )
+
+    if len(changes) == 0:
+        changes.append('default_config')
+
     run_name = '_'.join(changes)
     run_name = run_name.replace("'", "")
     run_name = run_name.replace("][", "_")
     run_name = run_name.replace("[", "")
     run_name = run_name.replace("]", "")
+    run_name = run_name.replace("prior_bounds_", "")
 
     return run_name
 
