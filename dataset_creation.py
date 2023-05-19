@@ -366,6 +366,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
             print(f"Number of SNe with {host_property}: {number_of_sn_with_property}")
             print(f"Percentage of SNe with {host_property}: {number_of_sn_with_property / len(catalog) * 100:.3f} %\n")   
 
+    new_column_names += ['RA', 'DEC']
     catalog = catalog[new_column_names].copy()
     save_path = os.path.join(
         cfg['prep_cfg']['output_path'],
