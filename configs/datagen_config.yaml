@@ -63,11 +63,7 @@ prep_cfg:
   ]
 
   drop_surveys: []
-  survey_redshift_limits:
-    SDSS: [1,0.2]
-    SNLS: [4,0.6]
-    PS1: [15,0.31]
-    DES: [10,0.6]
+  survey_redshift_limits: []
 
   use_bias_corrections: False #True
   apparent_mag_column_name: 'mB'
@@ -80,8 +76,8 @@ prep_cfg:
   redshift_upper_cutoff : 0.15
 
   use_mb_err_cutoff: True
-  alpha: 0.14
-  beta: 2.9
+  alpha: 0.148
+  beta: 3.122
   mb_err_cutoff: 0.2
 
   use_tripp_residual_err_cutoff: True
