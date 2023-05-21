@@ -452,6 +452,15 @@ class Model():
         value = 0.
         stretch_1_par = prep.global_model_cfg.stretch_par_name + "_1"
         stretch_2_par = prep.global_model_cfg.stretch_par_name + "_2"
+        galaxy_means_names = np.repeat(
+            np.array(
+                prep.global_model_cfg.host_galaxy_cfg.shared_property_names +
+                prep.global_model_cfg.host_galaxy_cfg.independent_property_names
+            ), 2
+        )
+        galaxy_sig_names = [
+            "sig_" + name for name in galaxy_means_names
+        ]
         if prep.global_model_cfg.stretch_par_name in prep.global_model_cfg.independent_par_names:
             stretch_independent = True
         else:
@@ -464,18 +473,24 @@ class Model():
                 continue
             
             if value_key == 'host_galaxy_means':
-                if np.any(
-                    (par_dict[value_key] <= -20) | (par_dict[value_key] >= 20)
-                ):
-                    value += -np.inf
-                    break
+                for mean_value, par_name in zip(par_dict[value_key], galaxy_means_names):
+                    is_in_priors = par_name in prep.global_model_cfg.prior_bounds.keys()
+                    if is_in_priors:
+                        value += utils.uniform(
+                            mean_value, **prep.global_model_cfg.prior_bounds[par_name]
+                        )
+                    else:
+                        continue
 
             if value_key == 'host_galaxy_sigs':
-                if np.any(
-                    (par_dict[value_key] < 0.) | (par_dict[value_key] >= 20.)
-                ):
-                    value += -np.inf
-                    break
+                for sigma_value, par_name in zip(par_dict[value_key], galaxy_sig_names):
+                    is_in_priors = par_name in prep.global_model_cfg.prior_bounds.keys()
+                    if is_in_priors:
+                        value += utils.uniform(
+                            sigma_value, **prep.global_model_cfg.prior_bounds[par_name]
+                        )
+                    else:
+                        continue
             
             # TODO: Remove 3-deep conditionals bleeeeh
             bounds_key = ""
@@ -956,7 +971,7 @@ class Model():
 
             using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
-                3 + prep.host_galaxy_observables.shape[1] +
+                3 + prep.n_independent_host_properties +
                 (not using_host_galaxy_properties)
             )
             outputs = (
@@ -992,8 +1007,8 @@ class Model():
         log_w_1 = np.log(w_vector)
         log_w_2 = np.log(1-w_vector)
 
-        n_host_properties = host_galaxy_means.shape[0] // 2
-        if n_host_properties > 0:
+        use_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
+        if use_host_galaxy_properties:
             host_log_probs_1, host_log_probs_2 = self.host_galaxy_log_probs(
                 host_galaxy_means=host_galaxy_means,
                 host_galaxy_sigmas=host_galaxy_sigs,
@@ -1013,29 +1028,31 @@ class Model():
             combined_log_probs = combined_log_probs[~prep.idx_calibrator_sn]
         
         n_tile = (
-            n_host_properties + (not prep.global_model_cfg['host_galaxy_cfg']['use_properties'])
+            prep.n_independent_host_properties + (not use_host_galaxy_properties)
         )
-        idx_all_properties_not_observed = np.all(
-            prep.idx_host_galaxy_property_not_observed, axis=1
+        idx_all_independent_properties_not_observed = np.all(
+            prep.idx_host_galaxy_property_not_observed[:, prep.n_shared_host_properties:], axis=1
         )
         tiled_log_w_1 = np.tile(log_w_1[:, None], [1, n_tile])
         tiled_log_w_2 = np.tile(log_w_2[:, None], [1, n_tile])
 
         log_host_membership_probs = (
             1./np.log(10) * (
-                tiled_log_w_1 + host_log_probs_1 -
-                tiled_log_w_2 - host_log_probs_2
+                tiled_log_w_1 + host_log_probs_1[:, prep.n_shared_host_properties:] -
+                tiled_log_w_2 - host_log_probs_2[:, prep.n_shared_host_properties:]
             )
         )
-        log_host_membership_probs[prep.idx_host_galaxy_property_not_observed] = NULL_VALUE
+        log_host_membership_probs[
+            prep.idx_host_galaxy_property_not_observed[:, prep.n_shared_host_properties:]
+        ] = NULL_VALUE
 
         log_full_host_membership_probs = (
             1./np.log(10) * (
-                log_w_1 + np.sum(host_log_probs_1, axis=1) -
-                log_w_2 - np.sum(host_log_probs_2, axis=1)
+                log_w_1 + np.sum(host_log_probs_1[:, prep.n_shared_host_properties:], axis=1) -
+                log_w_2 - np.sum(host_log_probs_2[:, prep.n_shared_host_properties:], axis=1)
             )
         )#.flatten()
-        log_full_host_membership_probs[idx_all_properties_not_observed] = NULL_VALUE
+        log_full_host_membership_probs[idx_all_independent_properties_not_observed] = NULL_VALUE
 
         log_sn_membership_probs = (
             1./np.log(10) * (
@@ -1069,7 +1086,7 @@ class Model():
             )
             using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
-                3 + prep.host_galaxy_observables.shape[1] +
+                3 + prep.n_independent_host_properties +
                 (not using_host_galaxy_properties)
             )
             outputs = (
@@ -1083,14 +1100,11 @@ class Model():
 
     def __call__(self, theta: np.ndarray) -> float:
 
-        n_host_galaxy_observables = (
-            prep.host_galaxy_observables.shape[1] - prep.n_unused_host_properties
-        )
         param_dict = utils.theta_to_dict(
             theta=theta, shared_par_names=prep.global_model_cfg.shared_par_names,
             independent_par_names=prep.global_model_cfg.independent_par_names,
-            n_host_galaxy_observables=n_host_galaxy_observables,
-            n_unused_host_properties=prep.n_unused_host_properties,
+            n_independent_host_galaxy_properties=prep.n_independent_host_properties,
+            n_shared_host_galaxy_properties=prep.n_shared_host_properties,
             ratio_par_name=prep.global_model_cfg.ratio_par_name,
             cosmology_par_names=prep.global_model_cfg.cosmology_par_names,
             use_physical_ratio=prep.global_model_cfg.use_physical_ratio,
@@ -1101,7 +1115,7 @@ class Model():
 
             using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
-                3 + prep.host_galaxy_observables.shape[1] +
+                3 + prep.n_independent_host_properties +
                 (not using_host_galaxy_properties)
             )
             outputs = (
