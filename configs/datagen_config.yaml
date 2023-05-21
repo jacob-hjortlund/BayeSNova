@@ -60,6 +60,8 @@ prep_cfg:
     'bias_corr_factor'
   ]
 
+  drop_surveys: []
+
   use_bias_corrections: False #True
   apparent_mag_column_name: 'mB'
   apparent_mag_err_column_name: 'mBErr'

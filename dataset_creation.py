@@ -38,7 +38,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     for column_name in new_column_names:
         if column_name not in catalog.columns:
             catalog[column_name] = NULL_VALUE
-    
+
     # Flag calibration SNe
     if cfg['prep_cfg']['include_calibrator_sn']:
         print("Including calbrator SNe...\n")
@@ -73,6 +73,18 @@ def main(cfg: omegaconf.DictConfig) -> None:
             catalog[apparent_mag_err_name] ** 2 +
             catalog[apparent_mag_bias_correction_err_name] ** 2
         )
+
+    if cfg['prep_cfg'].get('drop_surveys', []):
+        print("Dropping surveys...")
+        idx_not_in_dropped_survey = ~catalog['IDSURVEY'].isin(cfg['prep_cfg']['drop_surveys'])
+        idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
+        idx_to_keep = idx_not_in_dropped_survey | idx_calibrator
+        n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
+        catalog = catalog.loc[idx_to_keep].copy()
+        catalog = catalog.reset_index(drop=True)
+        print(f"Number of SNe filtered: {n_sn_filtered}")
+        print(f"Number of SNe remaining: {len(catalog)}")
+        print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
 
     if cfg['prep_cfg']['use_redshift_cutoff']:
         print("Applying redshift cutoff...")
@@ -366,7 +378,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
             print(f"Number of SNe with {host_property}: {number_of_sn_with_property}")
             print(f"Percentage of SNe with {host_property}: {number_of_sn_with_property / len(catalog) * 100:.3f} %\n")   
 
-    new_column_names += ['RA', 'DEC']
     catalog = catalog[new_column_names].copy()
     save_path = os.path.join(
         cfg['prep_cfg']['output_path'],

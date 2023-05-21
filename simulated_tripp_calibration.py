@@ -17,6 +17,7 @@ import src.model as models
 import src.preprocessing as prep
 import src.utils as utils
 from functools import partial
+from scipy.ndimage import gaussian_filter
 
 def dist_mod(observables, Mb, alpha, beta):
     mb = observables[:, 0]
@@ -317,23 +318,99 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 res_1 = mb_full_1 - mb_tripp_full_1
                 res_2 = mb_full_2 - mb_tripp_full_2
 
-                x1_min, x1_max = -3., 3.
-                c_min, c_max = -0.3, 0.3
-                res_min, res_max = -0.8, 0.8
+                bins = [100, 100]
+                
+                res_1_range = [res_1.min(), res_1.max()]
+                res_2_range = [res_2.min(), res_2.max()]
+                x1_1_range = [x1_full_1.min(), x1_full_1.max()]
+                x1_2_range = [x1_full_2.min(), x1_full_2.max()]
+                c_1_range = [c_full_1.min(), c_full_1.max()]
+                c_2_range = [c_full_2.min(), c_full_2.max()]
 
-                xx_x1, yy_resx = np.mgrid[x1_min:x1_max:100j, res_min:res_max:100j]
-                x1_positions = np.vstack([xx_x1.ravel(), yy_resx.ravel()])
-                kernel_x1_1 = stats.gaussian_kde(np.vstack([x1_full_1, res_1]))
-                kernel_x1_2 = stats.gaussian_kde(np.vstack([x1_full_2, res_2]))
-                f_x1_1 = np.reshape(kernel_x1_1(x1_positions).T, xx_x1.shape)
-                f_x1_2 = np.reshape(kernel_x1_2(x1_positions).T, xx_x1.shape)
+                bin_x1_1 = np.linspace(x1_1_range[0], x1_1_range[1], bins[0] + 1)
+                bin_x1_2 = np.linspace(x1_2_range[0], x1_2_range[1], bins[0] + 1)
+                bin_c_1 = np.linspace(c_1_range[0], c_1_range[1], bins[0] + 1)
+                bin_c_2 = np.linspace(c_2_range[0], c_2_range[1], bins[0] + 1)
+                bin_res_1 = np.linspace(res_1_range[0], res_1_range[1], bins[1] + 1)
+                bin_res_2 = np.linspace(res_2_range[0], res_2_range[1], bins[1] + 1)
 
-                xx_c, yy_resc = np.mgrid[c_min:c_max:100j, res_min:res_max:100j]
-                c_positions = np.vstack([xx_c.ravel(), yy_resc.ravel()])
-                kernel_c_1 = stats.gaussian_kde(np.vstack([c_full_1, res_1]))
-                kernel_c_2 = stats.gaussian_kde(np.vstack([c_full_2, res_2]))
-                f_c_1 = np.reshape(kernel_c_1(c_positions).T, xx_c.shape)
-                f_c_2 = np.reshape(kernel_c_2(c_positions).T, xx_c.shape)
+                levels = 1.0 - np.exp(-0.5 * np.arange(0.5, 4.1, 0.5) ** 2)
+
+                H_x1_1, x_x1_1, y_x1_1 = np.histogram2d(
+                    x1_full_1, res_1, bins=[bin_x1_1, bin_res_1]
+                )
+                H_x1_2, x_x1_2, y_x1_2 = np.histogram2d(
+                    x1_full_2, res_2, bins=[bin_x1_2, bin_res_2]
+                )
+                H_c_1, x_c_1, y_c_1 = np.histogram2d(
+                    c_full_1, res_1, bins=[bin_c_1, bin_res_1]
+                )
+                H_c_2, x_c_2, y_c_2 = np.histogram2d(
+                    c_full_2, res_2, bins=[bin_c_2, bin_res_2]
+                )
+
+                H_x1_1 = gaussian_filter(H_x1_1, 1.)
+                H_x1_2 = gaussian_filter(H_x1_2, 1.)
+                H_c_1 = gaussian_filter(H_c_1, 1.)
+                H_c_2 = gaussian_filter(H_c_2, 1.)
+
+                hists = [
+                    [H_x1_1, x_x1_1, y_x1_1],
+                    [H_x1_2, x_x1_2, y_x1_2],
+                    [H_c_1, x_c_1, y_c_1],
+                    [H_c_2, x_c_2, y_c_2]
+                ]
+                contours = []
+
+                for hist in hists:
+                    H, X, Y = hist
+                    Hflat = H.flatten()
+                    inds = np.argsort(Hflat)[::-1]
+                    Hflat = Hflat[inds]
+                    sm = np.cumsum(Hflat)
+                    sm /= sm[-1]
+                    V = np.empty(len(levels))
+                    for i, v0 in enumerate(levels):
+                        try:
+                            V[i] = Hflat[sm <= v0][-1]
+                        except IndexError:
+                            V[i] = Hflat[0]
+                    V.sort()
+                    m = np.diff(V) == 0
+                    while np.any(m):
+                        V[np.where(m)[0][0]] *= 1.0 - 1e-4
+                        m = np.diff(V) == 0
+                    V.sort()
+
+                    # Compute the bin centers.
+                    X1, Y1 = 0.5 * (X[1:] + X[:-1]), 0.5 * (Y[1:] + Y[:-1])
+
+                    # Extend the array for the sake of the contours at the plot edges.
+                    H2 = H.min() + np.zeros((H.shape[0] + 4, H.shape[1] + 4))
+                    H2[2:-2, 2:-2] = H
+                    H2[2:-2, 1] = H[:, 0]
+                    H2[2:-2, -2] = H[:, -1]
+                    H2[1, 2:-2] = H[0]
+                    H2[-2, 2:-2] = H[-1]
+                    H2[1, 1] = H[0, 0]
+                    H2[1, -2] = H[0, -1]
+                    H2[-2, 1] = H[-1, 0]
+                    H2[-2, -2] = H[-1, -1]
+                    X2 = np.concatenate(
+                        [
+                            X1[0] + np.array([-2, -1]) * np.diff(X1[:2]),
+                            X1,
+                            X1[-1] + np.array([1, 2]) * np.diff(X1[-2:]),
+                        ]
+                    )
+                    Y2 = np.concatenate(
+                        [
+                            Y1[0] + np.array([-2, -1]) * np.diff(Y1[:2]),
+                            Y1,
+                            Y1[-1] + np.array([1, 2]) * np.diff(Y1[-2:]),
+                        ]
+                    )
+                    contours.append([X2.copy(), Y2.copy(), H2.copy()])
 
             fig, ax = plt.subplots(nrows=2, sharex=True, figsize=(8,8), gridspec_kw={'height_ratios': [3, 1]})
             ax[0].plot(z_plot, mu_model_plot, color='k')
@@ -371,10 +448,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
             ax[1].set_xlabel(r"$c$", fontsize=16)
 
             if cfg['emcee_cfg']['use_full_sample']:
-                cs_x1 = ax[0].contour(xx_x1, yy_resx, f_x1_1, colors='r', levels=20)
-                cs_c = ax[0].contour(xx_x1, yy_resx, f_x1_2, colors='b', levels=20)
-                cs_x1 = ax[1].contour(xx_c, yy_resc, f_c_1, colors='r', levels=20)
-                cs_c = ax[1].contour(xx_c, yy_resc, f_c_2, colors='b', levels=20)
+                ax[0].contour(contours[0][0], contours[0][1], contours[0][2].T, levels=levels, colors='r')
+                ax[0].contour(contours[1][0], contours[1][1], contours[1][2].T, levels=levels, colors='b')
+                ax[1].contour(contours[2][0], contours[0][1], contours[2][2].T, levels=levels, colors='r')
+                ax[1].contour(contours[3][0], contours[1][1], contours[3][2].T, levels=levels, colors='b')
 
             fig.tight_layout()
             fig.savefig(
