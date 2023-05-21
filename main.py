@@ -440,9 +440,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
         
         use_physical_ratio = cfg['model_cfg']['use_physical_ratio']
-        host_galaxy_property_names = cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
-        n_host_galaxy_properties = len(host_galaxy_property_names)
-        n_host_galaxy_pars = 4 * n_host_galaxy_properties
+        independent_host_galaxy_property_names = cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
+        shared_host_galaxy_property_names = cfg['model_cfg']['host_galaxy_cfg']['shared_property_names']
+        n_independent_properties = len(independent_host_galaxy_property_names)
+        n_host_galaxy_pars = 4 * n_independent_properties
         n_cosmology_pars = len(cfg['model_cfg']['cosmology_par_names'])
         
         idx_first = -(n_host_galaxy_pars + n_cosmology_pars + (not use_physical_ratio))
@@ -452,7 +453,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         w_1 = sample_thetas[:, -1]
 
-        for i, host_property_name in enumerate(host_galaxy_property_names):
+        for i, host_property_name in enumerate(independent_host_galaxy_property_names):
             
             host_property_values = data[host_property_name].to_numpy()
             host_property_errors = data[host_property_name+"_err"].to_numpy()
@@ -463,8 +464,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
             observed_host_property_values = host_property_values[~idx_observed]
 
-            x_axis_max = np.abs(np.max(observed_host_property_values)) * 1.1
-            x_axis_min = -x_axis_max
+            x_axis_max = np.max(observed_host_property_values)
+            x_axis_min = np.min(observed_host_property_values)
+            x_axis_max = (1 + np.sign(x_axis_max)*0.1)*x_axis_max
+            x_axis_min = (1 - np.sign(x_axis_min)*0.1)*x_axis_min
             x_values = np.linspace(x_axis_min, x_axis_max, 1000)
 
             n_samples = cfg['plot_cfg'].get('n_samples', sample_thetas.shape[0])
@@ -550,7 +553,90 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
             plt.close('all')
 
+        shared_host_galaxy_property_names = cfg['model_cfg']['host_galaxy_cfg']['shared_property_names']
+        n_shared_properties = len(shared_host_galaxy_property_names)
+        n_host_galaxy_pars = 2 * n_shared_properties
+        n_shared_pars = len(cfg['model_cfg']['shared_par_names'])
+        
+        idx_first = n_shared_pars
+        idx_last = n_shared_pars + n_host_galaxy_pars
 
+        host_prop_par_samples = sample_thetas[:,idx_first:idx_last]
+
+        for i, host_property_name in enumerate(shared_host_galaxy_property_names):
+            
+            host_property_values = data[host_property_name].to_numpy()
+            host_property_errors = data[host_property_name+"_err"].to_numpy()
+            idx_observed = (
+                (host_property_values == prep.NULL_VALUE) |
+                (host_property_errors == prep.NULL_VALUE)
+            )
+
+            observed_host_property_values = host_property_values[~idx_observed]
+
+            x_axis_max = np.max(observed_host_property_values)
+            x_axis_min = np.min(observed_host_property_values)
+            x_axis_max = (1 + np.sign(x_axis_max)*0.1)*x_axis_max
+            x_axis_min = (1 - np.sign(x_axis_min)*0.1)*x_axis_min
+
+            x_values = np.linspace(x_axis_min, x_axis_max, 1000)
+
+            n_samples = cfg['plot_cfg'].get('n_samples', sample_thetas.shape[0])
+            if n_samples == 'max':
+                n_samples = sample_thetas.shape[0]
+            n_samples = min(n_samples, sample_thetas.shape[0])
+
+            host_property_name = utils.format_property_names(
+                [host_property_name], use_scientific_notation=False
+            )[0]
+            print("\n-----------------", host_property_name.upper() ,"DISTRIBUTION ---------------------\n")
+
+            pop_1_pdf_values = np.zeros((n_samples, len(x_values)))
+
+            idx_pop_1_mean = i*2
+            idx_pop_1_std = i*2 + 1
+
+            for j in range(n_samples):
+                pop_1_pdf_values[j] = stats.norm.pdf(
+                    x_values, host_prop_par_samples[j,idx_pop_1_mean], host_prop_par_samples[j,idx_pop_1_std]
+                )
+
+            mean_pop_1_pdf_values = np.mean(pop_1_pdf_values, axis=0)
+            std_pop_1_pdf_values = np.std(pop_1_pdf_values, axis=0)
+
+            fig, ax = plt.subplots(figsize=(8, 8))
+
+            ax.hist(
+                observed_host_property_values, density=True,
+                color='k', alpha=0.5, label='Observed'
+            )
+
+            ax.plot(x_values, mean_pop_1_pdf_values, color=pop1_color)
+            ax.fill_between(
+                x_values, mean_pop_1_pdf_values - std_pop_1_pdf_values, mean_pop_1_pdf_values + std_pop_1_pdf_values,
+                color=pop1_color, alpha=0.3
+            )
+
+            ax.set_xlabel(
+                host_property_name, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize']
+            )
+            ax.set_ylabel(
+                "Probability Density", fontsize=cfg['plot_cfg']['label_kwargs']['fontsize']
+            )
+            ax.legend(fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+            fig.tight_layout()
+
+            save_path = os.path.join(
+                fig_path,
+                "host_property_distributions"
+            )
+
+            os.makedirs(save_path, exist_ok=True)
+
+            filename = f"{host_property_name}.png"
+            fig.savefig(os.path.join(save_path, filename))
+
+            plt.close('all')
 
     print("Done!")
 
