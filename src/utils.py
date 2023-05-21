@@ -314,11 +314,12 @@ def theta_to_dict(
 
     shared_host_pars = np.array(shared_pars[2 * n_shared_pars - 4 * n_shared_host_galaxy_properties:])
     independent_host_pars = np.array(
-        independent_pars[n_independent_pars - 4 * n_independent_host_galaxy_properties:]
+        independent_pars[n_independent_pars - 4 * n_independent_host_galaxy_properties:],
     )
     host_pars = np.concatenate([shared_host_pars, independent_host_pars])
     idx_means = np.array(
-        [True, True, False, False] * (n_independent_host_galaxy_properties + n_shared_host_galaxy_properties)
+        [True, True, False, False] * (n_independent_host_galaxy_properties + n_shared_host_galaxy_properties),
+        dtype='bool'
     )
     idx_sigs = ~idx_means
     arg_dict['host_galaxy_means'] = host_pars[idx_means]

@@ -234,7 +234,7 @@ def get_membership_quantiles(
     
     index_unused = (
         3 + prep.n_independent_host_properties -
-        2 * (not cfg['host_galaxy_cfg']['use_properties'])
+        2 * (not cfg['host_galaxy_cfg']['use_properties'] or prep.n_independent_host_properties == 0)
     )
 
     blobs = backend.get_blobs(
@@ -401,6 +401,8 @@ def membership_histogram(
 ):
 
     n_hists = len(membership_quantiles)
+    if n_hists == 1:
+        n_cols = 1
     n_rows = int(np.ceil(n_hists/n_cols))
     fig, ax = plt.subplots(
         nrows=n_rows, ncols=n_cols,

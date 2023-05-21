@@ -1,6 +1,7 @@
 import hydra
 import omegaconf
 import os
+import corner
 
 import emcee as em
 import numpy as np
@@ -70,14 +71,15 @@ def main(cfg: omegaconf.DictConfig) -> None:
     
     shared_host_galaxy_par_names = [None] * 2 * prep.n_shared_host_properties
     independent_host_galaxy_par_names = [None] * 2 * prep.n_independent_host_properties
-    shared_host_galaxy_par_names[::2] = cfg['model_cfg']['host_galaxy_cfg']['shared_property_names']
-    shared_host_galaxy_par_names[1::2] = [
-        "sig_" + name for name in cfg['model_cfg']['host_galaxy_cfg']['shared_property_names']
-    ]
-    independent_host_galaxy_par_names[::2] = cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
-    independent_host_galaxy_par_names[1::2] = [
-        "sig_" + name for name in cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
-    ]
+    if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
+        shared_host_galaxy_par_names[::2] = cfg['model_cfg']['host_galaxy_cfg']['shared_property_names']
+        shared_host_galaxy_par_names[1::2] = [
+            "sig_" + name for name in cfg['model_cfg']['host_galaxy_cfg']['shared_property_names']
+        ]
+        independent_host_galaxy_par_names[::2] = cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
+        independent_host_galaxy_par_names[1::2] = [
+            "sig_" + name for name in cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
+        ]
 
     log_prob = model.Model()
 
@@ -211,8 +213,26 @@ def main(cfg: omegaconf.DictConfig) -> None:
         sample_thetas, pop1_color, pop2_color, labels, cfg, fig_path
     )
 
-    titles_list = ["All Observables", "Light Curve Observables",]
-    if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
+    if cfg['model_cfg']['host_galaxy_cfg']['use_properties'] and prep.n_shared_host_properties > 0:
+        n_shared = len(cfg['model_cfg']['shared_par_names'])
+        shared_host_samples = sample_thetas[:, n_shared:n_shared+2*prep.n_shared_host_properties]
+        labels = shared_host_galaxy_par_names
+        n_bins = post.doane_bin_count(shared_host_samples)
+        tmp_cfg = omegaconf.OmegaConf.to_container(cfg)
+        tmp_cfg['plot_cfg']['corner_cfg']['hist_kwargs']['color'] = pop1_color
+        fig_shared_host_pars = corner.corner(
+            data=shared_host_samples, labels=labels,
+            color=pop1_color, bins=n_bins,
+            **tmp_cfg['plot_cfg']['corner_cfg']
+        )
+        fig_shared_host_pars.tight_layout()
+        fig_shared_host_pars.savefig(
+            os.path.join(fig_path, "shared_host_pars.png")
+        )
+
+    titles_list = ["All Observables",]
+    if cfg['model_cfg']['host_galaxy_cfg']['use_properties'] and prep.n_independent_host_properties > 0:
+        titles_list.append("Light Curve Observables")
         titles_list.append("All Host Properties")
         titles_list += utils.format_property_names(
             cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
