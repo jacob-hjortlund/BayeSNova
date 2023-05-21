@@ -188,24 +188,30 @@ def create_task_name(
         else:
             continue
     
+    cosmology = []
     shared_host_names = []
     independent_host_names = []
     for setting in diff_dict.get('iterable_item_added',{}).keys():
         item_added = diff_dict['iterable_item_added'][setting]
         
+        is_cosmology = item_added in cfg['model_cfg']['cosmology_par_names']
         is_shared = item_added in cfg['model_cfg']['host_galaxy_cfg']['shared_property_names']
         is_independent = item_added in cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
 
         if is_shared:
             shared_host_names.append(item_added)
         elif is_independent:
-            independent_host_names.append(item_added)
+            independent_host_names.append(item_added)   
+        elif is_cosmology:
+            cosmology.append(item_added)
         else:
             continue
     shared_host_string = 'shared-' * len(shared_host_names) + '-'.join(shared_host_names)
     independent_host_string = 'independent-' * len(independent_host_names) + '-'.join(independent_host_names)
+    cosmology_string = 'cosmology-' * len(cosmology) + '-'.join(cosmology)
     changes.append(shared_host_string)
     changes.append(independent_host_string)
+    changes.append(cosmology_string)
 
     for setting in diff_dict.get('values_changed',{}).keys():
 
