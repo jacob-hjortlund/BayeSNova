@@ -1,6 +1,7 @@
 import hydra
 import omegaconf
 import os
+import corner
 
 import emcee as em
 import numpy as np
@@ -34,7 +35,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         os.path.split(cfg['data_cfg']['train_path'])[1].split(".")[0]
     ]
     if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
-        tags += cfg['model_cfg']['host_galaxy_cfg']['property_names']
+        tags += cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
     tags += cfg['clearml_cfg']['tags']
 
     using_MPI_and_is_master = cfg['emcee_cfg']['pool_type'] == 'MPI' and MPI.COMM_WORLD.rank == 0
@@ -67,6 +68,18 @@ def main(cfg: omegaconf.DictConfig) -> None:
         volumetric_rates = None
 
     prep.init_global_data(data, volumetric_rates, cfg['model_cfg'])
+    
+    shared_host_galaxy_par_names = [None] * 2 * prep.n_shared_host_properties
+    independent_host_galaxy_par_names = [None] * 2 * prep.n_independent_host_properties
+    if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
+        shared_host_galaxy_par_names[::2] = cfg['model_cfg']['host_galaxy_cfg']['shared_property_names']
+        shared_host_galaxy_par_names[1::2] = [
+            "sig_" + name for name in cfg['model_cfg']['host_galaxy_cfg']['shared_property_names']
+        ]
+        independent_host_galaxy_par_names[::2] = cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
+        independent_host_galaxy_par_names[1::2] = [
+            "sig_" + name for name in cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
+        ]
 
     log_prob = model.Model()
 
@@ -85,7 +98,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
             cfg['model_cfg']['prior_bounds'], cfg['model_cfg']['init_values'], cfg['model_cfg']['shared_par_names'],
             cfg['model_cfg']['independent_par_names'], cfg['model_cfg']['ratio_par_name'], cfg['model_cfg']['cosmology_par_names'],
             cfg['model_cfg']['use_physical_ratio'], cfg['model_cfg']['host_galaxy_cfg']['use_properties'],
-            cfg['model_cfg']['host_galaxy_cfg']['property_names'], cfg['model_cfg']['host_galaxy_cfg']['init_values'], 
+            shared_host_galaxy_par_names, independent_host_galaxy_par_names,  
         )
         init_theta = init_theta + 3e-2 * np.random.rand(cfg['emcee_cfg']['n_walkers'], len(init_theta))
         _ = log_prob(init_theta[0]) # call func once befor loop to jit compile
@@ -162,7 +175,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     print("\n-------- POSTERIOR / MARGINALIZED DIST COMPARISON -----------\n")
 
-    par_names, host_galaxy_par_names = post.get_par_names(cfg)
+    par_names = post.get_par_names(cfg)
     if using_MPI_and_is_master or using_multiprocessing or no_pool:
 
         par_quantiles, symmetrized_stds = post.map_mmap_comparison(
@@ -172,15 +185,16 @@ def main(cfg: omegaconf.DictConfig) -> None:
     print("\n-------- PARAM VALUES / ERRORS / Z-SCORES -----------\n")
 
     post.parameter_values(
-        par_quantiles, symmetrized_stds, par_names,
-        host_galaxy_par_names, cfg, path, clearml_logger
+        par_quantiles, symmetrized_stds, shared_host_galaxy_par_names,
+        independent_host_galaxy_par_names, par_names, cfg, path, clearml_logger
     )
 
     print("\n----------------- PLOTS ---------------------\n")
     labels = (
         cfg['model_cfg']['shared_par_names'] +
+        shared_host_galaxy_par_names +
         cfg['model_cfg']['independent_par_names'] +
-        host_galaxy_par_names +
+        independent_host_galaxy_par_names +
         cfg['model_cfg']['cosmology_par_names'] +
         (not cfg['model_cfg']['use_physical_ratio']) * [cfg['model_cfg']['ratio_par_name']]
     )
@@ -188,23 +202,40 @@ def main(cfg: omegaconf.DictConfig) -> None:
     os.makedirs(fig_path, exist_ok=True)
 
     membership_quantiles = post.get_membership_quantiles(
-        backend, burnin, tau, prep.n_unused_host_properties,
-        cfg['model_cfg']
+        backend, burnin, tau, cfg['model_cfg']
     )
 
-    cm, cm_norm, mapper, pop1_color, pop2_color = post.setup_colormap(
-        membership_quantiles, cfg
-    )
+    (
+        cm, cm_norm, mapper, pop1_color, pop2_color
+    ) = post.setup_colormap(membership_quantiles)
 
     post.corner_plot(
         sample_thetas, pop1_color, pop2_color, labels, cfg, fig_path
     )
 
-    titles_list = ["All Observables", "Light Curve Observables",]
-    if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
+    if cfg['model_cfg']['host_galaxy_cfg']['use_properties'] and prep.n_shared_host_properties > 0:
+        n_shared = len(cfg['model_cfg']['shared_par_names'])
+        shared_host_samples = sample_thetas[:, n_shared:n_shared+2*prep.n_shared_host_properties]
+        labels = shared_host_galaxy_par_names
+        n_bins = post.doane_bin_count(shared_host_samples)
+        tmp_cfg = omegaconf.OmegaConf.to_container(cfg)
+        tmp_cfg['plot_cfg']['corner_cfg']['hist_kwargs']['color'] = pop1_color
+        fig_shared_host_pars = corner.corner(
+            data=shared_host_samples, labels=labels,
+            color=pop1_color, bins=n_bins,
+            **tmp_cfg['plot_cfg']['corner_cfg']
+        )
+        fig_shared_host_pars.tight_layout()
+        fig_shared_host_pars.savefig(
+            os.path.join(fig_path, "shared_host_pars.png")
+        )
+
+    titles_list = ["All Observables",]
+    if cfg['model_cfg']['host_galaxy_cfg']['use_properties'] and prep.n_independent_host_properties > 0:
+        titles_list.append("Light Curve Observables")
         titles_list.append("All Host Properties")
         titles_list += utils.format_property_names(
-            cfg['model_cfg']['host_galaxy_cfg']['property_names']
+            cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
         )
     
     post.membership_histogram(
@@ -429,9 +460,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
     if cfg['model_cfg']['host_galaxy_cfg']['use_properties']:
         
         use_physical_ratio = cfg['model_cfg']['use_physical_ratio']
-        host_galaxy_property_names = cfg['model_cfg']['host_galaxy_cfg']['property_names']
-        n_host_galaxy_properties = len(host_galaxy_property_names)
-        n_host_galaxy_pars = 4 * n_host_galaxy_properties
+        independent_host_galaxy_property_names = cfg['model_cfg']['host_galaxy_cfg']['independent_property_names']
+        shared_host_galaxy_property_names = cfg['model_cfg']['host_galaxy_cfg']['shared_property_names']
+        n_independent_properties = len(independent_host_galaxy_property_names)
+        n_host_galaxy_pars = 4 * n_independent_properties
         n_cosmology_pars = len(cfg['model_cfg']['cosmology_par_names'])
         
         idx_first = -(n_host_galaxy_pars + n_cosmology_pars + (not use_physical_ratio))
@@ -441,7 +473,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         w_1 = sample_thetas[:, -1]
 
-        for i, host_property_name in enumerate(host_galaxy_property_names):
+        for i, host_property_name in enumerate(independent_host_galaxy_property_names):
             
             host_property_values = data[host_property_name].to_numpy()
             host_property_errors = data[host_property_name+"_err"].to_numpy()
@@ -452,8 +484,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
             observed_host_property_values = host_property_values[~idx_observed]
 
-            x_axis_max = np.abs(np.max(observed_host_property_values)) * 1.1
-            x_axis_min = -x_axis_max
+            x_axis_max = np.max(observed_host_property_values)
+            x_axis_min = np.min(observed_host_property_values)
+            x_axis_max = (1 + np.sign(x_axis_max)*0.1)*x_axis_max
+            x_axis_min = (1 - np.sign(x_axis_min)*0.1)*x_axis_min
             x_values = np.linspace(x_axis_min, x_axis_max, 1000)
 
             n_samples = cfg['plot_cfg'].get('n_samples', sample_thetas.shape[0])
@@ -539,7 +573,90 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
             plt.close('all')
 
+        shared_host_galaxy_property_names = cfg['model_cfg']['host_galaxy_cfg']['shared_property_names']
+        n_shared_properties = len(shared_host_galaxy_property_names)
+        n_host_galaxy_pars = 2 * n_shared_properties
+        n_shared_pars = len(cfg['model_cfg']['shared_par_names'])
+        
+        idx_first = n_shared_pars
+        idx_last = n_shared_pars + n_host_galaxy_pars
 
+        host_prop_par_samples = sample_thetas[:,idx_first:idx_last]
+
+        for i, host_property_name in enumerate(shared_host_galaxy_property_names):
+            
+            host_property_values = data[host_property_name].to_numpy()
+            host_property_errors = data[host_property_name+"_err"].to_numpy()
+            idx_observed = (
+                (host_property_values == prep.NULL_VALUE) |
+                (host_property_errors == prep.NULL_VALUE)
+            )
+
+            observed_host_property_values = host_property_values[~idx_observed]
+
+            x_axis_max = np.max(observed_host_property_values)
+            x_axis_min = np.min(observed_host_property_values)
+            x_axis_max = (1 + np.sign(x_axis_max)*0.1)*x_axis_max
+            x_axis_min = (1 - np.sign(x_axis_min)*0.1)*x_axis_min
+
+            x_values = np.linspace(x_axis_min, x_axis_max, 1000)
+
+            n_samples = cfg['plot_cfg'].get('n_samples', sample_thetas.shape[0])
+            if n_samples == 'max':
+                n_samples = sample_thetas.shape[0]
+            n_samples = min(n_samples, sample_thetas.shape[0])
+
+            host_property_name = utils.format_property_names(
+                [host_property_name], use_scientific_notation=False
+            )[0]
+            print("\n-----------------", host_property_name.upper() ,"DISTRIBUTION ---------------------\n")
+
+            pop_1_pdf_values = np.zeros((n_samples, len(x_values)))
+
+            idx_pop_1_mean = i*2
+            idx_pop_1_std = i*2 + 1
+
+            for j in range(n_samples):
+                pop_1_pdf_values[j] = stats.norm.pdf(
+                    x_values, host_prop_par_samples[j,idx_pop_1_mean], host_prop_par_samples[j,idx_pop_1_std]
+                )
+
+            mean_pop_1_pdf_values = np.mean(pop_1_pdf_values, axis=0)
+            std_pop_1_pdf_values = np.std(pop_1_pdf_values, axis=0)
+
+            fig, ax = plt.subplots(figsize=(8, 8))
+
+            ax.hist(
+                observed_host_property_values, density=True,
+                color='k', alpha=0.5, label='Observed'
+            )
+
+            ax.plot(x_values, mean_pop_1_pdf_values, color=pop1_color)
+            ax.fill_between(
+                x_values, mean_pop_1_pdf_values - std_pop_1_pdf_values, mean_pop_1_pdf_values + std_pop_1_pdf_values,
+                color=pop1_color, alpha=0.3
+            )
+
+            ax.set_xlabel(
+                host_property_name, fontsize=cfg['plot_cfg']['label_kwargs']['fontsize']
+            )
+            ax.set_ylabel(
+                "Probability Density", fontsize=cfg['plot_cfg']['label_kwargs']['fontsize']
+            )
+            ax.legend(fontsize=cfg['plot_cfg']['label_kwargs']['fontsize'])
+            fig.tight_layout()
+
+            save_path = os.path.join(
+                fig_path,
+                "host_property_distributions"
+            )
+
+            os.makedirs(save_path, exist_ok=True)
+
+            filename = f"{host_property_name}.png"
+            fig.savefig(os.path.join(save_path, filename))
+
+            plt.close('all')
 
     print("Done!")
 
