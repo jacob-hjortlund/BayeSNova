@@ -175,7 +175,7 @@ def init_global_data(
     sn_covariance_values = data[sn_covariance_keys].copy().to_numpy()
     sn_cids = data['CID'].copy().to_numpy()
     data.drop(
-        sn_observable_keys + sn_covariance_keys + ['z','CID'], axis=1, inplace=True
+        sn_observable_keys + sn_covariance_keys + ['z','CID', 'SurveyID'], axis=1, inplace=True
     )
 
     if selection_bias_correction_key in data.columns:

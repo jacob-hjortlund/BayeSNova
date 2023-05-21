@@ -76,7 +76,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     if cfg['prep_cfg'].get('drop_surveys', []):
         print("Dropping surveys...")
-        idx_not_in_dropped_survey = ~catalog['IDSURVEY'].isin(cfg['prep_cfg']['drop_surveys'])
+        idx_not_in_dropped_survey = ~catalog['SurveyID'].isin(cfg['prep_cfg']['drop_surveys'])
         idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
         idx_to_keep = idx_not_in_dropped_survey | idx_calibrator
         n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
@@ -85,6 +85,23 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print(f"Number of SNe filtered: {n_sn_filtered}")
         print(f"Number of SNe remaining: {len(catalog)}")
         print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
+
+    if cfg['prep_cfg'].get('survey_redshift_limits', []):
+        print("Applying survey redshift limits...")
+        for survey_name, survey_id, upper_limit in cfg['prep_cfg']['survey_redshift_limits']:
+            idx_survey = catalog['SurveyID'].to_numpy() == survey_id
+            idx_above = catalog['z'].to_numpy() > upper_limit
+            idx_to_remove = idx_survey & idx_above
+            n_sn_filtered = np.sum(idx_to_remove)
+            n_survey_sn = np.sum(idx_survey)
+            catalog = catalog.loc[~idx_to_remove].copy()
+            catalog = catalog.reset_index(drop=True)
+            print(f"\nSurvey: {survey_name} ({survey_id}) with redshift limit: {upper_limit}")
+            print(f"Number of survey SNe: {n_survey_sn}")
+            print(f"Number of SNe filtered: {n_sn_filtered}")
+            print(f"Number of survey SNe remaining: {n_survey_sn - n_sn_filtered}")
+            print(f"Number of SNe remaining: {len(catalog)}")
+            print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_remove) * 100:.3f} %\n")
 
     if cfg['prep_cfg']['use_redshift_cutoff']:
         print("Applying redshift cutoff...")

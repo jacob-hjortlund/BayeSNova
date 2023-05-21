@@ -27,13 +27,14 @@ prep_cfg:
 
   column_names: [
     'CID',
+    'IDSURVEY',
     'zHD',
     'mB',
     'mBERR',
     'x1',
     'x1ERR',
     'c',
-    'cERR', 
+    'cERR',
     'x0',
     'COV_x1_c',
     'COV_x1_x0',
@@ -44,6 +45,7 @@ prep_cfg:
   ]
   new_column_names: [
     'CID',
+    'SurveyID'
     'z',
     'mB',
     'mBErr',
@@ -60,7 +62,15 @@ prep_cfg:
     'bias_corr_factor'
   ]
 
-  drop_surveys: []
+  drop_surveys: [
+    5,18,50,51,56,57,61,62,63,64,65,66,100,101,106,150
+  ]
+  survey_redshift_limits: [
+    ["SDSS", 1, 0.20], #SDSS, lower is 0.15
+    ["SNLS", 4, 0.60], #SNLS, lower is 0.55
+    ["PS1", 15, 0.31], #PS1, lower is 0.27
+    ["DES", 10, 0.60], #DES, lower is 0.55
+  ]
 
   use_bias_corrections: False #True
   apparent_mag_column_name: 'mB'
