@@ -262,10 +262,10 @@ def volumetric_rates(
         prompt_args = np.array([zi, eta_prompt, H0, Om0, w0, wa], dtype=np.float64)
         delayed_args = np.array([zi, eta, H0, Om0, w0, wa], dtype=np.float64)
 
-        N_prompt, _, _ = dqags(
+        N_prompt, _, _, _ = dqags(
             N_prompt_integral_ptr, z0, z1, prompt_args
         )
-        N_delayed, _, _ = dqags(
+        N_delayed, _, _, _ = dqags(
             N_delayed_integral_ptr, z1, zinf, delayed_args
         )
 
