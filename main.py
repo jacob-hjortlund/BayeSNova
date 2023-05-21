@@ -516,14 +516,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
             combined_pdf_values = w_1[:,np.newaxis] * pop_1_pdf_values + (1 - w_1[:,np.newaxis]) * pop_2_pdf_values
 
-            mean_pop_1_pdf_values = np.mean(pop_1_pdf_values, axis=0)
-            std_pop_1_pdf_values = np.std(pop_1_pdf_values, axis=0)
-
-            mean_pop_2_pdf_values = np.mean(pop_2_pdf_values, axis=0)
-            std_pop_2_pdf_values = np.std(pop_2_pdf_values, axis=0)
-
-            mean_combined_pdf_values = np.mean(combined_pdf_values, axis=0)
-            std_combined_pdf_values = np.std(combined_pdf_values, axis=0)
+            pop_1_quantiles = np.quantile(pop_1_pdf_values, [0.16, 0.5, 0.84], axis=0)
+            pop_2_quantiles = np.quantile(pop_2_pdf_values, [0.16, 0.5, 0.84], axis=0)
+            combined_quantiles = np.quantile(combined_pdf_values, [0.16, 0.5, 0.84], axis=0)
 
             fig, ax = plt.subplots(figsize=(8, 8))
 
@@ -532,21 +527,21 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 color='k', alpha=0.5, label='Observed'
             )
 
-            ax.plot(x_values, mean_pop_1_pdf_values, color=pop1_color, label='Pop 1')
+            ax.plot(x_values, pop_1_quantiles[1,:], color=pop1_color, label='Pop 1')
             ax.fill_between(
-                x_values, mean_pop_1_pdf_values - std_pop_1_pdf_values, mean_pop_1_pdf_values + std_pop_1_pdf_values,
+                x_values, pop_1_quantiles[0,:], pop_1_quantiles[2,:],
                 color=pop1_color, alpha=0.3
             )
 
-            ax.plot(x_values, mean_pop_2_pdf_values, color=pop2_color, label='Pop 2')
+            ax.plot(x_values, pop_2_quantiles[1,:], color=pop2_color, label='Pop 2')
             ax.fill_between(
-                x_values, mean_pop_2_pdf_values - std_pop_2_pdf_values, mean_pop_2_pdf_values + std_pop_2_pdf_values,
+                x_values, pop_2_quantiles[0,:], pop_2_quantiles[2,:],
                 color=pop2_color, alpha=0.3
             )
 
-            ax.plot(x_values, mean_combined_pdf_values, color='purple', label='Combined')
+            ax.plot(x_values, combined_quantiles[1,:], color='purple', label='Combined')
             ax.fill_between(
-                x_values, mean_combined_pdf_values - std_combined_pdf_values, mean_combined_pdf_values + std_combined_pdf_values,
+                x_values, combined_quantiles[0,:], combined_quantiles[2,:],
                 color='purple', alpha=0.3
             )
 
@@ -619,8 +614,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
                     x_values, host_prop_par_samples[j,idx_pop_1_mean], host_prop_par_samples[j,idx_pop_1_std]
                 )
 
-            mean_pop_1_pdf_values = np.mean(pop_1_pdf_values, axis=0)
-            std_pop_1_pdf_values = np.std(pop_1_pdf_values, axis=0)
+            # mean_pop_1_pdf_values = np.mean(pop_1_pdf_values, axis=0)
+            # std_pop_1_pdf_values = np.std(pop_1_pdf_values, axis=0)
+            pop_1_quantiles = np.quantile(pop_1_pdf_values, [0.16, 0.5, 0.84], axis=0)
 
             fig, ax = plt.subplots(figsize=(8, 8))
 
@@ -629,9 +625,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
                 color='k', alpha=0.5, label='Observed'
             )
 
-            ax.plot(x_values, mean_pop_1_pdf_values, color=pop1_color)
+            ax.plot(x_values, pop_1_quantiles[1,:], color=pop1_color)
             ax.fill_between(
-                x_values, mean_pop_1_pdf_values - std_pop_1_pdf_values, mean_pop_1_pdf_values + std_pop_1_pdf_values,
+                x_values, pop_1_quantiles[0,:], pop_1_quantiles[2,:],
                 color=pop1_color, alpha=0.3
             )
 
