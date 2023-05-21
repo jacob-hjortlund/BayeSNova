@@ -88,7 +88,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     if cfg['prep_cfg'].get('survey_redshift_limits', []):
         print("Applying survey redshift limits...")
-        for survey_name, survey_id, upper_limit in cfg['prep_cfg']['survey_redshift_limits']:
+        for survey_name in cfg['prep_cfg']['survey_redshift_limits'].keys():
+            survey_id, upper_limit = cfg['prep_cfg']['survey_redshift_limits'][survey_name]
             idx_survey = catalog['SurveyID'].to_numpy() == survey_id
             idx_above = catalog['z'].to_numpy() > upper_limit
             idx_to_remove = idx_survey & idx_above
