@@ -408,7 +408,7 @@ def membership_histogram(
         nrows=n_rows, ncols=n_cols,
         figsize=(10, 5 * n_rows)
     )
-    ax = ax.flatten()
+    ax = np.atleast_1d(ax).flatten()
     for i in range(n_hists):
         title = titles_list[i]
         quantiles = membership_quantiles[i,1,:]
