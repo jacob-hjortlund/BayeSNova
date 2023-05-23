@@ -1081,6 +1081,7 @@ class Model():
         )
 
         if not np.isfinite(log_prob):
+            warnings.resetwarnings()
             warnings.warn(
                 "Log posterior probability is not finite. Returning -np.inf. "
             )
