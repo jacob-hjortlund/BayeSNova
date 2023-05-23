@@ -993,13 +993,11 @@ class Model():
 
             is_inf = np.any(np.isinf(sn_rates))
             if is_inf:
-                # TODO: UPDATE FOR VARIABLE BLOB SIZE
-                return (
-                    -np.inf,
-                    np.ones(prep.n_unique_sn)*np.nan,
-                    np.ones(prep.n_unique_sn)*np.nan,
-                    np.ones(prep.n_unique_sn)*np.nan,
+                outputs = (
+                    (-np.inf,) + 
+                    tuple(number_of_blobs * [np.ones(prep.n_unique_sn) * np.nan])
                 )
+                return outputs
 
             w_vector = sn_rates[:, -1] / sn_rates[:, 0]
         else:
