@@ -703,6 +703,7 @@ class Model():
         )
         
         if not prep.global_model_cfg.use_log_space_integral:
+            warnings.resetwarnings()
             logprobs = np.log(logprobs)
 
         logp_1 = logprobs[:, 0] - norm_1
@@ -774,6 +775,12 @@ class Model():
                 method='Bounded'
             )
         except:
+            warnings.resetwarnings()
+            warning_str = (
+                'Failure to find z0 for minimum convolution time of '
+                f'{minimum_convolution_time} Gyr'
+            )
+            warnings.warn(warning_str)
             return np.ones_like(observed_redshifts) * -np.inf
         warnings.resetwarnings()
         zinf = 20.
@@ -802,6 +809,19 @@ class Model():
 
         is_inf = np.any(np.isinf(sn_rates))
         if is_inf:
+            warnings.resetwarnings()
+            H0 = cosmo.H0.value
+            Om0 = cosmo.Om0
+            w0 = cosmo.w0
+            wa = cosmo.wa
+            warning_str = (
+                "\n ----------------------------------------------- \n" +
+                "Inf values in SN rates. Cosmological parameters are:\n" +
+                f"H0: {H0:.3f}, Om0: {Om0:.3f}, w0: {w0:.3f}, wa: {wa}\n" +
+                f"eta: {eta:.3f}, prompt_fraction: {prompt_fraction:.3f}\n" +
+                " ----------------------------------------------- \n"
+            )
+            warnings.warn(warning_str)
             return -np.inf
 
         obs_volumetric_rates = prep.observed_volumetric_rates
@@ -993,6 +1013,20 @@ class Model():
 
             is_inf = np.any(np.isinf(sn_rates))
             if is_inf:
+                warnings.resetwarnings()
+                warning_str = (
+                    "\n ----------------------------------------------- \n" +
+                    "Inf values in SN rates. Cosmological parameters are:\n" +
+                    f"H0: {H0:.3f}, Om0: {Om0:.3f}, w0: {w0:.3f}, wa: {wa}\n" +
+                    f"eta: {eta:.3f}, prompt_fraction: {prompt_fraction:.3f}\n" +
+                    " ----------------------------------------------- \n"
+                )
+                warnings.warn(warning_str)
+                using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
+                number_of_blobs = (
+                    3 + prep.n_independent_host_properties +
+                    (not using_host_galaxy_properties)
+                )
                 outputs = (
                     (-np.inf,) + 
                     tuple(number_of_blobs * [np.ones(prep.n_unique_sn) * np.nan])
