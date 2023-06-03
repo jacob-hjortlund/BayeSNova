@@ -81,16 +81,9 @@ def redshift_at_times(
         args=cosmo_args, max_steps=4096*16
     )
 
-    ts = jnp.column_stack(
-        jnp.split(
-            sol.ts[idx_unsort], 2
-        )
-    )
-    zs = jnp.column_stack(
-        jnp.split(
-            sol.ys[idx_unsort], 2
-        )
-    )
+    ts = sol.ts[idx_unsort]
+    zs = sol.ys[idx_unsort]
+
     num_steps = sol.stats['num_steps']
 
     return ts, zs, num_steps
@@ -264,13 +257,21 @@ def volumetric_rates(
         delayed_args = np.array([zi, eta, H0, Om0, w0, wa], dtype=np.float64)
 
         N_prompt = N_delayed = 0.
-        if z0 != NULL_VALUE:
-            N_prompt, _, _, _ = dqags(
-                N_prompt_integral_ptr, z0, z1, prompt_args
-            )
-        if z1 != NULL_VALUE:
+        
+        z0_valid = z0 != NULL_VALUE
+        z1_valid = z1 != NULL_VALUE
+
+        if z1_valid:
+
             N_delayed, _, _, _ = dqags(
                 N_delayed_integral_ptr, z1, zinf, delayed_args
+            )
+        else:
+            z1 = zinf
+
+        if z0_valid:
+            N_prompt, _, _, _ = dqags(
+                N_prompt_integral_ptr, z0, z1, prompt_args
             )
 
         rates[i, 0] = N_prompt + N_delayed
