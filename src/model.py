@@ -766,7 +766,10 @@ class Model():
         convolution_time_limits = cosmo_utils.convolution_limits(
             cosmo, observed_redshifts, dtd_t0, dtd_t1
         )
-        minimum_convolution_time = np.min(convolution_time_limits)
+
+        idx_valid = convolution_time_limits > 0.
+        valid_convolution_time_limits = convolution_time_limits[idx_valid]
+        minimum_convolution_time = np.min(valid_convolution_time_limits)
         
         warnings.filterwarnings("error")
         try:
@@ -785,10 +788,18 @@ class Model():
         warnings.resetwarnings()
         zinf = 20.
         age_of_universe = cosmo.age(0).value - cosmo.age(zinf).value
-        _, zs, _ = cosmo_utils.redshift_at_times(
-            convolution_time_limits, minimum_convolution_time, z0, cosmo_args
+        _, zs_valid, _ = cosmo_utils.redshift_at_times(
+            valid_convolution_time_limits, minimum_convolution_time, z0, cosmo_args
         )
-        integral_limits = np.array(zs.tolist(), dtype=np.float64)
+
+        integral_limits = np.ones_like(convolution_time_limits) * NULL_VALUE
+        integral_limits[idx_valid] = np.array(zs_valid.tolist(), dtype=np.float64)
+        integral_limits = np.column_stack(
+            np.split(
+                integral_limits, 2
+            )
+        )
+        
         sn_rates = cosmo_utils.volumetric_rates(
             observed_redshifts, integral_limits, H0, Om0,
             w0, wa, eta, prompt_fraction, zinf=zinf,
@@ -818,7 +829,7 @@ class Model():
                 "\n ----------------------------------------------- \n" +
                 "Inf values in SN rates. Cosmological parameters are:\n" +
                 f"H0: {H0:.3f}, Om0: {Om0:.3f}, w0: {w0:.3f}, wa: {wa}\n" +
-                f"eta: {eta:.3f}, prompt_fraction: {prompt_fraction:.3f}\n" +
+                f"log10(eta): {np.log10(eta):.3f}, prompt_fraction: {prompt_fraction:.3f}\n" +
                 " ----------------------------------------------- \n"
             )
             warnings.warn(warning_str)
@@ -960,7 +971,7 @@ class Model():
             warning_string += (
                 "\nCosmology parameters used:\n" +
                 f"H0: {H0:.3f}, Om0: {Om0:.3f}, w0: {w0:.3f}, wa: {wa}\n" +
-                f"eta: {eta:.3f}, prompt_fraction: {prompt_fraction:.3f}\n"
+                f"log10(eta): {np.log10(eta):.3f}, prompt_fraction: {prompt_fraction:.3f}\n"
             )
 
             cid_for_failures = [idx_not_valid]
@@ -1018,7 +1029,7 @@ class Model():
                     "\n ----------------------------------------------- \n" +
                     "Inf values in SN rates. Cosmological parameters are:\n" +
                     f"H0: {H0:.3f}, Om0: {Om0:.3f}, w0: {w0:.3f}, wa: {wa}\n" +
-                    f"eta: {eta:.3f}, prompt_fraction: {prompt_fraction:.3f}\n" +
+                    f"log10(eta): {np.log10(eta):.3f}, prompt_fraction: {prompt_fraction:.3f}\n" +
                     " ----------------------------------------------- \n"
                 )
                 warnings.warn(warning_str)
