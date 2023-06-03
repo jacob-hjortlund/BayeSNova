@@ -9,6 +9,7 @@ from astropy.units import Gyr
 from NumbaQuadpack import quadpack_sig, dqags, ldqag
 from diffrax import diffeqsolve, Tsit5, ODETerm, SaveAt, PIDController
 
+NULL_VALUE = -9999.
 H0_CONVERSION_FACTOR = 0.001022
 DH_70 = 4282.7494
 
@@ -262,12 +263,15 @@ def volumetric_rates(
         prompt_args = np.array([zi, eta_prompt, H0, Om0, w0, wa], dtype=np.float64)
         delayed_args = np.array([zi, eta, H0, Om0, w0, wa], dtype=np.float64)
 
-        N_prompt, _, _, _ = dqags(
-            N_prompt_integral_ptr, z0, z1, prompt_args
-        )
-        N_delayed, _, _, _ = dqags(
-            N_delayed_integral_ptr, z1, zinf, delayed_args
-        )
+        N_prompt = N_delayed = 0.
+        if z0 != NULL_VALUE:
+            N_prompt, _, _, _ = dqags(
+                N_prompt_integral_ptr, z0, z1, prompt_args
+            )
+        if z1 != NULL_VALUE:
+            N_delayed, _, _, _ = dqags(
+                N_delayed_integral_ptr, z1, zinf, delayed_args
+            )
 
         rates[i, 0] = N_prompt + N_delayed
         rates[i, 1] = N_prompt
