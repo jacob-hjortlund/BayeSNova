@@ -63,6 +63,7 @@ prep_cfg:
   ]
 
   drop_surveys: []
+  include_surveys: []
   survey_redshift_limits: []
 
   use_bias_corrections: False #True

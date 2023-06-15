@@ -86,6 +86,18 @@ def main(cfg: omegaconf.DictConfig) -> None:
         print(f"Number of SNe remaining: {len(catalog)}")
         print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
 
+    if cfg['prep_cfg'].get('include_surveys', []):
+        print("Including surveys...")
+        idx_included_survey = catalog['SurveyID'].isin(cfg['prep_cfg']['include_surveys'])
+        idx_calibrator = catalog['is_calibrator'].to_numpy() == 1
+        idx_to_keep = idx_included_survey | idx_calibrator
+        n_sn_filtered = len(catalog) - np.sum(idx_to_keep)
+        catalog = catalog.loc[idx_to_keep].copy()
+        catalog = catalog.reset_index(drop=True)
+        print(f"Number of SNe filtered: {n_sn_filtered}")
+        print(f"Number of SNe remaining: {len(catalog)}")
+        print(f"Percentage of SNe remaining: {len(catalog) / len(idx_to_keep) * 100:.3f} %\n")
+
     if cfg['prep_cfg'].get('survey_redshift_limits', []):
         print("Applying survey redshift limits...")
         for survey_name in cfg['prep_cfg']['survey_redshift_limits'].keys():
