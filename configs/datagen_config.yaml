@@ -42,6 +42,8 @@ prep_cfg:
     'HOST_LOGMASS',
     'HOST_LOGMASS_ERR',
     'biasCor_m_b_COVSCALE',
+    'RA',
+    'DEC'
   ]
   new_column_names: [
     'CID',
@@ -59,7 +61,9 @@ prep_cfg:
     'cov_c_x0',
     'global_mass',
     'global_mass_err',
-    'bias_corr_factor'
+    'bias_corr_factor',
+    'RA',
+    'DEC'
   ]
 
   drop_surveys: []

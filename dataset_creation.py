@@ -271,12 +271,20 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         number_of_sn_observations = len(catalog)
         number_of_duplicate_sn = len(duplicate_details)
-        number_of_duplicate_sn_observations = 0
+        #number_of_duplicate_sn_observations = 0
         dz = []
         for i, (_, sn_details) in enumerate(duplicate_details.items()):
-            number_of_duplicate_sn_observations += sn_details['number_of_duplicates']
+            #number_of_duplicate_sn_observations += sn_details['number_of_duplicates']
             catalog.loc[sn_details['idx_duplicate'], 'duplicate_uid'] = i
             dz.append(sn_details['dz'])
+
+        duplicate_cids =  np.concatenate(
+            [duplicate_details[key]['duplicate_names'] for key in duplicate_details.keys()]
+        )
+        unique_duplicate_cids = np.unique(duplicate_cids)
+        number_of_duplicate_sn_observations = len(unique_duplicate_cids)
+        number_of_duplicate_sn_observations = len(duplicate_cids)
+
 
         number_of_unique_sn = number_of_sn_observations - number_of_duplicate_sn_observations + number_of_duplicate_sn
 

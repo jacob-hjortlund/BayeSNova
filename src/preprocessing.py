@@ -71,12 +71,21 @@ def identify_duplicate_sn(
                 sn_coordinates
             ) < max_angular_separation * u.arcsec
     
-            idx_duplicates_of_current_sn = (
+            idx_passes_match_cuts = (
                     idx_below_max_peak_date_diff & idx_below_max_angular_separation
             )
+
+            match_cids = catalog[sn_id_key][idx_passes_match_cuts].to_numpy()
+            idx_match_cids = catalog[sn_id_key].isin(match_cids).to_numpy()
+            no_of_missed_duplicates = idx_match_cids.sum() - idx_passes_match_cuts.sum()
+
+            idx_match_cids[i] = False
+            idx_duplicates_of_current_sn = idx_passes_match_cuts | idx_match_cids
+            idx_missed_cids = idx_match_cids & ~idx_passes_match_cuts
+
             number_of_duplicates_for_current_sn = np.count_nonzero(
                 idx_duplicates_of_current_sn
-            )
+            ) + no_of_missed_duplicates
     
             no_duplicates_present = number_of_duplicates_for_current_sn == 1
     
@@ -102,15 +111,17 @@ def identify_duplicate_sn(
                 )
             )
             names_for_duplicates = catalog[sn_id_key].to_numpy()[idx_duplicates_of_current_sn]
-    
+
             duplicate_sn_details[name_of_current_sn] = {
                 'dz': max_abs_redshift_diff,
                 'dt': max_abs_peak_date_diff,
                 'number_of_duplicates': number_of_duplicates_for_current_sn,
                 'duplicate_names': names_for_duplicates,
-                'idx_duplicate': idx_duplicates_of_current_sn
+                'idx_duplicate': idx_duplicates_of_current_sn,
+                'idx_missed_duplicates': idx_missed_cids,
+                'no_of_missed_duplicates': no_of_missed_duplicates
             }
-    
+
             idx_of_duplicate_sn.append(idx_duplicates_of_current_sn)
 
             idx_of_non_duplicates = ~np.any(idx_of_duplicate_sn, axis=0)
