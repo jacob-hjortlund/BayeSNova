@@ -285,7 +285,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
         number_of_duplicate_sn_observations = len(unique_duplicate_cids)
         number_of_duplicate_sn_observations = len(duplicate_cids)
 
-
         number_of_unique_sn = number_of_sn_observations - number_of_duplicate_sn_observations + number_of_duplicate_sn
 
         print(f"\nNumber of SNe observations in catalog: {number_of_sn_observations}")
