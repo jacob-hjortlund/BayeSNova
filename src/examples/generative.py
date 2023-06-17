@@ -7,9 +7,9 @@ import numpy as np
 import pandas as pd
 import scipy.stats as stats
 import matplotlib.pyplot as plt
-import src.preprocessing as prep
-import src.generative_models as gen
-import src.cosmology_utils as cosmo_utils
+import bayesnova.preprocessing as prep
+import bayesnova.generative_models as gen
+import bayesnova.cosmology_utils as cosmo_utils
 
 @hydra.main(
     version_base=None, config_path="configs", config_name="gen_config"

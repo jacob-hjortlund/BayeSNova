@@ -9,10 +9,10 @@ import pandas as pd
 import clearml as cl
 import matplotlib.pyplot as plt
 import scipy.stats as stats
-import src.utils as utils
-import src.model as model
-import src.preprocessing as prep
-import src.postprocessing as post
+import bayesnova.utils as utils
+import bayesnova.model as model
+import bayesnova.preprocessing as prep
+import bayesnova.postprocessing as post
 
 from time import time
 from mpi4py import MPI
