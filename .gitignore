@@ -17,3 +17,5 @@ talks/
 figures/
 src/__pycache__/
 src/bayesnova/bayesnova.egg-info/
+build/
+dist/
