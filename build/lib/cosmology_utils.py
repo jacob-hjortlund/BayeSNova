@@ -132,7 +132,7 @@ def distance_modulus_at_redshift(
 
 # ---------- N(z) integral ------------
 
-@nb.jit(forceobj=True)
+@nb.jit()
 def prompt_frac_to_prompt_rate(
     prompt_frac, delayed_rate,
     t_max, t0 = 0.04, t1 = 0.5
@@ -146,7 +146,7 @@ def prompt_frac_to_prompt_rate(
 
     return prompt_rate
 
-@nb.jit(forceobj=True)
+@nb.jit()
 def lookback_time_integrand(
     z, args
 ):
@@ -171,7 +171,7 @@ def lookback_time_integral(z, args):
     return value
 lookback_time_integral_ptr = lookback_time_integral.address
 
-@nb.jit(forceobj=True)
+@nb.jit()
 def dtd_prompt(
     t,
     H0,
@@ -180,7 +180,7 @@ def dtd_prompt(
     h = H0/70.
     return eta * h**2
 
-@nb.jit(forceobj=True)
+@nb.jit()
 def dtd_delayed(
     t,
     H0,
@@ -189,7 +189,7 @@ def dtd_delayed(
     h = H0/70.
     return eta * h**2 * t**-1 
 
-@nb.jit(forceobj=True)
+@nb.jit()
 def SFH(z, H0):
     
     h = H0/70.
@@ -199,7 +199,7 @@ def SFH(z, H0):
 
     return h * numerator / denomenator 
 
-@nb.jit(forceobj=True)
+@nb.jit()
 def N_prompt_integrand(zp, args):
     z, eta, H0 = args[:3]
     lookback_time_args = args[2:]
@@ -209,7 +209,7 @@ def N_prompt_integrand(zp, args):
 
     return value
 
-@nb.jit(forceobj=True)
+@nb.jit()
 def N_delayed_integrand(zp, args):
     z, eta, H0 = args[:3]
     lookback_time_args = args[2:]
@@ -236,7 +236,7 @@ def N_delayed_integral(zp, args):
     return value
 N_delayed_integral_ptr = N_delayed_integral.address
 
-@nb.jit(forceobj=True)
+@nb.jit()
 def volumetric_rates(
     z, integral_limits,
     H0, Om0, w0, wa,

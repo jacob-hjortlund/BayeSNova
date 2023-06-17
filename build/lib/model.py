@@ -20,7 +20,7 @@ DH_70 = 4282.7494
 
 # ---------- E(B-V) PRIOR INTEGRAL ------------
 
-@nb.jit(forceobj=True)
+@nb.jit()
 def Ebv_integral_body(
     x, i1, i2, i3, i4, i5,
     i6, i7, i8, i9, r1, r2, r3,
@@ -160,7 +160,7 @@ def _Ebv_prior_convolution(
 
 # ---------- LOG E(B-V) PRIOR INTEGRAL ------------
 
-@nb.jit(forceobj=True)
+@nb.jit()
 def Ebv_integral_log_body(
     x, i1, i2, i3, i4, i5,
     i6, i7, i8, i9, r1, r2, r3,
@@ -300,7 +300,7 @@ def _Ebv_prior_log_convolution(
 
 # ---------- RB/E(B-V) PRIOR DOUBLE INTEGRAL ------------
 
-@nb.jit(forceobj=True)
+@nb.jit()
 def dbl_integral_body(
     x, y, i1, i2, i3, i5,
     i6, i9, r1, r2, r3,

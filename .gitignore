@@ -15,3 +15,5 @@ jax_stuff/
 old_scripts/
 talks/
 figures/
+src/__pycache__/
+src/bayesnova/bayesnova.egg-info/
