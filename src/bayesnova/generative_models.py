@@ -1,8 +1,8 @@
 import numpy as np
 import scipy.stats as stats
 import astropy.cosmology as apy_cosmo
-import src.preprocessing as prep
-import src.cosmology_utils as cosmo_utils
+import bayesnova.preprocessing as prep
+import bayesnova.cosmology_utils as cosmo_utils
 
 from astropy.units import Gyr
 

@@ -7,8 +7,8 @@ import pandas as pd
 import emcee as em
 import matplotlib.pyplot as plt
 
-import src.utils as utils
-import src.preprocessing as prep
+import bayesnova.utils as utils
+import bayesnova.preprocessing as prep
 
 from matplotlib.colors import Normalize
 
