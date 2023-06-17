@@ -24,7 +24,10 @@ from itertools import combinations
 def main(cfg: omegaconf.DictConfig) -> None:
 
     # Setup clearml
-    task_name = utils.create_task_name(cfg)
+    cfg_path = os.path.join(
+        cfg['cfg_sources'][1]['path'], 'config.yaml'
+    )
+    task_name = utils.create_task_name(cfg, default_path=cfg_path)
     if len(cfg['model_cfg']['independent_par_names']) > 0:
         tags = ["-".join(cfg['model_cfg']['independent_par_names'])]
     else:
