@@ -1,7 +1,9 @@
 import jax
 jax.config.update("jax_enable_x64", True)
+
 import numpy as np
 import numba as nb
+
 import jax.numpy as jnp
 import astropy.cosmology as apy_cosmo
 

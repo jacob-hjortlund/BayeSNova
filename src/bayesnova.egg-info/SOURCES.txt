@@ -4,7 +4,7 @@ pyproject.toml
 src/bayesnova/__init__.py
 src/bayesnova/cosmology_utils.py
 src/bayesnova/generative_models.py
-src/bayesnova/model.py
+src/bayesnova/models.py
 src/bayesnova/postprocessing.py
 src/bayesnova/preprocessing.py
 src/bayesnova/utils.py

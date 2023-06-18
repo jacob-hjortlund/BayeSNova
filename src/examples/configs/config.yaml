@@ -1,3 +1,4 @@
+config_sources: ${hydra:runtime.config_sources}
 data_cfg:
   train_path: './data/processed_data/supercal'
   volumetric_rates_path: './data/processed_data/volumetric_rates'

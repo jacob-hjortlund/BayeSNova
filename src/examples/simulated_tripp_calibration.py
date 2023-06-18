@@ -13,9 +13,9 @@ import emcee as em
 import corner
 import astropy.cosmology as cosmopy
 
-import bayesnova..model as models
-import bayesnova..preprocessing as prep
-import bayesnova..utils as utils
+import bayesnova.models as models
+import bayesnova.preprocessing as prep
+import bayesnova.utils as utils
 from functools import partial
 from scipy.ndimage import gaussian_filter
 
