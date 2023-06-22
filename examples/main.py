@@ -6,7 +6,6 @@ import corner
 import emcee as em
 import numpy as np
 import pandas as pd
-import clearml as cl
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 import bayesnova.utils as utils

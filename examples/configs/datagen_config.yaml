@@ -1,6 +1,6 @@
 data_cfg:
-  path: './data/raw_data'
-  dataset: 'supercal.fitres' #'Pantheon+SH0ES.dat'
+  path: '/home/jacob/Uni/Msc/Thesis/Data/raw_data'
+  dataset: 'supercal.dat' #'Pantheon+SH0ES.dat'
   morphologies: 'SN-morph-type-t'
   local_properties: 'jones_2018'
   sep: ' '
