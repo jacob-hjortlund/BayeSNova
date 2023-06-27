@@ -17,6 +17,10 @@ import bayesnova.cosmology_utils as cosmo_utils
 NULL_VALUE = -9999.0
 H0_CONVERSION_FACTOR = 0.001022
 DH_70 = 4282.7494
+SPEED_OF_LIGHT = 299792.458 # km/s
+PECULIAR_VELOCITY_DISPERSION = 300 # km/s
+
+# --------------------------------------- SUPERNOVA MODEL ---------------------------------------
 
 # ---------- E(B-V) PRIOR INTEGRAL ------------
 
@@ -154,7 +158,7 @@ def Ebv_prior_convolution(
 
     return logprobs, status
 
-# ---------- LOG E(B-V) PRIOR INTEGRAL ------------
+# ---------- E(B-V) PRIOR LOG-SPACE INTEGRAL ------------
 
 @nb.jit()
 def Ebv_integral_log_body(
@@ -289,3 +293,49 @@ def Ebv_prior_log_convolution(
         status[i, 1] = s2
 
     return logprobs, status
+
+def sn_covariance(
+    observational_covariances: np.ndarray,
+    sn_redshifts: np.ndarray,
+    calibrator_indices: np.ndarray,
+    alpha: float, beta: float, sig_int: float,
+    sig_x1: float, sig_c: float
+) -> np.ndarray:
+    """Given the observational covariances, redshifts, and calibrator indices,
+    calculate the SN model covariance matrix for a given set of parameters.
+
+    Args:
+        observational_covariances (np.ndarray): Observational covariance matrix
+        sn_redshifts (np.ndarray): Observed redshifts
+        calibrator_indices (np.ndarray): Boolean array indicating which SNe are calibrators
+        alpha (float): Tripp alpha parameter
+        beta (float): Tripp beta parameter
+        sig_int (float): Intrinsic scatter
+        sig_x1 (float): Population scatter in stretch
+        sig_c (float): Population scatter in intrinsic color
+
+    Returns:
+        np.ndarray: SN model covariance matrix
+    """
+
+    z = sn_redshifts.copy
+    cov = observational_covariances.copy()
+
+    cov[0,0] += (
+        sig_int**2 + alpha**2 * sig_x1**2 + beta**2 * sig_c**2
+    )
+
+    distmod_var = z**2 * (
+        (5. / np.log(10.))**2 * (PECULIAR_VELOCITY_DISPERSION / SPEED_OF_LIGHT)**2
+    )
+    distmod_var[calibrator_indices] = 0.
+    cov[0,0] += distmod_var
+
+    cov[1,1] += sig_x1**2
+    cov[2,2] += sig_c**2
+    cov[0,1] += alpha * sig_x1**2
+    cov[0,2] += beta * sig_c**2
+    cov[1,0] = cov[0,1]
+    cov[2,0] = cov[0,2]
+
+    return cov
