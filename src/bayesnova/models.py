@@ -87,6 +87,7 @@ def prior_builder(
     free_parameters_to_compare = model_config.get('free_parameters_to_compare', [])
     prior_config = model_config.get('priors', {})
 
+    #TODO: ADD LOG HANDLING
     if free_parameters is None:
         raise ValueError(f'No free parameters specified in {model_name} model config.')
     parameters_in_prior = set(prior_config.keys()).intersection(free_parameters)
