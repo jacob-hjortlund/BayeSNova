@@ -21,6 +21,141 @@ DH_70 = 4282.7494
 SPEED_OF_LIGHT = 299792.458 # km/s
 PECULIAR_VELOCITY_DISPERSION = 300 # km/s
 
+global sn_observables
+
+# -------------------------------------------- PRIORS -------------------------------------------
+
+def uniform_log_prior(value: float, lower: float = -np.inf, upper: float = np.inf):
+    """
+    Uniform log prior.
+
+    Args:
+        value (float): Value to evaluate.
+        lower (float, optional): Lower bound. Defaults to -np.inf.
+        upper (float, optional): Upper bound. Defaults to np.inf.
+        
+    Returns:
+        float: Log prior value.
+    """
+
+    if value < lower or value > upper:
+        return -np.inf
+    else:
+        return 0.
+
+def truncnorm_log_prior(
+    value: float, lower: float = -np.inf, upper: float = np.inf,
+    mu: float = 0., sigma: float = 1.
+):
+    """
+    Truncated normal log prior.
+
+    Args:
+        value (float): Value to evaluate.
+        lower (float, optional): Lower bound. Defaults to -np.inf.
+        upper (float, optional): Upper bound. Defaults to np.inf.
+        mu (float, optional): Mean. Defaults to 0.
+        sigma (float, optional): Standard deviation. Defaults to 1.
+        
+    Returns:
+        float: Log prior value.
+    """
+
+    if value < lower or value > upper:
+        return -np.inf
+    else:
+        return stats.truncnorm.logpdf(
+            value, (lower - mu) / sigma, (upper - mu) / sigma,
+            loc=mu, scale=sigma
+        )
+
+def prior_builder(
+    model_config: dict
+) -> Callable:
+    """
+    Builds a prior function from a model config.
+
+    Args:
+        model_config (dict): Model config.
+
+    Returns:
+        Callable: Prior function.
+    """
+    
+    model_name = model_config['name']
+    free_parameters = model_config.get('free_parameters', None)
+    free_parameters_to_compare = model_config.get('free_parameters_to_compare', [])
+    prior_config = model_config.get('priors', {})
+
+    if free_parameters is None:
+        raise ValueError(f'No free parameters specified in {model_name} model config.')
+    parameters_in_prior = set(prior_config.keys()).intersection(free_parameters)
+
+    def prior_func(
+        parameter_dict: dict
+    ) -> float:
+        """
+        Prior function.
+
+        Args:
+            parameter_dict (dict): Dictionary of parameter values.
+
+        Returns:
+            float: Log prior value.
+        """
+
+        prior_value = 0.
+        for parameter in parameters_in_prior:
+            
+            is_gaussian = (
+                "mean" in prior_config[parameter].keys() and
+                "sigma" in prior_config[parameter].keys()
+            )
+            is_uniform = (
+                not is_gaussian and
+                (
+                    "lower" in prior_config[parameter].keys() or
+                    "upper" in prior_config[parameter].keys()
+                )
+            )
+            prior_is_not_valid = not is_gaussian and not is_uniform
+
+            if prior_is_not_valid:
+                raise ValueError(f'Prior for parameter {parameter} in {model_name} model is not valid.')
+            
+            lower_bound = prior_config[parameter].get('lower', -np.inf)
+            upper_bound = prior_config[parameter].get('upper', np.inf)
+
+            if is_gaussian:
+                
+                prior_value += truncnorm_log_prior(
+                    parameter_dict[parameter],
+                    lower=lower_bound,
+                    upper=upper_bound,
+                    mu=prior_config[parameter]['mean'],
+                    sigma=prior_config[parameter]['sigma']
+                )
+
+            if is_uniform:
+
+                prior_value += uniform_log_prior(
+                    parameter_dict[parameter],
+                    lower=lower_bound,
+                    upper=upper_bound
+                )
+
+            if prior_value == -np.inf:
+                break
+        
+        for lower_parameter, upper_parameter in free_parameters_to_compare:
+            if parameter_dict[lower_parameter] > parameter_dict[upper_parameter]:
+                prior_value += -np.inf
+                break
+
+        return prior_value
+    
+    return prior_func
+
 # --------------------------------------- SUPERNOVA MODEL ---------------------------------------
 
 # ---------- E(B-V) PRIOR INTEGRAL ------------
@@ -143,9 +278,9 @@ def EBV_prior_marginalization(
     cov: np.ndarray, res: np.ndarray,
     RB: float, sig_RB: float, 
     tau_EBV: float, gamma_EBV: float, 
-    lower_bound_EBV: float,
     upper_bound_EBV: float,
     selection_bias_correction: np.ndarray,
+    lower_bound_EBV: float = 0
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Calculates the marginalization of the E(B-V) prior.
@@ -184,7 +319,9 @@ def EBV_prior_marginalization(
             b=upper_bound_EBV, data=tmp_params
         )
 
-    return probs, status
+        logprobs = np.log(probs)
+
+    return logprobs, status
 
 # ---------- E(B-V) PRIOR LOG-SPACE INTEGRAL ------------
 
@@ -306,9 +443,9 @@ def EBV_prior_log_marginalization(
     cov: np.ndarray, res: np.ndarray,
     RB: float, sig_RB: float,
     tau_EBV: float, gamma_EBV: float, 
-    lower_bound_EBV: float,
     upper_bound_EBV: float,
     selection_bias_correction: np.ndarray,
+    lower_bound_EBV: float = 0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Calculates the log marginalization of the E(B-V) prior.
@@ -349,10 +486,72 @@ def EBV_prior_log_marginalization(
 
     return logprobs, status
 
+# ---------- INTEGRAL LIMIT UTILS ----------
+
+def create_gamma_quantiles(
+    lower: float, upper: float,
+    resolution: float = 0.001,
+    cdf_limit: float = 0.995
+) -> np.ndarray:
+    """Create a set of quantiles corresponing to a given cdf limit / max probability mass for a range of
+    gamma distribution exponents.
+
+    Args:
+        lower (float): Lower bound of gamma distribution exponents.
+        upper (float): Upper bound of gamma distribution exponents.
+        resolution (float, optional): Resolution of gamma distribution exponents. Defaults to 0.001.
+        cdf_limit (float, optional): CDF limit / max probability mass. Defaults to 0.995.
+
+    Returns:
+        np.ndarray: 2xN array of gamma distribution exponents and corresponding quantiles.
+    """
+        
+    vals = np.arange(lower, upper, resolution)
+    quantiles = np.stack((
+        vals, special.gammaincinv(
+            vals, cdf_limit
+        )
+    ))
+
+    return quantiles
+
+def find_nearest_idx(array, value):
+    """Find the index of the nearest value in an array to a given value.
+
+    Args:
+        array (np.ndarray): Array to search.
+        value (float): Value to search for.
+
+    Returns:
+        int: Index of nearest value.
+    """
+
+    idx = (np.abs(array - value)).argmin()
+
+    return idx
+
+# ---------- SN MODEL BUILDER ----------
+
+def map_array_to_dict(
+    array: np.ndarray,
+    keys: list[str]
+):
+    """Map an array to a dictionary.
+
+    Args:
+        array (np.ndarray): Array to map.
+        keys (list[str]): Keys to map to.
+
+    Returns:
+        dict: Dictionary of mapped values.
+    """
+
+    return dict(zip(keys, array))
+
 def sn_covariance(
     observational_covariances: np.ndarray,
     sn_redshifts: np.ndarray,
-    calibrator_indices: np.ndarray,
+    calibrator_indices: np.ndarray[bool],
     alpha: float, beta: float, sig_int: float,
     sig_x1: float, sig_c: float
 ) -> np.ndarray:
@@ -372,6 +571,10 @@ def sn_covariance(
     Returns:
         np.ndarray: SN model covariance matrix
     """
+
+    no_calibrator_indices = calibrator_indices is None
+    if no_calibrator_indices:
+        calibrator_indices = np.zeros(len(sn_redshifts), dtype=bool)
 
     z = sn_redshifts.copy
     cov = observational_covariances.copy()
@@ -460,9 +663,9 @@ def marginalize_EBV(
     sn_residuals: np.ndarray,
     RB: float, sig_RB: float,
     tau_EBV: float, gamma_EBV: float,
-    lower_bound_EBV: float,
     upper_bound_EBV: float,
-    selection_bias_correction: np.ndarray
+    lower_bound_EBV: float = 0,
+    selection_bias_correction: np.ndarray = None
 ) -> tuple:
     """Given the SN covariance and residuals, calculate the log likelihood
     marginalized over EBV.
@@ -477,12 +680,16 @@ def marginalize_EBV(
         gamma_EBV (float): EBV exponent
         lower_bound_EBV (float): Lower bound on EBV
         upper_bound_EBV (float): Upper bound on EBV
-        selection_bias_correction (np.ndarray): Selection bias correction
+        selection_bias_correction (np.ndarray, optional): Selection bias correction. Defaults to None, corresponding
+        to no correction.
 
     Returns:
         tuple[np.ndarray, np.ndarray]: Log likelihood marginalized over EBV, status array
     """
     
+    if selection_bias_correction is None:
+        selection_bias_correction = np.ones(len(sn_residuals))
+
     log_truncated_normalization = (
         np.log(special.gammainc(gamma_EBV, upper_bound_EBV)) +
         special.loggamma(gamma_EBV)
@@ -499,3 +706,107 @@ def marginalize_EBV(
     logprobs -= log_truncated_normalization
 
     return logprobs, status
+
+def sn_model_builder(
+    sn_app_magnitudes: np.ndarray,
+    sn_stretch: np.ndarray,
+    sn_colors: np.ndarray,
+    sn_redshifts: np.ndarray,
+    sn_covariances: np.ndarray,
+    calibrator_indices: np.ndarray = None,
+    calibrator_distance_moduli: np.ndarray = None,
+    selection_bias_correction: np.ndarray = None,
+    sn_model_config: dict = {},
+):
+    
+    model_name = sn_model_config.get("model_name", "SN")
+    fixed_parameters = sn_model_config.get("fixed_parameters", {})
+    free_parameter_names = sn_model_config.get("free_parameters", None)
+    use_log_space_EBV_integral = sn_model_config.get("use_log_space_EBV_integral", False)
+    
+    if free_parameter_names is None:
+        raise ValueError(f"Must provide parameter names in {model_name} model config")
+    
+    if use_log_space_EBV_integral:
+        EBV_marginalization_func = EBV_prior_log_marginalization
+    else:
+        EBV_marginalization_func = EBV_prior_marginalization
+
+    prior_function = prior_builder(sn_model_config)
+
+    def sn_model(
+        sampled_parameters: np.ndarray,
+        upper_bound_EBV: Callable, # TODO: UPDATE / FIX THIS
+        is_component: bool = False,
+    ) -> float:
+
+        free_param_dict = map_array_to_dict(
+            array=sampled_parameters,
+            parameter_names=free_parameter_names
+        )
+
+        logprior = prior_function(free_param_dict)
+        if np.isinf(logprior):
+            return logprior
+
+        param_dict = fixed_parameters | free_param_dict
+
+        covariances = sn_covariance(
+            observational_covariances=sn_covariances,
+            sn_redshifts=sn_redshifts,
+            calibrator_indices=calibrator_indices,
+            **param_dict
+        )
+
+        residuals = sn_residuals(
+            sn_app_magnitudes=sn_app_magnitudes,
+            sn_stretch=sn_stretch,
+            sn_colors=sn_colors,
+            sn_redshifts=sn_redshifts,
+            calibrator_indices=calibrator_indices,
+            calibrator_distance_moduli=calibrator_distance_moduli,
+            **param_dict
+        )
+
+        logprobs, integration_status = marginalize_EBV(
+            EBV_marginalization_func=EBV_marginalization_func,
+            sn_covariances=covariances,
+            sn_residuals=residuals,
+            upper_bound_EBV=upper_bound_EBV,
+            selection_bias_correction=selection_bias_correction,
+            **param_dict
+        )
+
+        idx_integration_failed = ~integration_status
+        idx_logprob_not_finite = ~np.isfinite(logprobs)
+        idx_not_valid = idx_integration_failed | idx_logprob_not_finite
+        logprob_not_valid = np.any(idx_not_valid)
+
+        if logprob_not_valid:
+            
+            logprobs[idx_not_valid] = -np.inf
+            n_integration_failed = np.sum(idx_integration_failed)
+            n_logprob_not_finite = np.sum(idx_logprob_not_finite)
+
+            warning_string = (
+                f"\n --------- Failure in {model_name} EBV marginalizatin --------- \n" +
+                f"\nNo. of SN with failed integration: {n_integration_failed}\n" +
+                f"No. of SN with non-finite probabilities: {n_logprob_not_finite}\n" +
+                "\n Parameter values: \n" +
+                f"MB: {param_dict['MB']}, x1: {param_dict['x1']}, c: {param_dict['c']},\n" +
+                f"alpha: {param_dict['alpha']}, beta: {param_dict['beta']},\n" +
+                f"RB: {param_dict['RB']}, sig_RB: {param_dict['sig_RB']},\n" +
+                f"tau_EBV: {param_dict['tau_EBV']}, gamma_EBV: {param_dict['gamma_EBV']}\n"
+                "\n ------------------------------------------------------------- \n"
+            )
+
+            warnings.warn(warning_string)
+
+        if is_component:
+            output = logprobs
+        else:
+            output = np.sum(logprobs)
+
+        return output
+    
+    return sn_model
