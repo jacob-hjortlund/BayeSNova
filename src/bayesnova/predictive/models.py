@@ -2,6 +2,7 @@ import inspect
 import warnings
 import numpy as np
 import numba as nb
+import NumbaQuadpack as nq
 import bayesnova.utils as utils
 import scipy.stats as stats
 import scipy.special as special
@@ -9,7 +10,6 @@ import astropy.cosmology as cosmo
 
 from functools import partial
 from astropy.units import Gyr
-from NumbaQuadpack import quadpack_sig, dqags, ldqag
 from typing import Callable
 
 import bayesnova.preprocessing as prep
@@ -49,6 +49,7 @@ def EBV_marginalization(
     selection_bias_correction: np.ndarray,
     pointer: int,
     lower_bound_EBV: float = 0,
+    integrator: Callable = nq.dqags,
     convert_to_log: bool = False
 ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -65,7 +66,8 @@ def EBV_marginalization(
         upper_bound_EBV (float): Upper bound of E(B-V) integral.
         selection_bias_correction (np.ndarray): Selection bias correction.
         pointer (int): Pointer to the integrand function.
-        convert_to_log (bool, optional): Whether to log-transform the output. Defaults to False.
+        integrator (Callable): Integrator function.
+        is_log_space_integral (bool, optional): Whether the givene integrand is defined in log-space. Defaults to False.
 
     Returns:
         tuple[np.ndarray, np.ndarray]: Tuple of marginalization values and integration statuses.
@@ -76,7 +78,7 @@ def EBV_marginalization(
         RB, sig_RB, tau_EBV, gamma_EBV
     ])
     probs = np.zeros(n_sn)
-    status = np.zeros(n_sn, dtype='bool')
+    status = np.zeros(n_sn, dtype='bool')     
 
     for i in range(n_sn):
 
@@ -87,7 +89,7 @@ def EBV_marginalization(
         )).copy()
         tmp_params.astype(np.float64)
         
-        prob, _, state, _ = dqags(
+        prob, _, state, _ = integrator(
             funcptr=pointer, a=lower_bound_EBV,
             b=upper_bound_EBV, data=tmp_params
         )
@@ -176,7 +178,7 @@ def EBV_integral_body(
 
     return value
 
-@nb.cfunc(quadpack_sig)
+@nb.cfunc(nq.quadpack_sig)
 def EBV_integral(x, data):
     """
     Calculates the integrand of the E(B-V) prior.
@@ -215,9 +217,6 @@ def EBV_integral(x, data):
 EBV_integral_ptr = EBV_integral.address
 
 # ---------- E(B-V) PRIOR LOG-SPACE INTEGRAL ------------
-
-global EBV_prior_log_marginalization
-
 @nb.jit()
 def EBV_integral_log_body(
     x, i1, i2, i3, i4, i5,
@@ -293,7 +292,7 @@ def EBV_integral_log_body(
 
     return value
 
-@nb.cfunc(quadpack_sig)
+@nb.cfunc(nq.quadpack_sig)
 def EBV_log_integral(x, data):
     """
     Calculates the log integrand of the E(B-V) prior.
@@ -539,6 +538,7 @@ def marginalize_EBV(
     lower_bound_EBV: float = 0,
     selection_bias_correction: np.ndarray = None,
     convert_to_log: bool = False,
+    integration_method: str = 'dqags',
     **kwargs
 ) -> tuple:
     """Given the SN covariance and residuals, calculate the log likelihood
@@ -557,11 +557,14 @@ def marginalize_EBV(
         selection_bias_correction (np.ndarray, optional): Selection bias correction. Defaults to None, corresponding
         to no correction.
         convert_to_log (bool, optional): Whether to log-transform the output. Defaults to False.
-
+        integration_method (str, optional): Integration method. Defaults to 'dqags'.
+        
     Returns:
         tuple[np.ndarray, np.ndarray]: Log likelihood marginalized over EBV, status array
     """
     
+    integrator = getattr(nq, integration_method)
+
     if callable(upper_bound_EBV):
         upper_bound = upper_bound_EBV(gamma_EBV)
     else:
@@ -582,7 +585,8 @@ def marginalize_EBV(
         gamma_EBV=gamma_EBV, lower_bound_EBV=lower_bound_EBV,
         upper_bound_EBV=upper_bound,
         selection_bias_correction=selection_bias_correction,
-        convert_to_log=convert_to_log
+        convert_to_log=convert_to_log,
+        integrator=integrator,
     )
 
     logprobs -= log_truncated_normalization
@@ -633,9 +637,11 @@ def single_pop_sn_model_builder(
     if use_log_space_EBV_integral:
         EBV_integral_pointer = EBV_log_integral_ptr
         kwargs["convert_to_log"] = False
+        kwargs["integration_method"] = 'ldqag'
     else:
         EBV_integral_pointer = EBV_integral_ptr
         kwargs["convert_to_log"] = True
+        kwargs["integration_method"] = 'dqags'
 
     if use_variable_EBV_integral_limits:
         gamma_EBV_lower = sn_model_config['priors']['gamma_EBV']['lower']
