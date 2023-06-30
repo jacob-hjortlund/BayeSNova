@@ -375,6 +375,25 @@ def find_nearest_idx(array, value):
 
     return idx
 
+def get_gamma_quantile(
+    exponents: np.ndarray, quantiles: np.ndarray
+) -> np.ndarray:
+    """Get the quantiles for a set of gamma distribution exponents.
+
+    Args:
+        exponents (np.ndarray): Gamma distribution exponents.
+        quantiles (np.ndarray): Gamma distribution quantiles.
+
+    Returns:
+        np.ndarray: Gamma distribution quantiles for the given exponents.
+    """
+
+    quantiles = np.interp(
+        exponents, quantiles[0], quantiles[1]
+    )
+
+    return quantiles
+
 # ---------- SN MODEL BUILDER ----------
 
 def cosmology_builder(
@@ -543,6 +562,11 @@ def marginalize_EBV(
         tuple[np.ndarray, np.ndarray]: Log likelihood marginalized over EBV, status array
     """
     
+    if callable(upper_bound_EBV):
+        upper_bound = upper_bound_EBV(gamma_EBV)
+    else:
+        upper_bound = upper_bound_EBV
+
     if selection_bias_correction is None:
         selection_bias_correction = np.ones(len(sn_residuals))
 
@@ -575,13 +599,33 @@ def single_pop_sn_model_builder(
     calibrator_distance_moduli: np.ndarray = None,
     selection_bias_correction: np.ndarray = None,
     sn_model_config: dict = {},
-):
-    
+) -> Callable:
+    """Given the observed SN magnitudes, stretch, color, redshift, and
+    covariance, build a single-population SN model.
+
+    Args:
+        sn_app_magnitudes (np.ndarray): Observed SN apparent B-band magnitudes
+        sn_stretch (np.ndarray): Observed SN stretch
+        sn_colors (np.ndarray): Observed SN apparent color
+        sn_redshifts (np.ndarray): Observed SN redshifts
+        sn_covariances (np.ndarray): SN covariance matrix
+        calibrator_indices (np.ndarray, optional): Boolean array indicating which SNe are calibrators. Defaults to None.
+        calibrator_distance_moduli (np.ndarray, optional): Distance moduli of calibrators. Defaults to None.
+        selection_bias_correction (np.ndarray, optional): Selection bias correction. Defaults to None, corresponding
+        to no correction.
+        sn_model_config (dict, optional): SN model configuration. Defaults to {}.
+
+    Returns:
+        sn_model (Callable): SN model, taking an ndarray of parameters and returning total / individual log likelihoods.
+    """
+
     model_name = sn_model_config.get("model_name", "SN")
     is_component = sn_model_config.get("is_component", False)
     fixed_parameters = sn_model_config.get("fixed_parameters", {})
     free_parameter_names = sn_model_config.get("free_parameters", None)
     use_log_space_EBV_integral = sn_model_config.get("use_log_space_EBV_integral", False)
+    use_variable_EBV_integral_limits = sn_model_config.get("use_variable_EBV_integral_limits", False)
+    EBV_integral_limits_kwargs = sn_model_config.get("EBV_integral_limits_kwargs", {})
     kwargs = sn_model_config.get("kwargs", {})
     if free_parameter_names is None:
         raise ValueError(f"Must provide parameter names in {model_name} model config")
@@ -593,8 +637,19 @@ def single_pop_sn_model_builder(
         EBV_integral_pointer = EBV_integral_ptr
         kwargs["convert_to_log"] = True
 
+    if use_variable_EBV_integral_limits:
+        gamma_EBV_lower = sn_model_config['priors']['gamma_EBV']['lower']
+        gamma_EBV_upper = sn_model_config['priors']['gamma_EBV']['upper']
+        gamma_quantiles = create_gamma_quantiles(
+            lower=gamma_EBV_lower, upper=gamma_EBV_upper,
+            **EBV_integral_limits_kwargs
+        )
+        EBV_upper_bound_func = lambda exponent: get_gamma_quantile(exponent, gamma_quantiles)
+    else:
+        gamma_quantiles = None
+        EBV_upper_bound_func = lambda exponent: exponent
+
     prior_function = priors.prior_builder(sn_model_config)
-    upper_bound_EBV = 10.
 
     def sn_model(
         sampled_parameters: np.ndarray,
@@ -639,7 +694,7 @@ def single_pop_sn_model_builder(
             EBV_integral_pointer=EBV_integral_pointer,
             sn_covariances=covariances,
             sn_residuals=residuals,
-            upper_bound_EBV=upper_bound_EBV,
+            upper_bound_EBV=EBV_upper_bound_func,
             selection_bias_correction=selection_bias_correction,
             **input_dict
         )
