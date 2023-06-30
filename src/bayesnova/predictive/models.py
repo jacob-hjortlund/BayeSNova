@@ -571,7 +571,7 @@ def marginalize_EBV(
         selection_bias_correction = np.ones(len(sn_residuals))
 
     log_truncated_normalization = (
-        np.log(special.gammainc(gamma_EBV, upper_bound_EBV)) +
+        np.log(special.gammainc(gamma_EBV, upper_bound)) +
         special.loggamma(gamma_EBV)
     )
 
@@ -580,7 +580,7 @@ def marginalize_EBV(
         cov=sn_covariances, res=sn_residuals,
         RB=RB, sig_RB=sig_RB, tau_EBV=tau_EBV,
         gamma_EBV=gamma_EBV, lower_bound_EBV=lower_bound_EBV,
-        upper_bound_EBV=upper_bound_EBV,
+        upper_bound_EBV=upper_bound,
         selection_bias_correction=selection_bias_correction,
         convert_to_log=convert_to_log
     )
