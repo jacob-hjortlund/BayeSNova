@@ -646,8 +646,8 @@ def single_pop_sn_model_builder(
         )
         EBV_upper_bound_func = lambda exponent: get_gamma_quantile(exponent, gamma_quantiles)
     else:
-        gamma_quantiles = None
-        EBV_upper_bound_func = lambda exponent: exponent
+        fixed_upper_bound_EBV = sn_model_config.get("EBV_integral_fixed_limit", 10.)
+        EBV_upper_bound_func = lambda exponent: fixed_upper_bound_EBV
 
     prior_function = priors.prior_builder(sn_model_config)
 
