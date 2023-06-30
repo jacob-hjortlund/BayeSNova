@@ -24,11 +24,68 @@ PECULIAR_VELOCITY_DISPERSION = 300 # km/s
 
 global sn_observables
 
-# --------------------------------------- SUPERNOVA MODEL ---------------------------------------
+# --------------------------------------- SINGLE POPULATION SUPERNOVA MODEL ---------------------------------------
+
+@nb.njit
+def EBV_marginalization(
+    cov: np.ndarray, res: np.ndarray,
+    RB: float, sig_RB: float, 
+    tau_EBV: float, gamma_EBV: float, 
+    upper_bound_EBV: float,
+    selection_bias_correction: np.ndarray,
+    pointer: int,
+    lower_bound_EBV: float = 0,
+    convert_to_log: bool = False
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Calculates the marginalization of the E(B-V) prior.
+
+    Args:
+        cov (np.ndarray): SNe covariance matrix.
+        res (np.ndarray): SNe residual vector.
+        RB (float): Mean extinction coefficient.
+        sig_RB (float): Standard deviation of extinction coefficient.
+        tau_EBV (float): E(B-V) scale factor.
+        gamma_EBV (float): E(B-V) exponent.
+        lower_bound_EBV (float, optional): Lower bound of E(B-V) integral. Defaults to 0.
+        upper_bound_EBV (float): Upper bound of E(B-V) integral.
+        selection_bias_correction (np.ndarray): Selection bias correction.
+        pointer (int): Pointer to the integrand function.
+        convert_to_log (bool, optional): Whether to log-transform the output. Defaults to False.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: Tuple of marginalization values and integration statuses.
+    """
+
+    n_sn = len(cov)
+    params = np.array([
+        RB, sig_RB, tau_EBV, gamma_EBV
+    ])
+    probs = np.zeros(n_sn)
+    status = np.zeros(n_sn, dtype='bool')
+
+    for i in range(n_sn):
+
+        bias_corr = np.array([selection_bias_correction[i]])
+        tmp_params = np.concatenate((
+            cov[i].ravel(), res[i].ravel(),
+            bias_corr, params
+        )).copy()
+        tmp_params.astype(np.float64)
+        
+        prob, _, state, _ = dqags(
+            funcptr=pointer, a=lower_bound_EBV,
+            b=upper_bound_EBV, data=tmp_params
+        )
+        probs[i] = prob
+        status[i] = state
+
+    if convert_to_log:
+        probs = np.log(probs)
+
+    return probs, status
 
 # ---------- E(B-V) PRIOR INTEGRAL ------------
-
-global EBV_prior_marginalization
 
 @nb.jit()
 def EBV_integral_body(
@@ -142,96 +199,6 @@ def EBV_integral(x, data):
         RB, sig_RB, tau_EBV, gamma_EBV
     )
 EBV_integral_ptr = EBV_integral.address
-
-@nb.njit
-def _EBV_prior_marginalization(
-    cov: np.ndarray, res: np.ndarray,
-    RB: float, sig_RB: float, 
-    tau_EBV: float, gamma_EBV: float, 
-    upper_bound_EBV: float,
-    selection_bias_correction: np.ndarray,
-    pointer,
-    lower_bound_EBV: float = 0
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Calculates the marginalization of the E(B-V) prior.
-
-    Args:
-        cov (np.ndarray): SNe covariance matrix.
-        res (np.ndarray): SNe residual vector.
-        RB (float): Mean extinction coefficient.
-        sig_RB (float): Standard deviation of extinction coefficient.
-        tau_EBV (float): E(B-V) scale factor.
-        gamma_EBV (float): E(B-V) exponent.
-        lower_bound_EBV (float): Lower bound of E(B-V) integral.
-        upper_bound_EBV (float): Upper bound of E(B-V) integral.
-        selection_bias_correction (np.ndarray): Selection bias correction.
-
-    Returns:
-        tuple[np.ndarray, np.ndarray]: Tuple of marginalization values and integration statuses.
-    """
-
-    n_sn = len(cov)
-    params = np.array([
-        RB, sig_RB, tau_EBV, gamma_EBV
-    ])
-    probs = np.zeros(n_sn)
-    status = np.zeros(n_sn, dtype='bool')
-
-    for i in range(n_sn):
-
-        bias_corr = np.array([selection_bias_correction[i]])
-        tmp_params = np.concatenate((
-            cov[i].ravel(), res[i].ravel(),
-            bias_corr, params
-        )).copy()
-        tmp_params.astype(np.float64)
-        
-        prob, _, state, _ = dqags(
-            funcptr=pointer, a=lower_bound_EBV,
-            b=upper_bound_EBV, data=tmp_params
-        )
-        probs[i] = prob
-        status[i] = state
-
-    logprobs = np.log(probs)
-
-    return logprobs, status
-
-def EBV_prior_marginalization(
-    cov: np.ndarray, res: np.ndarray,
-    RB: float, sig_RB: float, 
-    tau_EBV: float, gamma_EBV: float, 
-    upper_bound_EBV: float,
-    selection_bias_correction: np.ndarray,
-    pointer=EBV_integral_ptr,
-    lower_bound_EBV: float = 0
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Calculates the marginalization of the E(B-V) prior.
-
-    Args:
-        cov (np.ndarray): SNe covariance matrix.
-        res (np.ndarray): SNe residual vector.
-        RB (float): Mean extinction coefficient.
-        sig_RB (float): Standard deviation of extinction coefficient.
-        tau_EBV (float): E(B-V) scale factor.
-        gamma_EBV (float): E(B-V) exponent.
-        lower_bound_EBV (float): Lower bound of E(B-V) integral.
-        upper_bound_EBV (float): Upper bound of E(B-V) integral.
-        selection_bias_correction (np.ndarray): Selection bias correction.
-
-    Returns:
-        tuple[np.ndarray, np.ndarray]: Tuple of marginalization values and integration statuses.
-    """
-
-    logprobs, status = _EBV_prior_marginalization(
-        cov, res, RB, sig_RB, tau_EBV, gamma_EBV,
-        upper_bound_EBV, selection_bias_correction,
-        pointer, lower_bound_EBV
-    )
-
-    return logprobs, status
 
 # ---------- E(B-V) PRIOR LOG-SPACE INTEGRAL ------------
 
@@ -349,58 +316,6 @@ def EBV_log_integral(x, data):
         RB, sig_RB, tau_EBV, gamma_EBV
     )
 EBV_log_integral_ptr = EBV_log_integral.address
-
-@nb.njit
-def EBV_prior_log_marginalization(
-    cov: np.ndarray, res: np.ndarray,
-    RB: float, sig_RB: float,
-    tau_EBV: float, gamma_EBV: float, 
-    upper_bound_EBV: float,
-    selection_bias_correction: np.ndarray,
-    lower_bound_EBV: float = 0,
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Calculates the log marginalization of the E(B-V) prior.
-
-    Args:
-        cov (np.ndarray): SNe covariance matrices.
-        res (np.ndarray): SNe residual vectors.
-        RB (float): Mean extinction coefficient.
-        sig_RB (float): Standard deviation of extinction coefficient.
-        tau_EBV (float): E(B-V) scale factor.
-        gamma_EBV (float): E(B-V) exponent.
-        lower_bound_EBV (float): Lower bound of E(B-V) prior.
-        upper_bound_EBV (float): Upper bound of E(B-V) prior.
-        selection_bias_correction (np.ndarray): Selection bias correction.
-
-    Returns:
-        tuple[np.ndarray, np.ndarray]: Log marginalization and status.
-    """
-
-    n_sn = len(cov)
-    params = np.array([
-        RB, sig_RB, tau_EBV, gamma_EBV
-    ])
-    logprobs = np.zeros(n_sn)
-    status = np.zeros(n_sn, dtype='bool')
-
-    for i in range(n_sn):
-
-        bias_corr = np.array([selection_bias_correction[i]])
-        tmp_params = np.concatenate((
-            cov[i].ravel(), res[i].ravel(),
-            bias_corr, params
-        )).copy()
-        tmp_params.astype(np.float64)
-        
-        logprob, _, state, _ = ldqag(
-            funcptr=EBV_log_integral_ptr, a=lower_bound_EBV,
-            b=upper_bound_EBV, data=tmp_params
-        )
-        logprobs[i] = logprob
-        status[i] = state
-
-    return logprobs, status
 
 # ---------- INTEGRAL LIMIT UTILS ----------
 
@@ -598,7 +513,7 @@ def sn_residuals(
     return residuals
 
 def marginalize_EBV(
-    EBV_marginalization_func: Callable,
+    EBV_integral_pointer: int,
     sn_covariances: np.ndarray,
     sn_residuals: np.ndarray,
     RB: float, sig_RB: float,
@@ -606,13 +521,14 @@ def marginalize_EBV(
     upper_bound_EBV: float,
     lower_bound_EBV: float = 0,
     selection_bias_correction: np.ndarray = None,
+    convert_to_log: bool = False,
     **kwargs
 ) -> tuple:
     """Given the SN covariance and residuals, calculate the log likelihood
     marginalized over EBV.
 
     Args:
-        EBV_marginalization_func (Callable): Function to calculate the log likelihood marginalized over EBV
+        EBV_integral_pointer (int): Pointer to EBV integral function
         sn_covariances (np.ndarray): SN covariance matrix
         sn_residuals (np.ndarray): SN residuals
         RB (float): Mean extinction coefficient
@@ -623,6 +539,7 @@ def marginalize_EBV(
         upper_bound_EBV (float): Upper bound on EBV
         selection_bias_correction (np.ndarray, optional): Selection bias correction. Defaults to None, corresponding
         to no correction.
+        convert_to_log (bool, optional): Whether to log-transform the output. Defaults to False.
 
     Returns:
         tuple[np.ndarray, np.ndarray]: Log likelihood marginalized over EBV, status array
@@ -636,12 +553,14 @@ def marginalize_EBV(
         special.loggamma(gamma_EBV)
     )
 
-    logprobs, status = EBV_marginalization_func(
+    logprobs, status = EBV_marginalization(
+        pointer=EBV_integral_pointer,
         cov=sn_covariances, res=sn_residuals,
         RB=RB, sig_RB=sig_RB, tau_EBV=tau_EBV,
         gamma_EBV=gamma_EBV, lower_bound_EBV=lower_bound_EBV,
         upper_bound_EBV=upper_bound_EBV,
-        selection_bias_correction=selection_bias_correction
+        selection_bias_correction=selection_bias_correction,
+        convert_to_log=convert_to_log
     )
 
     logprobs -= log_truncated_normalization
@@ -665,14 +584,16 @@ def sn_model_builder(
     fixed_parameters = sn_model_config.get("fixed_parameters", {})
     free_parameter_names = sn_model_config.get("free_parameters", None)
     use_log_space_EBV_integral = sn_model_config.get("use_log_space_EBV_integral", False)
-    
+    kwargs = sn_model_config.get("kwargs", {})
     if free_parameter_names is None:
         raise ValueError(f"Must provide parameter names in {model_name} model config")
     
     if use_log_space_EBV_integral:
-        EBV_marginalization_func = EBV_prior_log_marginalization
+        EBV_integral_pointer = EBV_log_integral_ptr
+        kwargs["convert_to_log"] = False
     else:
-        EBV_marginalization_func = EBV_prior_marginalization
+        EBV_integral_pointer = EBV_integral_ptr
+        kwargs["convert_to_log"] = True
 
     prior_function = priors.prior_builder(sn_model_config)
     upper_bound_EBV = 10.
@@ -695,14 +616,14 @@ def sn_model_builder(
         if np.isinf(logprior):
             return logprior
 
-        param_dict = fixed_parameters | free_param_dict
-        cosmology = cosmology_builder(**param_dict)
+        input_dict = fixed_parameters | free_param_dict | kwargs
+        cosmology = cosmology_builder(**input_dict)
 
         covariances = sn_covariance(
             observational_covariances=sn_covariances,
             sn_redshifts=sn_redshifts,
             calibrator_indices=calibrator_indices,
-            **param_dict
+            **input_dict
         )
 
         residuals = sn_residuals(
@@ -713,16 +634,16 @@ def sn_model_builder(
             calibrator_indices=calibrator_indices,
             calibrator_distance_moduli=calibrator_distance_moduli,
             cosmology=cosmology,
-            **param_dict
+            **input_dict
         )
 
         logprobs, integration_status = marginalize_EBV(
-            EBV_marginalization_func=EBV_marginalization_func,
+            EBV_integral_pointer=EBV_integral_pointer,
             sn_covariances=covariances,
             sn_residuals=residuals,
             upper_bound_EBV=upper_bound_EBV,
             selection_bias_correction=selection_bias_correction,
-            **param_dict
+            **input_dict
         )
 
         idx_integration_failed = ~integration_status
@@ -743,8 +664,8 @@ def sn_model_builder(
                 "\n Parameter values: \n\n"
             )
 
-            for param in free_parameter_names:
-                warning_string += f"{param}: {param_dict[param]}\n"
+            for param in free_parameter_names + list(fixed_parameters.keys()):
+                warning_string += f"{param}: {input_dict[param]}\n"
 
             warning_string += "\n ---------------------------------------------------------- \n"
 
