@@ -738,3 +738,47 @@ def single_pop_sn_model_builder(
         return output
     
     return sn_model
+
+# --------------------------------------- MULTIPLE POPULATION SUPERNOVA MODEL ---------------------------------------
+
+def multi_pop_sn_model_builder(
+    sn_app_magnitudes: np.ndarray,
+    sn_stretch: np.ndarray,
+    sn_colors: np.ndarray,
+    sn_redshifts: np.ndarray,
+    sn_covariances: np.ndarray,
+    calibrator_indices: np.ndarray = None,
+    calibrator_distance_moduli: np.ndarray = None,
+    selection_bias_correction: np.ndarray = None,
+    sn_model_config: dict = {},
+    mixture_model_config: dict = {}
+) -> Callable:
+    
+    n_mixture_components = mixture_model_config.get("n_components", 2)
+    shared_parameters = mixture_model_config.get("shared_parameters", [])
+    independent_parameters = mixture_model_config.get("independent_parameters", [])
+    cosmological_parameters = mixture_model_config.get("cosmological_parameters", [])
+    all_parameter_names = shared_parameters + independent_parameters + cosmological_parameters
+    
+    sn_model_config = sn_model_config.copy()
+    sn_model_config["free_parameters"] = all_parameter_names
+
+    sn_models = []
+    for i in range(n_mixture_components):
+        sn_model_config_i = sn_model_config.copy()
+        sn_model_config_i["model_name"] = f"SN_{i}"
+        sn_models.append(
+            single_pop_sn_model_builder(
+                sn_app_magnitudes=sn_app_magnitudes,
+                sn_stretch=sn_stretch,
+                sn_colors=sn_colors,
+                sn_redshifts=sn_redshifts,
+                sn_covariances=sn_covariances,
+                calibrator_indices=calibrator_indices,
+                calibrator_distance_moduli=calibrator_distance_moduli,
+                selection_bias_correction=selection_bias_correction,
+                sn_model_config=sn_model_config_i
+            )
+        )
+
+    return 1
