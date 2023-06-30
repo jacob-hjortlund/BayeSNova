@@ -22,7 +22,21 @@ DH_70 = 4282.7494
 SPEED_OF_LIGHT = 299792.458 # km/s
 PECULIAR_VELOCITY_DISPERSION = 300 # km/s
 
-global sn_observables
+def map_array_to_dict(
+    array: np.ndarray,
+    keys: list[str]
+):
+    """Map an array to a dictionary.
+
+    Args:
+        array (np.ndarray): Array to map.
+        keys (list[str]): Keys to map to.
+
+    Returns:
+        dict: Dictionary of mapped values.
+    """
+
+    return dict(zip(keys, array))
 
 # --------------------------------------- SINGLE POPULATION SUPERNOVA MODEL ---------------------------------------
 
@@ -386,22 +400,6 @@ def cosmology_builder(
 
     return cosmology
 
-def map_array_to_dict(
-    array: np.ndarray,
-    keys: list[str]
-):
-    """Map an array to a dictionary.
-
-    Args:
-        array (np.ndarray): Array to map.
-        keys (list[str]): Keys to map to.
-
-    Returns:
-        dict: Dictionary of mapped values.
-    """
-
-    return dict(zip(keys, array))
-
 def sn_covariance(
     observational_covariances: np.ndarray,
     sn_redshifts: np.ndarray,
@@ -567,7 +565,7 @@ def marginalize_EBV(
 
     return logprobs, status
 
-def sn_model_builder(
+def single_pop_sn_model_builder(
     sn_app_magnitudes: np.ndarray,
     sn_stretch: np.ndarray,
     sn_colors: np.ndarray,
