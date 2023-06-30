@@ -13,7 +13,7 @@ import emcee as em
 import corner
 import astropy.cosmology as cosmopy
 
-import bayesnova.models_old as models_old
+import bayesnova.models as models
 import bayesnova.preprocessing as prep
 import bayesnova.utils as utils
 from functools import partial
@@ -182,7 +182,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
             # Init model and sample
             n_dim = len(cfg['model_cfg']['pars'])
             n_walkers = cfg['emcee_cfg']['n_walkers']
-            tripp_model = models_old.TrippModel(cfg['model_cfg'])
+            tripp_model = models.TrippModel(cfg['model_cfg'])
             init_values = init_values[None, :] + 3e-2 * np.random.normal(size=(
                 n_walkers, n_dim
             ))

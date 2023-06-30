@@ -9,7 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 import bayesnova.utils as utils
-import bayesnova.models_old as model
+import bayesnova.models as model
 import bayesnova.preprocessing as prep
 import bayesnova.postprocessing as post
 
