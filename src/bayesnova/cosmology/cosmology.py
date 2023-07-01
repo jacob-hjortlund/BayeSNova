@@ -1,5 +1,6 @@
 import jax
 jax.config.update("jax_enable_x64", True)
+import warnings
 import numpy as np
 import jax.numpy as jnp
 import astropy.cosmology as cosmo
@@ -35,7 +36,8 @@ def E(
 
 def convolution_limits(
     z: np.ndarray, T0: float, T1: float, cosmology: cosmo.Cosmology = None,
-    H0: float = None, Om0: float = None, w0: float = None, wa: float = None
+    H0: float = None, Om0: float = None, w0: float = None, wa: float = None,
+    **kwargs
 ) -> jax.Array:
     """The convolution limits for the redshift at times ODE.
 
@@ -71,8 +73,8 @@ def convolution_limits(
 
 def initial_redshift_value(
     initial_time: float, z_at_value_kwargs: dict = {'method': 'Bounded', 'zmax': 1000},
-    zmax: float = 1e10, factor: float = 10, cosmology: cosmo.Cosmology = None,
-    H0: float = None, Om0: float = None, w0: float = None, wa: float = None
+    zmax: float = 1e10, factor: float = 10, n_repeats: int = 0, cosmology: cosmo.Cosmology = None,
+    H0: float = None, Om0: float = None, w0: float = None, wa: float = None, **kwargs
 ) -> float:
     """The initial redshift value for the redshift at times ODE.
 
@@ -81,6 +83,7 @@ def initial_redshift_value(
         cosmo_kwargs (dict, optional): The kwargs for the z_at_value function. Defaults to {'method': 'Bounded', 'zmax': 1000}.
         zmax (float, optional): The maximum redshift for z_at_value. Defaults to 1e10.
         factor (float, optional): The factor to increase z_at_value zmax by. Defaults to 10.
+        n_repeats (int, optional): The number of times to repeat the z_at_value function. Defaults to 0.
         cosmology (cosmo.Cosmology, optional): The AstroPy cosmology. Defaults to None.
         H0 (float, optional): The Hubble constant. Defaults to None.
         Om0 (float, optional): The matter density. Defaults to None.
@@ -108,17 +111,28 @@ def initial_redshift_value(
             'is above 1e10, something is wrong.'
         )
 
+    warnings.filterwarnings('ignore')
     try:
         z0 = cosmo.z_at_value(
             cosmology.age, initial_time * Gyr, **z_at_value_kwargs
         )
     except:
-        z_at_value_kwargs['zmax'] *= factor
-        z0 = initial_redshift_value(
-            initial_time=initial_time,
-            z_at_value_kwargs=z_at_value_kwargs,
-            zmax=zmax, factor=factor, cosmology=cosmology
+        warnings.resetwarnings()
+        warning_str = (
+            f"Failure to find z0 for minimum convolution time of {initial_time} Gyr."
         )
+        if n_repeats > 0:
+            warning_str += f" Trying again with zmax = {zmax * factor}."
+            warnings.warn(warning_str)
+            z_at_value_kwargs['zmax'] *= factor
+            z0 = initial_redshift_value(
+                initial_time=initial_time,
+                z_at_value_kwargs=z_at_value_kwargs,
+                zmax=zmax, factor=factor, cosmology=cosmology
+            )
+        else:
+            warnings.warn(warning_str)
+            z0 = np.nan
 
     return z0
 

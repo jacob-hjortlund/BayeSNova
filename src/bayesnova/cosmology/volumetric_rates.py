@@ -1,6 +1,7 @@
 import numpy as np
 import numba as nb
 
+from astropy.cosmology import Flatw0waCDM
 from NumbaQuadpack import quadpack_sig, dqags, ldqag
 
 import src.bayesnova.utils.constants as constants
@@ -275,10 +276,60 @@ def _volumetric_rates(
     return rates
 
 def volumetric_rates(
-    z: np.ndarray, integral_limits: np.ndarray,
-    H0: float, Om0: float, w0: float, wa: float,
+    z: np.ndarray, H0: float, Om0: float,
+    w0: float, wa: float,
     eta: float, prompt_fraction: float,
-    zinf: float, age: float, **kwargs
+    t0: float = 0.04, t1: float = 0.5,
+    zinf: float = 20., **kwargs
 ) -> np.ndarray:
+    """Calculate the total, prompt and delayed progenitor channel volumetric rates at the given redshifts.
+
+    Args:
+        z (np.ndarray): The redshifts.
+        H0 (float): The Hubble constant in km/s/Mpc.
+        Om0 (float): The matter density parameter.
+        w0 (float): The dark energy equation of state parameter.
+        wa (float): The dark energy equation of state parameter.
+        eta (float): The SN Ia normalization.
+        prompt_fraction (float): The prompt fraction.
+        t0 (float, optional): The minimum delay time in Gyr. Defaults to 0.04.
+        t1 (float, optional): The maximum delay time in Gyr. Defaults to 0.5.
+        zinf (float, optional): The maximum redshift of star formation. Defaults to 20.
+
+    Returns:
+        np.ndarray: The total, prompt and delayed progenitor channel volumetric rates at the given redshifts.
+    """
     
-    return 1
+    cosmo = Flatw0waCDM(H0=H0, Om0=Om0, w0=w0, wa=wa)
+    cosmo_args = (H0, Om0, w0, wa)
+    convolution_time_limits = cosmology.convolution_time_limits(
+        z=z, T0=t0, T1=t1, cosmology=cosmo
+    )
+    idx_valid_limits = convolution_time_limits > 0.
+    valid_convolution_time_limits = convolution_time_limits[idx_valid_limits]
+    minimum_convolution_time = np.min(valid_convolution_time_limits)
+
+    z0 = cosmology.initial_redshift_value(
+        minimum_convolution_time, cosmology=cosmo
+    )
+
+    _, convolution_redshift_limits, _ = cosmology.redshift_at_times(
+        times=convolution_time_limits, t0=minimum_convolution_time,
+        z0=z0, cosmo_args=cosmo_args
+    )
+
+    integral_limits = np.ones_like(convolution_redshift_limits) * constants.NULL_VALUE
+    integral_limits[idx_valid_limits] = convolution_redshift_limits[idx_valid_limits]
+    integral_limits = np.column_stack(
+        np.split(integral_limits, 2)
+    )
+
+    age_of_universe = cosmo.age(0).value - cosmo.age(zinf).value
+
+    sn_ia_rates = _volumetric_rates(
+        z=z, integral_limits=integral_limits, H0=H0, Om0=Om0,
+        w0=w0, wa=wa, eta=eta, prompt_fraction=prompt_fraction,
+        zinf=zinf, age=age_of_universe
+    )
+
+    return sn_ia_rates
