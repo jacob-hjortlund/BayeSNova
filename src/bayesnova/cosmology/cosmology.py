@@ -34,19 +34,35 @@ def E(
     return Ez
 
 def convolution_limits(
-    cosmology: cosmo.Cosmology, z: np.ndarray, T0: float, T1: float
+    z: np.ndarray, T0: float, T1: float, cosmology: cosmo.Cosmology = None,
+    H0: float = None, Om0: float = None, w0: float = None, wa: float = None
 ) -> jax.Array:
     """The convolution limits for the redshift at times ODE.
 
     Args:
-        cosmology (cosmo.Cosmology): The AstroPy cosmology.
         z (np.ndarray): Redshifts.
         T0 (float): The lower time limit in Gyrs.
         T1 (float): The upper time limit in Gyrs.
+        cosmology (cosmo.Cosmology, optional): The AstroPy cosmology. Defaults to None.
+        H0 (float, optional): The Hubble constant. Defaults to None.
+        Om0 (float, optional): The matter density. Defaults to None.
+        w0 (float, optional): The dark energy equation of state. Defaults to None.
+        wa (float, optional): The dark energy equation of state evolution. Defaults to None.
 
     Returns:
         jax.Array: The convolution limits.
     """
+
+    is_cosmology_provided = cosmology is not None
+    are_cosmology_pars_given = (
+        H0 is not None and Om0 is not None and w0 is not None and wa is not None
+    )
+    if not is_cosmology_provided and not are_cosmology_pars_given:
+        raise ValueError(
+            'Either a cosmology or the cosmology parameters must be provided.'
+        )
+    if are_cosmology_pars_given:
+        cosmology = cosmo.Flatw0waCDM(H0, Om0, w0, wa)
     
     times_z0_lower = cosmology.age(z).value - T0
     times_z0_upper = cosmology.age(z).value - T1
@@ -54,24 +70,39 @@ def convolution_limits(
     return jnp.concatenate((times_z0_lower, times_z0_upper))
 
 def initial_redshift_value(
-    cosmology: cosmo.Cosmology, initial_time: float,
-    cosmo_kwargs: dict = {'method': 'Bounded', 'zmax': 1000},
-    zmax: float = 1e10, factor: float = 10
+    initial_time: float, z_at_value_kwargs: dict = {'method': 'Bounded', 'zmax': 1000},
+    zmax: float = 1e10, factor: float = 10, cosmology: cosmo.Cosmology = None,
+    H0: float = None, Om0: float = None, w0: float = None, wa: float = None
 ) -> float:
     """The initial redshift value for the redshift at times ODE.
 
     Args:
-        cosmology (cosmo.Cosmology): The AstroPy cosmology.
         initial_time (float): The initial time in Gyrs.
         cosmo_kwargs (dict, optional): The kwargs for the z_at_value function. Defaults to {'method': 'Bounded', 'zmax': 1000}.
         zmax (float, optional): The maximum redshift for z_at_value. Defaults to 1e10.
         factor (float, optional): The factor to increase z_at_value zmax by. Defaults to 10.
+        cosmology (cosmo.Cosmology, optional): The AstroPy cosmology. Defaults to None.
+        H0 (float, optional): The Hubble constant. Defaults to None.
+        Om0 (float, optional): The matter density. Defaults to None.
+        w0 (float, optional): The dark energy equation of state. Defaults to None.
+        wa (float, optional): The dark energy equation of state evolution. Defaults to None.
 
     Returns:
         float: The initial redshift value.
     """
 
-    if cosmo_kwargs['zmax'] > zmax:
+    is_cosmology_provided = cosmology is not None
+    are_cosmology_pars_given = (
+        H0 is not None and Om0 is not None and w0 is not None and wa is not None
+    )
+    if not is_cosmology_provided and not are_cosmology_pars_given:
+        raise ValueError(
+            'Either a cosmology or the cosmology parameters must be provided.'
+        )
+    if are_cosmology_pars_given:
+        cosmology = cosmo.Flatw0waCDM(H0, Om0, w0, wa)
+
+    if z_at_value_kwargs['zmax'] > zmax:
         raise ValueError(
             'Upper limit for initial age to redshift ODE ' +
             'is above 1e10, something is wrong.'
@@ -79,12 +110,14 @@ def initial_redshift_value(
 
     try:
         z0 = cosmo.z_at_value(
-            cosmology.age, initial_time * Gyr, **cosmo_kwargs
+            cosmology.age, initial_time * Gyr, **z_at_value_kwargs
         )
     except:
-        cosmo_kwargs['zmax'] *= factor
+        z_at_value_kwargs['zmax'] *= factor
         z0 = initial_redshift_value(
-            cosmology, initial_time, cosmo_kwargs, zmax, factor
+            initial_time=initial_time,
+            z_at_value_kwargs=z_at_value_kwargs,
+            zmax=zmax, factor=factor, cosmology=cosmology
         )
 
     return z0
