@@ -17,6 +17,7 @@ import bayesnova.cosmology_utils as cosmo_utils
 import src.bayesnova.predictive.priors as priors
 import src.bayesnova.predictive.single_population as single_pop
 import src.bayesnova.utils as utils
+from src.bayesnova.cosmology.volumetric_rates import volumetric_rates
 
 # --------------------------------------- MULTIPLE POPULATION SUPERNOVA MODEL ---------------------------------------
 
@@ -85,6 +86,42 @@ def constant_mixture_weights(
 
     return mixture_weights
 
+def redshift_dependent_mixture_weights(
+    redshifts: np.ndarray, H0: float, Om0: float,
+    w0: float, wa: float, eta: float, 
+    prompt_fraction: float, **kwargs
+) -> np.ndarray:
+    """Create a redshift dependent mixture weight array based on volumetric SN Ia rates.
+
+    Args:
+        redshifts (np.ndarray): The redshifts.
+        H0 (float): The Hubble constant.
+        Om0 (float): The matter density.
+        w0 (float): The dark energy equation of state parameter.
+        wa (float): The dark energy equation of state evolution parameter.
+        eta (float): The SN Ia delay time distribution normalization.
+        prompt_fraction (float): The prompt progenitor channel fraction.
+
+    Returns:
+        np.ndarray: The mixture weights.
+    """
+
+    sn_ia_rates = volumetric_rates(
+        z=redshifts, H0=H0, Om0=Om0, w0=w0, wa=wa,
+        eta=eta, prompt_fraction=prompt_fraction
+        **kwargs
+    )
+    valid_rates = np.all(np.isfinite(sn_ia_rates))
+
+    if valid_rates:
+        prompt_population_weight = sn_ia_rates[:, 1] / sn_ia_rates[:, 0]
+        delayed_population_weight = 1 - prompt_population_weight
+        mixture_weights = np.row_stack([prompt_population_weight, delayed_population_weight])
+    else:
+        mixture_weights = np.ones((2, len(redshifts))) * -np.inf
+
+    return mixture_weights
+
 def multi_pop_sn_model_builder(
     sn_app_magnitudes: np.ndarray,
     sn_stretch: np.ndarray,
@@ -113,8 +150,10 @@ def multi_pop_sn_model_builder(
     all_free_parameter_names = shared_parameters + independent_parameters + cosmological_parameters
     fixed_sn_parameters = mixture_model_config.get("fixed_sn_parameters", {})
     fixed_mixture_parameters = mixture_model_config.get("fixed_mixture_parameters", {})
+    mixture_kwargs = mixture_model_config.get("mixture_kwargs", {})
     use_physical_mixture_weights = mixture_model_config.get("use_physical_mixture_weights", False)
 
+    n_sne = sn_app_magnitudes.shape[1]
     n_shared_parameters = len(shared_parameters)
     n_independent_parameters = len(independent_parameters)
     n_cosmological_parameters = len(cosmological_parameters)
@@ -122,12 +161,13 @@ def multi_pop_sn_model_builder(
     n_mixture_parameters = len(mixture_parameters)
 
     if not use_physical_mixture_weights:
-        n_supernoave = sn_app_magnitudes.shape[1]
         mixture_weight_function = lambda mixture_parameters: constant_mixture_weights(
-            n_supernovae=n_supernoave, **mixture_parameters
+            n_supernovae=n_sne, **mixture_parameters
         )
     else:
-        print("Using physical mixture weights.")
+        mixture_weight_function = lambda mixture_parameters: redshift_dependent_mixture_weights(
+            redshifts=sn_redshifts, **mixture_parameters
+        )
 
     sn_model_config = sn_model_config.copy()
     sn_model_config["free_parameters"] = all_free_parameter_names
@@ -170,11 +210,14 @@ def multi_pop_sn_model_builder(
             array=mixture_params,
             array_names=mixture_parameters
         )
-        mixture_params_dict = mixture_params_dict | fixed_mixture_parameters
+        mixture_params_dict = mixture_params_dict | fixed_mixture_parameters | mixture_kwargs
 
         mixture_weights = mixture_weight_function(**mixture_params_dict)
+        valid_mixture_weights = np.all(np.isfinite(mixture_weights))
+        if not valid_mixture_weights:
+            return -np.inf
 
-        population_likelihoods = []
+        population_likelihoods = np.zeros((n_sne, n_mixture_components))
         for i in range(n_mixture_components):
 
             independent_params = sampled_parameters[
@@ -189,6 +232,9 @@ def multi_pop_sn_model_builder(
 
             population_likelihoods.append(population_likelihood)
         
-        return 1
+        sn_probs = np.sum(population_likelihoods, axis=1)
+        total_likelihood = np.sum(np.log(sn_probs))
+
+        return total_likelihood
     
     return multi_pop_sn_model

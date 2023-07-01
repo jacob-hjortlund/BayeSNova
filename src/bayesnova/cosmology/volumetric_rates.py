@@ -312,6 +312,9 @@ def volumetric_rates(
     z0 = cosmology.initial_redshift_value(
         minimum_convolution_time, cosmology=cosmo
     )
+    is_z0_valid = np.isfinite(z0) and z0 > 0.
+    if not is_z0_valid:
+        sn_ia_rates = np.ones((len(z), 3)) * -np.inf
 
     _, convolution_redshift_limits, _ = cosmology.redshift_at_times(
         times=convolution_time_limits, t0=minimum_convolution_time,
