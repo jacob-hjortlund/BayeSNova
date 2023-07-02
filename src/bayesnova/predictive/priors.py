@@ -91,27 +91,63 @@ def sampling_transform(parameter_dict: dict, transform_config):
     
     return param_dict
 
+
+
+def ordering_prior_builder(
+    independent_parameters_to_compare: list,
+) -> Callable:
+    """
+    Builds an ordering prior function.
+
+    Args:
+        independent_parameters_to_compare (list): List of independent parameters to compare.
+
+    Returns:
+        Callable: Ordering prior function.
+    """
+    
+    def check_if_ordered(parameter_dict: dict) -> float:
+        """
+        Checks if array of each independent population parameter is ordered.
+
+        Args:
+            parameter_dict (dict): Dictionary of parameter values. Keys are parameter names
+            and values are arrays of population parameter values.
+
+        Returns:
+            float: Log prior value, -inf if not ordered, 0 otherwise. 
+        """
+
+        prior_value = 0.
+        parameters_to_compare = set(parameter_dict.keys()).intersection(independent_parameters_to_compare)
+        for parameter in parameters_to_compare:
+            values_to_compare = parameter_dict[parameter]
+            is_ordered = np.all(values_to_compare[:-1] < values_to_compare[1:])
+            if not is_ordered:
+                prior_value = -np.inf
+                break
+
+        return prior_value
+
+    return check_if_ordered
+
 def prior_builder(
-    model_config: dict
+    model_name: str,
+    free_parameters: list[str] = [],
+    prior_config: dict = {},
 ) -> Callable:
     """
     Builds a prior function from a model config.
 
     Args:
-        model_config (dict): Model config.
+        model_name (str): Model name.
+        free_parameters (list[str], optional): List of free parameters. Defaults to [].
+        prior_config (dict, optional): Prior configuration. Defaults to {}.
 
     Returns:
         Callable: Prior function.
     """
-    
-    model_name = model_config['model_name']
-    free_parameters = model_config.get('free_parameters', None)
-    free_parameters_to_compare = model_config.get('free_parameters_to_compare', [])
-    prior_config = model_config.get('priors', {})
 
-    #TODO: ADD LOG HANDLING
-    if free_parameters is None:
-        raise ValueError(f'No free parameters specified in {model_name} model config.')
     parameters_in_prior = set(prior_config.keys()).intersection(free_parameters)
 
     def prior_func(
@@ -168,11 +204,6 @@ def prior_builder(
                 )
 
             if prior_value == -np.inf:
-                break
-        
-        for (lower_parameter, upper_parameter) in free_parameters_to_compare:
-            if parameter_dict[lower_parameter] > parameter_dict[upper_parameter]:
-                prior_value += -np.inf
                 break
 
         return prior_value
