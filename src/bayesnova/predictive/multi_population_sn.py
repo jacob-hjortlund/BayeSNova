@@ -135,6 +135,7 @@ def multi_pop_sn_model_builder(
     mixture_model_config: dict = {}
 ) -> Callable:
     
+    # Check Mixture Model Config
     raise_error, error_message = check_multi_pop_sn_model_config(
         mixture_model_config=mixture_model_config
     )
@@ -144,26 +145,33 @@ def multi_pop_sn_model_builder(
     sn_model_config = mixture_model_config.get("single_pop", {})
     mixture_model_config = mixture_model_config.get("multi_pop", {})
 
+    # Mixture Settings
     mixture_model_name = mixture_model_config.get("model_name", "Mixture Model")
     n_mixture_components = mixture_model_config.get("n_components", 2)
-    shared_parameters = mixture_model_config.get("shared_parameters", [])
-    independent_parameters = mixture_model_config.get("independent_parameters", [])
-    cosmological_parameters = mixture_model_config.get("cosmological_parameters", [])
     mixture_parameters = mixture_model_config.get("mixture_parameters", [])
-    all_free_parameter_names = shared_parameters + independent_parameters + cosmological_parameters
-    fixed_sn_parameters = mixture_model_config.get("fixed_sn_parameters", {})
     fixed_mixture_parameters = mixture_model_config.get("fixed_mixture_parameters", {})
-    fixed_cosmological_parameters = mixture_model_config.get("fixed_cosmological_parameters", {})
     mixture_kwargs = mixture_model_config.get("mixture_kwargs", {})
     use_physical_mixture_weights = mixture_model_config.get("use_physical_mixture_weights", False)
 
+    # SN Model Settings
+    shared_sn_parameters = mixture_model_config.get("shared_parameters", [])
+    independent_sn_parameters = mixture_model_config.get("independent_parameters", [])
+    fixed_sn_parameters = mixture_model_config.get("fixed_sn_parameters", {})
+
+    # Cosmology Settings
+    cosmological_parameters = mixture_model_config.get("cosmological_parameters", [])
+    fixed_cosmological_parameters = mixture_model_config.get("fixed_cosmological_parameters", {})
+    
+    all_free_sn_parameter_names = shared_sn_parameters + independent_sn_parameters + cosmological_parameters
+
     n_sne = sn_app_magnitudes.shape[1]
-    n_shared_parameters = len(shared_parameters)
-    n_independent_parameters = len(independent_parameters)
+    n_shared_parameters = len(shared_sn_parameters)
+    n_independent_parameters = len(independent_sn_parameters)
     n_cosmological_parameters = len(cosmological_parameters)
     n_total_independent_parameters = n_mixture_components * n_independent_parameters
     n_mixture_parameters = len(mixture_parameters)
 
+    # Setup Mixture Weight Function
     if not use_physical_mixture_weights:
         mixture_weight_function = lambda mixture_parameters: constant_mixture_weights(
             n_supernovae=n_sne, **mixture_parameters
@@ -174,8 +182,9 @@ def multi_pop_sn_model_builder(
             redshifts=sn_redshifts, **mixture_parameters
         )
 
+    # Setup single population SN Models
     sn_model_config = sn_model_config.copy()
-    sn_model_config["free_parameters"] = all_free_parameter_names
+    sn_model_config["free_parameters"] = all_free_sn_parameter_names
     sn_model_config['is_component'] = True
     sn_model_config['fixed_parameters'] = fixed_sn_parameters
 
@@ -202,22 +211,27 @@ def multi_pop_sn_model_builder(
     ) -> float:
 
         shared_params = sampled_parameters[:n_shared_parameters]
+        independent_params = np.split(
+            sampled_parameters[
+                n_shared_parameters:n_shared_parameters + n_total_independent_parameters
+            ], n_mixture_components
+        )
         cosmological_params = sampled_parameters[
-            n_shared_parameters+n_total_independent_parameters:
-            n_shared_parameters+n_total_independent_parameters+n_cosmological_parameters
+            n_shared_parameters + n_total_independent_parameters:
+            n_shared_parameters + n_total_independent_parameters + n_cosmological_parameters
         ]
         mixture_params = sampled_parameters[
-            n_shared_parameters+n_total_independent_parameters+n_cosmological_parameters:
-            n_shared_parameters+n_total_independent_parameters+n_cosmological_parameters+n_mixture_parameters
+            n_shared_parameters + n_total_independent_parameters + n_cosmological_parameters:
+            n_shared_parameters + n_total_independent_parameters + n_cosmological_parameters + n_mixture_parameters
         ]
 
         mixture_params_dict = utils.map_array_to_dict(
             array=mixture_params,
             array_names=mixture_parameters
         )
-        mixture_params_dict = mixture_params_dict | fixed_mixture_parameters | mixture_kwargs
+        mixture_inputs_dict = mixture_params_dict | fixed_mixture_parameters | mixture_kwargs
 
-        mixture_weights = mixture_weight_function(**mixture_params_dict)
+        mixture_weights = mixture_weight_function(**mixture_inputs_dict)
         valid_mixture_weights = np.all(np.isfinite(mixture_weights))
         if not valid_mixture_weights:
             return -np.inf
@@ -225,12 +239,9 @@ def multi_pop_sn_model_builder(
         population_likelihoods = np.zeros((n_sne, n_mixture_components))
         for i in range(n_mixture_components):
 
-            independent_params = sampled_parameters[
-                n_shared_parameters+i*n_independent_parameters:
-                n_shared_parameters+(i+1)*n_independent_parameters
-            ]
+            independent_params_i = independent_params[i]
             input_params = np.concatenate(
-                [shared_params, independent_params, cosmological_params]
+                [shared_params, independent_params_i, cosmological_params]
             )
 
             population_likelihood = sn_models[i](input_params) * mixture_weights[i]
