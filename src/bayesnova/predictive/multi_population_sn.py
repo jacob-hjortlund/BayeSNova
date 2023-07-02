@@ -132,8 +132,11 @@ def multi_pop_sn_model_builder(
     calibrator_indices: np.ndarray = None,
     calibrator_distance_moduli: np.ndarray = None,
     selection_bias_correction: np.ndarray = None,
-    mixture_model_config: dict = {}
+    model_config: dict = {}
 ) -> Callable:
+    
+    sn_model_config = model_config.get("single_pop", {})
+    mixture_model_config = model_config.get("multi_pop", {})
     
     # Check Mixture Model Config
     raise_error, error_message = check_multi_pop_sn_model_config(
@@ -141,9 +144,6 @@ def multi_pop_sn_model_builder(
     )
     if raise_error:
         raise ValueError(error_message)
-
-    sn_model_config = mixture_model_config.get("single_pop", {})
-    mixture_model_config = mixture_model_config.get("multi_pop", {})
 
     # Mixture Settings
     mixture_model_name = mixture_model_config.get("model_name", "Mixture Model")
@@ -166,7 +166,7 @@ def multi_pop_sn_model_builder(
     
     all_free_sn_parameter_names = shared_sn_parameters + independent_sn_parameters + cosmological_parameters
 
-    n_sne = sn_app_magnitudes.shape[1]
+    n_sne = sn_app_magnitudes.shape[0]
     n_shared_parameters = len(shared_sn_parameters)
     n_independent_parameters = len(independent_sn_parameters)
     n_cosmological_parameters = len(cosmological_parameters)
@@ -175,8 +175,8 @@ def multi_pop_sn_model_builder(
 
     # Setup Mixture Weight Function
     if not use_physical_mixture_weights:
-        mixture_weight_function = lambda mixture_parameters: constant_mixture_weights(
-            n_supernovae=n_sne, **mixture_parameters
+        mixture_weight_function = lambda **kwargs: constant_mixture_weights(
+            n_supernovae=n_sne, **kwargs
         )
     else:
         mixture_kwargs = mixture_kwargs | fixed_cosmological_parameters
@@ -233,7 +233,7 @@ def multi_pop_sn_model_builder(
 
         independent_params_dict = utils.map_array_to_dict(
             array=np.array(independent_params).T,
-            array_names=independent_sn_parameters
+            keys=independent_sn_parameters
         )
 
         logprior = ordering_prior_function(independent_params_dict)
@@ -248,7 +248,7 @@ def multi_pop_sn_model_builder(
 
         cosmological_params_dict = utils.map_array_to_dict(
             array=cosmological_params,
-            array_names=cosmological_parameters
+            keys=cosmological_parameters
         )
 
         # Mixture Parameters
@@ -259,7 +259,7 @@ def multi_pop_sn_model_builder(
 
         mixture_params_dict = utils.map_array_to_dict(
             array=mixture_params,
-            array_names=mixture_parameters
+            keys=mixture_parameters
         )
 
         logprior += prior_function(mixture_params_dict | cosmological_params_dict)
