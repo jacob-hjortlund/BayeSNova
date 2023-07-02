@@ -15,7 +15,7 @@ from typing import Callable
 import bayesnova.preprocessing as prep
 import bayesnova.cosmology_utils as cosmo_utils
 import src.bayesnova.predictive.priors as priors
-import bayesnova.predictive.single_population_sn as single_pop
+import src.bayesnova.predictive.single_population_sn as single_pop
 import src.bayesnova.utils as utils
 from src.bayesnova.cosmology.volumetric_rates import volumetric_rates
 
