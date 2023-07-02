@@ -152,11 +152,13 @@ def multi_pop_sn_model_builder(
     fixed_mixture_parameters = mixture_model_config.get("fixed_mixture_parameters", {})
     mixture_kwargs = mixture_model_config.get("mixture_kwargs", {})
     use_physical_mixture_weights = mixture_model_config.get("use_physical_mixture_weights", False)
+    mixture_prior_config = mixture_model_config.get("priors", {})
 
     # SN Model Settings
     shared_sn_parameters = mixture_model_config.get("shared_parameters", [])
     independent_sn_parameters = mixture_model_config.get("independent_parameters", [])
     fixed_sn_parameters = mixture_model_config.get("fixed_sn_parameters", {})
+    independent_parameters_to_compare = mixture_model_config.get("independent_parameters_to_compare", [])
 
     # Cosmology Settings
     cosmological_parameters = mixture_model_config.get("cosmological_parameters", [])
@@ -187,6 +189,7 @@ def multi_pop_sn_model_builder(
     sn_model_config["free_parameters"] = all_free_sn_parameter_names
     sn_model_config['is_component'] = True
     sn_model_config['fixed_parameters'] = fixed_sn_parameters
+    sn_model_config['priors'] = sn_model_config.get('priors', {}) | mixture_prior_config
 
     sn_models = []
     for i in range(n_mixture_components):
@@ -206,20 +209,49 @@ def multi_pop_sn_model_builder(
             )
         )
     
+    # Setup Priors
+    ordering_prior_function = priors.ordering_prior_builder(
+        independent_parameters_to_compare=independent_parameters_to_compare
+    )
+    prior_function = priors.prior_builder(
+        model_name=mixture_model_name,
+        free_parameters=mixture_parameters,
+        prior_config=mixture_prior_config
+    )
+
     def multi_pop_sn_model(
         sampled_parameters: np.ndarray,
     ) -> float:
 
+        # SNe Model Parameters
         shared_params = sampled_parameters[:n_shared_parameters]
         independent_params = np.split(
             sampled_parameters[
                 n_shared_parameters:n_shared_parameters + n_total_independent_parameters
             ], n_mixture_components
         )
+
+        independent_params_dict = utils.map_array_to_dict(
+            array=np.array(independent_params).T,
+            array_names=independent_sn_parameters
+        )
+
+        logprior = ordering_prior_function(independent_params_dict)
+        if np.isinf(logprior):
+            return logprior
+
+        # Cosmological Parameters
         cosmological_params = sampled_parameters[
             n_shared_parameters + n_total_independent_parameters:
             n_shared_parameters + n_total_independent_parameters + n_cosmological_parameters
         ]
+
+        cosmological_params_dict = utils.map_array_to_dict(
+            array=cosmological_params,
+            array_names=cosmological_parameters
+        )
+
+        # Mixture Parameters
         mixture_params = sampled_parameters[
             n_shared_parameters + n_total_independent_parameters + n_cosmological_parameters:
             n_shared_parameters + n_total_independent_parameters + n_cosmological_parameters + n_mixture_parameters
@@ -229,6 +261,11 @@ def multi_pop_sn_model_builder(
             array=mixture_params,
             array_names=mixture_parameters
         )
+
+        logprior += prior_function(mixture_params_dict | cosmological_params_dict)
+        if np.isinf(logprior):
+            return logprior
+
         mixture_inputs_dict = mixture_params_dict | fixed_mixture_parameters | mixture_kwargs
 
         mixture_weights = mixture_weight_function(**mixture_inputs_dict)
@@ -245,8 +282,10 @@ def multi_pop_sn_model_builder(
             )
 
             population_likelihood = sn_models[i](input_params) * mixture_weights[i]
+            if np.any(np.isnan(population_likelihood)):
+                return -np.inf
 
-            population_likelihoods.append(population_likelihood)
+            population_likelihoods[:, i] = population_likelihood
         
         sn_probs = np.sum(population_likelihoods, axis=1)
         total_likelihood = np.sum(np.log(sn_probs))
