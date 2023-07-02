@@ -272,8 +272,9 @@ def multi_pop_sn_model_builder(
         valid_mixture_weights = np.all(np.isfinite(mixture_weights))
         if not valid_mixture_weights:
             return -np.inf
+        log_mixture_weights = np.log(mixture_weights)
 
-        population_likelihoods = np.zeros((n_sne, n_mixture_components))
+        population_log_likelihoods = np.zeros((n_sne, n_mixture_components))
         for i in range(n_mixture_components):
 
             independent_params_i = independent_params[i]
@@ -281,15 +282,15 @@ def multi_pop_sn_model_builder(
                 [shared_params, independent_params_i, cosmological_params]
             )
 
-            population_likelihood = sn_models[i](input_params) * mixture_weights[i]
-            if np.any(np.isnan(population_likelihood)):
+            population_log_likelihood = sn_models[i](input_params) + log_mixture_weights[i]
+            if np.any(np.isnan(population_log_likelihood)):
                 return -np.inf
 
-            population_likelihoods[:, i] = population_likelihood
+            population_log_likelihoods[:, i] = population_log_likelihood
         
-        sn_probs = np.sum(population_likelihoods, axis=1)
-        total_likelihood = np.sum(np.log(sn_probs))
+        sn_probs = special.logsumexp(population_log_likelihoods, axis=1)
+        total_log_likelihood = np.sum(sn_probs)
 
-        return total_likelihood
+        return total_log_likelihood
     
     return multi_pop_sn_model
