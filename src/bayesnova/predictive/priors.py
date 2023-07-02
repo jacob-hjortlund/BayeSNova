@@ -170,7 +170,7 @@ def prior_builder(
             if prior_value == -np.inf:
                 break
         
-        for lower_parameter, upper_parameter in free_parameters_to_compare:
+        for (lower_parameter, upper_parameter) in free_parameters_to_compare:
             if parameter_dict[lower_parameter] > parameter_dict[upper_parameter]:
                 prior_value += -np.inf
                 break
