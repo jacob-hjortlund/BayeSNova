@@ -612,6 +612,7 @@ def single_pop_sn_model_builder(
     use_log_space_EBV_integral = sn_model_config.get("use_log_space_EBV_integral", False)
     use_variable_EBV_integral_limits = sn_model_config.get("use_variable_EBV_integral_limits", False)
     EBV_integral_limits_kwargs = sn_model_config.get("EBV_integral_limits_kwargs", {})
+    prior_config = sn_model_config.get("priors", {})
     kwargs = sn_model_config.get("kwargs", {})
     if free_parameter_names is None:
         raise ValueError(f"Must provide parameter names in {model_name} model config")
@@ -637,7 +638,11 @@ def single_pop_sn_model_builder(
         fixed_upper_bound_EBV = sn_model_config.get("EBV_integral_fixed_limit", 10.)
         EBV_upper_bound_func = lambda exponent: fixed_upper_bound_EBV
 
-    prior_function = priors.prior_builder(sn_model_config)
+    prior_function = priors.prior_builder(
+        model_name=model_name,
+        free_parameters=free_parameter_names,
+        prior_config=prior_config
+    )
 
     def sn_model(
         sampled_parameters: np.ndarray,
