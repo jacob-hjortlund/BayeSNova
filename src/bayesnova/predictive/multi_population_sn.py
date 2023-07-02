@@ -267,11 +267,12 @@ def multi_pop_sn_model_builder(
             return logprior
 
         mixture_inputs_dict = mixture_params_dict | fixed_mixture_parameters | mixture_kwargs
-
         mixture_weights = mixture_weight_function(**mixture_inputs_dict)
+        
         valid_mixture_weights = np.all(np.isfinite(mixture_weights))
         if not valid_mixture_weights:
             return -np.inf
+        
         log_mixture_weights = np.log(mixture_weights)
 
         population_log_likelihoods = np.zeros((n_sne, n_mixture_components))
