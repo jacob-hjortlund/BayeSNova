@@ -122,6 +122,7 @@ def redshift_dependent_mixture_weights(
 
     return mixture_weights
 
+# TODO: CONSIDER HOW TO USE PRIOR FUNC + COMPARING STRETCH IN PRIOR
 def multi_pop_sn_model_builder(
     sn_app_magnitudes: np.ndarray,
     sn_stretch: np.ndarray,
@@ -131,7 +132,6 @@ def multi_pop_sn_model_builder(
     calibrator_indices: np.ndarray = None,
     calibrator_distance_moduli: np.ndarray = None,
     selection_bias_correction: np.ndarray = None,
-    sn_model_config: dict = {},
     mixture_model_config: dict = {}
 ) -> Callable:
     
@@ -140,6 +140,9 @@ def multi_pop_sn_model_builder(
     )
     if raise_error:
         raise ValueError(error_message)
+
+    sn_model_config = mixture_model_config.get("single_pop", {})
+    mixture_model_config = mixture_model_config.get("multi_pop", {})
 
     mixture_model_name = mixture_model_config.get("model_name", "Mixture Model")
     n_mixture_components = mixture_model_config.get("n_components", 2)
@@ -150,6 +153,7 @@ def multi_pop_sn_model_builder(
     all_free_parameter_names = shared_parameters + independent_parameters + cosmological_parameters
     fixed_sn_parameters = mixture_model_config.get("fixed_sn_parameters", {})
     fixed_mixture_parameters = mixture_model_config.get("fixed_mixture_parameters", {})
+    fixed_cosmological_parameters = mixture_model_config.get("fixed_cosmological_parameters", {})
     mixture_kwargs = mixture_model_config.get("mixture_kwargs", {})
     use_physical_mixture_weights = mixture_model_config.get("use_physical_mixture_weights", False)
 
@@ -165,6 +169,7 @@ def multi_pop_sn_model_builder(
             n_supernovae=n_sne, **mixture_parameters
         )
     else:
+        mixture_kwargs = mixture_kwargs | fixed_cosmological_parameters
         mixture_weight_function = lambda mixture_parameters: redshift_dependent_mixture_weights(
             redshifts=sn_redshifts, **mixture_parameters
         )
@@ -177,7 +182,7 @@ def multi_pop_sn_model_builder(
     sn_models = []
     for i in range(n_mixture_components):
         sn_model_config_i = sn_model_config.copy()
-        sn_model_config_i["model_name"] = f"{mixture_model_name} SN_{i}"
+        sn_model_config_i["model_name"] = f"{mixture_model_name} Pop {i}"
         sn_models.append(
             single_pop.single_pop_sn_model_builder(
                 sn_app_magnitudes=sn_app_magnitudes,
