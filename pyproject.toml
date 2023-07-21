@@ -18,12 +18,12 @@ classifiers = [
 ]
 
 dependencies = [
-    "numpy==1.24.3", # c
-    "scipy==1.10.1", # c
+    "numpy==1.23.5", # c
+    "scipy==1.8.1", # c
     "pandas==1.5.3", # c
     "seaborn==0.12.2", # c
     "matplotlib==3.7.1", # c
-    "corner==2.2.2", # cf
+    "corner==2.2.1", # cf
     "emcee==3.1.4", # cf
     "mpi4py==3.1.4", # cf
     "h5py==3.7.0", # c
