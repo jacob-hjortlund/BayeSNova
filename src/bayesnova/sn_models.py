@@ -370,7 +370,6 @@ class TrippCalibration(Gaussian):
 
         return log_likehood
         
-
 class TrippDustCalibration(TrippCalibration):
 
     def __init__(
