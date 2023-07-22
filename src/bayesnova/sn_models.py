@@ -5,6 +5,7 @@ import scipy.special as special
 import astropy.cosmology as cosmo
 
 from astropy.units import Gyr
+from src.bayesnova.base_models import Gaussian
 from NumbaQuadpack import quadpack_sig, dqags, ldqag
 
 NULL_VALUE = -9999.0
@@ -191,7 +192,7 @@ def _E_BV_log_marginalization(
 
 # ---------------------- MODELS ----------------------------
 
-class TrippCalibration():
+class TrippCalibration(Gaussian):
 
     def __init__(
         self,
@@ -226,7 +227,7 @@ class TrippCalibration():
 
         self.cosmo = cosmo.Flatw0waCDM(H0=H0, Om0=Om0, w0=w0)
     
-    def residuals(
+    def residual(
         self,
         apparent_B_mag: np.ndarray,
         stretch: np.ndarray,
@@ -262,9 +263,9 @@ class TrippCalibration():
 
         return residuals
     
-    def covariance_matrix(
+    def covariance(
         self,
-        redshifts: np.ndarray,
+        redshift: np.ndarray,
         observed_covariance: np.ndarray,
         calibratior_indeces: np.ndarray,
     ) -> np.ndarray:
@@ -283,7 +284,7 @@ class TrippCalibration():
 
         cov_dims = observed_covariance.shape
         n_cov_dims = len(cov_dims)
-        n_sne = len(redshifts)
+        n_sne = len(redshift)
 
         if n_cov_dims == 1:
             observed_covariance = np.diag(observed_covariance)
@@ -298,7 +299,7 @@ class TrippCalibration():
 
         distmod_var = (
             (5 / np.log(10)) *
-            (self.peculiar_velocity_dispersion / (SPEED_OF_LIGHT * redshifts))
+            (self.peculiar_velocity_dispersion / (SPEED_OF_LIGHT * redshift))
         ) ** 2
         distmod_var[calibratior_indeces] = 0.0
 
@@ -316,6 +317,36 @@ class TrippCalibration():
         cov[:, 2, 0] = cov[:, 0, 2]
 
         return cov
+    
+    def log_likehood(
+        self,
+        apparent_B_mag: np.ndarray,
+        stretch: np.ndarray,
+        color: np.ndarray,
+        redshift: np.ndarray,
+        observed_covariance: np.ndarray,
+        calibrator_indeces: np.ndarray,
+        calibrator_distance_modulus: np.ndarray,
+    ) -> np.ndarray:
+        
+        residuals = self.residual(
+            apparent_B_mag=apparent_B_mag,
+            stretch=stretch,
+            color=color,
+            redshift=redshift,
+            calibrator_indeces=calibrator_indeces,
+            calibrator_distance_modulus=calibrator_distance_modulus,
+        )
+
+        cov = self.covariance(
+            redshift=redshift,
+            observed_covariance=observed_covariance,
+            calibratior_indeces=calibrator_indeces,
+        )
+
+        
+
+        return 1
         
 
 class TrippDustCalibration(TrippCalibration):
