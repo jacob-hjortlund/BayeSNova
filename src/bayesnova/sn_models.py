@@ -17,7 +17,7 @@ SPEED_OF_LIGHT = 299792.458 # km/s
 # ---------- E(B-V)_i MARGINALIZATION INTEGRAL ------------
 
 @nb.jit()
-def E_BV_i_log_integral_body(
+def _E_BV_i_log_integral_body(
     x, cov_i1, cov_i2, cov_i3, cov_i4,
     cov_i5, cov_i6, cov_i7, cov_i8, cov_i9,
     res_i1, res_i2, res_i3,
@@ -69,27 +69,8 @@ def E_BV_i_log_integral_body(
 
     return value
 
-@nb.jit()
-def E_BV_i_integral_body(
-    x, cov_i1, cov_i2, cov_i3, cov_i4,
-    cov_i5, cov_i6, cov_i7, cov_i8, cov_i9,
-    res_i1, res_i2, res_i3,
-    selection_bias_correction,
-    R_B, sigma_R_B, tau_E_BV, gamma_E_BV,
-):
-    
-    log_integral = E_BV_i_log_integral_body(
-        x, cov_i1, cov_i2, cov_i3, cov_i4,
-        cov_i5, cov_i6, cov_i7, cov_i8, cov_i9, 
-        res_i1, res_i2, res_i3,
-        selection_bias_correction,
-        R_B, sigma_R_B, tau_E_BV, gamma_E_BV,
-    )
-
-    return np.exp(log_integral)
-
 @nb.cfunc(quadpack_sig)
-def E_BV_i_integral(x, data):
+def _E_BV_i_log_integral(x, data):
     _data = nb.carray(data, (17,))
     cov_i1 = _data[0]
     cov_i2 = _data[1]
@@ -108,14 +89,62 @@ def E_BV_i_integral(x, data):
     sigma_R_B = _data[14]
     tau_E_BV = _data[15]
     gamma_E_BV = _data[16]
-    return E_BV_i_integral_body(
+    return _E_BV_i_log_integral_body(
+        x, cov_i1, cov_i2, cov_i3, cov_i4,
+        cov_i5, cov_i6, cov_i7, cov_i8, cov_i9, 
+        res_i1, res_i2, res_i3,
+        selection_bias_correction,
+        R_B, sigma_R_B, tau_E_BV, gamma_E_BV,
+    )
+_E_BV_i_log_integral_ptr = _E_BV_i_log_integral.address
+
+@nb.jit()
+def _E_BV_i_integral_body(
+    x, cov_i1, cov_i2, cov_i3, cov_i4,
+    cov_i5, cov_i6, cov_i7, cov_i8, cov_i9,
+    res_i1, res_i2, res_i3,
+    selection_bias_correction,
+    R_B, sigma_R_B, tau_E_BV, gamma_E_BV,
+):
+    
+    log_integral = _E_BV_i_log_integral_body(
+        x, cov_i1, cov_i2, cov_i3, cov_i4,
+        cov_i5, cov_i6, cov_i7, cov_i8, cov_i9, 
+        res_i1, res_i2, res_i3,
+        selection_bias_correction,
+        R_B, sigma_R_B, tau_E_BV, gamma_E_BV,
+    )
+
+    return np.exp(log_integral)
+
+@nb.cfunc(quadpack_sig)
+def _E_BV_i_integral(x, data):
+    _data = nb.carray(data, (17,))
+    cov_i1 = _data[0]
+    cov_i2 = _data[1]
+    cov_i3 = _data[2]
+    cov_i4 = _data[3]
+    cov_i5 = _data[4]
+    cov_i6 = _data[5]
+    cov_i7 = _data[6]
+    cov_i8 = _data[7]
+    cov_i9 = _data[8]
+    res_i1 = _data[9]
+    res_i2 = _data[10]
+    res_i3 = _data[11]
+    selection_bias_correction = _data[12]
+    R_B = _data[13]
+    sigma_R_B = _data[14]
+    tau_E_BV = _data[15]
+    gamma_E_BV = _data[16]
+    return _E_BV_i_integral_body(
         x, cov_i1, cov_i2, cov_i3, cov_i4,
         cov_i5, cov_i6, cov_i7, cov_i8, cov_i9,
         res_i1, res_i2, res_i3,
         selection_bias_correction,
         R_B, sigma_R_B, tau_E_BV, gamma_E_BV,
     )
-E_BV_i_integral_ptr = E_BV_i_integral.address
+_E_BV_i_integral_ptr = _E_BV_i_integral.address
 
 @nb.njit
 def _E_BV_marginalization(
@@ -125,6 +154,22 @@ def _E_BV_marginalization(
     upper_bound_E_BV: float,
     selection_bias_correction: np.ndarray,
 ):
+    """
+    Calculate the marginalization integral for the E(B-V) parameter.
+
+    Args:
+        covariance (np.ndarray): The covariance matrix for the SNe.
+        residual (np.ndarray): The residual for the SNe.
+        R_B (float): The R_B parameter.
+        sigma_R_B (float): The sigma_R_B parameter.
+        tau_E_BV (float): The tau_E_BV parameter.
+        gamma_E_BV (float): The gamma_E_BV parameter.
+        upper_bound_E_BV (float): The upper bound for the E(B-V) integral.
+        selection_bias_correction (np.ndarray): The selection bias correction.
+
+    Returns:
+        np.ndarray: The marginalization integral for the E(B-V) parameter.
+    """
 
     n_sne = len(covariance)
     probs = np.zeros(n_sne)
@@ -144,7 +189,7 @@ def _E_BV_marginalization(
         inputs_i.astype(np.float64)
         
         prob_i, _, status_i, _ = dqags(
-            funcptr=E_BV_i_integral_ptr, a=0,
+            funcptr=_E_BV_i_integral_ptr, a=0,
             b=upper_bound_E_BV, data=inputs_i
         )
 
@@ -162,6 +207,22 @@ def _E_BV_log_marginalization(
     upper_bound_E_BV: float,
     selection_bias_correction: np.ndarray,
 ):
+    """
+    Calculate the log likelihood using log marginalization of the latent E(B-V) parameter.
+
+    Args:
+        covariance (np.ndarray): The covariance matrix for the SNe.
+        residual (np.ndarray): The residual for the SNe.
+        R_B (float): The R_B parameter.
+        sigma_R_B (float): The sigma_R_B parameter.
+        tau_E_BV (float): The tau_E_BV parameter.
+        gamma_E_BV (float): The gamma_E_BV parameter.
+        upper_bound_E_BV (float): The upper bound for the E(B-V) integral.
+        selection_bias_correction (np.ndarray): The selection bias correction.
+
+    Returns:
+        np.ndarray: The log marginalization integral for the E(B-V) parameter.
+    """
     
     n_sne = len(covariance)
     log_probs = np.zeros(n_sne)
@@ -181,7 +242,7 @@ def _E_BV_log_marginalization(
         inputs_i.astype(np.float64)
         
         log_prob_i, _, status_i, _ = ldqag(
-            funcptr=E_BV_i_integral_ptr, a=0,
+            funcptr=_E_BV_i_log_integral_ptr, a=0,
             b=upper_bound_E_BV, data=inputs_i
         )
 
