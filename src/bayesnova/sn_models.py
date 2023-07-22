@@ -328,8 +328,23 @@ class TrippCalibration(Gaussian):
         calibrator_indeces: np.ndarray,
         calibrator_distance_modulus: np.ndarray,
     ) -> np.ndarray:
+        """
+        Calculate the log likehood for the Tripp calibration.
+
+        Args:
+            apparent_B_mag (np.ndarray): The apparent B-band magnitudes.
+            stretch (np.ndarray): The stretch of the SNe.
+            color (np.ndarray): The color of the SNe.
+            redshift (np.ndarray): The redshift of the SNe.
+            observed_covariance (np.ndarray): The observed covariance matrix.
+            calibrator_indeces (np.ndarray): The indeces of the calibrators.
+            calibrator_distance_modulus (np.ndarray): The distance modulus of the calibrators.
+
+        Returns:
+            np.ndarray: The log likehood for the Tripp calibration with shape (n_sne,).
+        """
         
-        residuals = self.residual(
+        residual = self.residual(
             apparent_B_mag=apparent_B_mag,
             stretch=stretch,
             color=color,
@@ -338,15 +353,21 @@ class TrippCalibration(Gaussian):
             calibrator_distance_modulus=calibrator_distance_modulus,
         )
 
-        cov = self.covariance(
+        covariance = self.covariance(
             redshift=redshift,
             observed_covariance=observed_covariance,
             calibratior_indeces=calibrator_indeces,
         )
 
-        
+        _, logdets = np.linalg.slogdet(covariance)
+        exponent = np.squeeze(
+            residual.transpose(0, 2, 1) @
+            np.linalg.solve(covariance, residual)
+        )
 
-        return 1
+        log_likehood = -0.5 * (logdets + exponent + 3 * np.log(2 * np.pi))
+
+        return log_likehood
         
 
 class TrippDustCalibration(TrippCalibration):
