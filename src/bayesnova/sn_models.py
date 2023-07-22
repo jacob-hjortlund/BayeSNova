@@ -15,58 +15,76 @@ SPEED_OF_LIGHT = 299792.458 # km/s
 # ---------- E(B-V)_i MARGINALIZATION INTEGRAL ------------
 
 @nb.jit()
-def E_BV_i_integral_body(
-    x, i1, i2, i3, i4, i5,
-    i6, i7, i8, i9, r1, r2, r3,
+def E_BV_i_log_integral_body(
+    x, cov_i1, cov_i2, cov_i3, cov_i4,
+    cov_i5, cov_i6, cov_i7, cov_i8, cov_i9,
+    res_i1, res_i2, res_i3,
     selection_bias_correction,
-    rb, sig_rb, tau_Ebv, gamma_Ebv,
+    R_B, sigma_R_B, tau_Ebv, gamma_Ebv,
 ):  
 
     # update res and cov
-    r1 -= rb * tau_Ebv * x
-    r3 -= tau_Ebv * x
-    i1 += sig_rb * sig_rb * tau_Ebv * tau_Ebv * x * x
-    i1 *= selection_bias_correction
+    res_i1 -= R_B * tau_Ebv * x
+    res_i3 -= tau_Ebv * x
+    cov_i1 += sigma_R_B * sigma_R_B * tau_Ebv * tau_Ebv * x * x
+    cov_i1 *= selection_bias_correction
 
     # precalcs
     exponent = gamma_Ebv - 1
-    A1 = i5 * i9 - i6 * i6
-    A2 = i6 * i3 - i2 * i9
-    A3 = i2 * i6 - i5 * i3
-    A5 = i1 * i9 - i3 * i3
-    A6 = i2 * i3 - i1 * i6
-    A9 = i1 * i5 - i2 * i2
-    det = i1 * A1 + i2 * A2 + i3 * A3
+    A1 = cov_i5 * cov_i9 - cov_i6 * cov_i6
+    A2 = cov_i6 * cov_i3 - cov_i2 * cov_i9
+    A3 = cov_i2 * cov_i6 - cov_i5 * cov_i3
+    A5 = cov_i1 * cov_i9 - cov_i3 * cov_i3
+    A6 = cov_i2 * cov_i3 - cov_i1 * cov_i6
+    A9 = cov_i1 * cov_i5 - cov_i2 * cov_i2
+    det = cov_i1 * A1 + cov_i2 * A2 + cov_i3 * A3
 
     if det < 0:
         cov = np.array([
-            [i1, i2, i3],
-            [i4, i5, i6],
-            [i7, i8, i9]
+            [cov_i1, cov_i2, cov_i3],
+            [cov_i4, cov_i5, cov_i6],
+            [cov_i7, cov_i8, cov_i9]
         ])
         eigvals = np.linalg.eigvalsh(cov)
         cov += np.eye(3) * np.abs(np.min(eigvals)) * (1 + 1e-2)
-        i1, i2, i3, i4, i5, i6, i7, i8, i9 = cov.flatten()
-        A1 = i5 * i9 - i6 * i6
-        A2 = i6 * i3 - i2 * i9
-        A3 = i2 * i6 - i5 * i3
-        A5 = i1 * i9 - i3 * i3
-        A6 = i2 * i3 - i1 * i6
-        A9 = i1 * i5 - i2 * i2
-        det = i1 * A1 + i2 * A2 + i3 * A3
+        cov_i1, cov_i2, cov_i3, cov_i4, cov_i5, cov_i6, cov_i7, cov_i8, cov_i9 = cov.flatten()
+        A1 = cov_i5 * cov_i9 - cov_i6 * cov_i6
+        A2 = cov_i6 * cov_i3 - cov_i2 * cov_i9
+        A3 = cov_i2 * cov_i6 - cov_i5 * cov_i3
+        A5 = cov_i1 * cov_i9 - cov_i3 * cov_i3
+        A6 = cov_i2 * cov_i3 - cov_i1 * cov_i6
+        A9 = cov_i1 * cov_i5 - cov_i2 * cov_i2
+        det = cov_i1 * A1 + cov_i2 * A2 + cov_i3 * A3
     
     logdet = np.log(det)
 
     # # calculate prob
     r_inv_cov_r = (
-        1./det * (r1 * r1 * A1 + r2 * r2 * A5 + r3 * r3 * A9 +
-                  2 * (r1 * r2 * A2 + r1 * r3 * A3 + r2 * r3 * A6))
+        1./det * (res_i1 * res_i1 * A1 + res_i2 * res_i2 * A5 + res_i3 * res_i3 * A9 +
+                  2 * (res_i1 * res_i2 * A2 + res_i1 * res_i3 * A3 + res_i2 * res_i3 * A6))
     )
-    value = np.exp(
-        -0.5 * r_inv_cov_r - x + exponent * np.log(x) - 0.5 * logdet - 0.5 * np.log(2 * np.pi)
-    )
+    value = -0.5 * r_inv_cov_r - x + exponent * np.log(x) - 0.5 * logdet - 0.5 * np.log(2 * np.pi)
 
     return value
+
+@nb.jit()
+def E_BV_i_integral_body(
+    x, cov_i1, cov_i2, cov_i3, cov_i4,
+    cov_i5, cov_i6, cov_i7, cov_i8, cov_i9,
+    res_i1, res_i2, res_i3,
+    selection_bias_correction,
+    R_B, sigma_R_B, tau_E_BV, gamma_E_BV,
+):
+    
+    log_integral = E_BV_i_log_integral_body(
+        x, cov_i1, cov_i2, cov_i3, cov_i4,
+        cov_i5, cov_i6, cov_i7, cov_i8, cov_i9, 
+        res_i1, res_i2, res_i3,
+        selection_bias_correction,
+        R_B, sigma_R_B, tau_E_BV, gamma_E_BV,
+    )
+
+    return np.exp(log_integral)
 
 @nb.cfunc(quadpack_sig)
 def E_BV_i_integral(x, data):
@@ -107,7 +125,7 @@ def _E_BV_marginalization(
 ):
 
     n_sne = len(covariance)
-    logprobs = np.zeros(n_sne)
+    probs = np.zeros(n_sne)
     status = np.ones(n_sne, dtype='bool')
     params = np.array([
         R_B, sigma_R_B, tau_E_BV, gamma_E_BV
@@ -123,16 +141,52 @@ def _E_BV_marginalization(
         )).copy()
         inputs_i.astype(np.float64)
         
-        logprob_i, _, status_i, _ = dqags(
+        prob_i, _, status_i, _ = dqags(
             funcptr=E_BV_i_integral_ptr, a=0,
             b=upper_bound_E_BV, data=inputs_i
         )
 
 
-        logprobs[i, 0] = logprob_i
-        status[i, 0] = status_i
+        probs[i] = prob_i
+        status[i] = status_i
 
-    return logprobs, status
+    return probs, status
+
+@nb.njit
+def _E_BV_log_marginalization(
+    covariance: np.ndarray, residual: np.ndarray,
+    R_B: float, sigma_R_B: float,
+    tau_E_BV: float, gamma_E_BV: float,
+    upper_bound_E_BV: float,
+    selection_bias_correction: np.ndarray,
+):
+    
+    n_sne = len(covariance)
+    log_probs = np.zeros(n_sne)
+    status = np.ones(n_sne, dtype='bool')
+    params = np.array([
+        R_B, sigma_R_B, tau_E_BV, gamma_E_BV
+    ])
+
+    for i in range(n_sne):
+        bias_corr = [selection_bias_correction[i]]
+        inputs_i = np.concatenate((
+            covariance[i].ravel(),
+            residual[i].ravel(),
+            bias_corr,
+            params
+        )).copy()
+        inputs_i.astype(np.float64)
+        
+        log_prob_i, _, status_i, _ = ldqag(
+            funcptr=E_BV_i_integral_ptr, a=0,
+            b=upper_bound_E_BV, data=inputs_i
+        )
+
+        log_probs[i] = log_prob_i
+        status[i] = status_i
+
+    return log_probs, status
 
 
 # ---------------------- MODELS ----------------------------
