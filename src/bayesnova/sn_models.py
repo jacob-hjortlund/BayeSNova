@@ -5,6 +5,7 @@ import scipy.special as special
 import astropy.cosmology as cosmo
 
 from astropy.units import Gyr
+from typing import Union
 from src.bayesnova.base_models import Gaussian
 from NumbaQuadpack import quadpack_sig, dqags, ldqag
 
@@ -414,3 +415,104 @@ class TrippDustCalibration(TrippCalibration):
         self.gamma_E_BV = gamma_E_BV
         self.tau_E_BV = tau_E_BV
 
+    def get_upper_bound_E_BV(
+        self,
+        upper_bound_E_BV: Union[float, np.ndarray],
+    ) -> float:
+        """
+        Get the upper bound for the E(B-V) integral. If the upper bound is a (2, N) array of 
+        gamma values and upper bounds, the upper bound for the E(B-V) integral is the upper bound
+        corresponding to the gamma value closest to the gamma value of the model. If the upper bound
+        is a float, it is returned as is.
+
+        Args:
+            upper_bound_E_BV (Union[float, np.ndarray]): The upper bound for the E(B-V) integral.
+
+        Returns:
+            float: The upper bound for the E(B-V) integral.
+        """
+        
+        if isinstance(upper_bound_E_BV, float):
+            return upper_bound_E_BV
+        
+        gamma_values = upper_bound_E_BV[0]
+        bounds = upper_bound_E_BV[1]
+        idx_nearest = np.argmin(np.abs(gamma_values - self.gamma_E_BV))
+        upper_bound = bounds[idx_nearest]
+
+        return upper_bound
+
+    def log_likelihood(
+        self,
+        apparent_B_mag: np.ndarray,
+        stretch: np.ndarray,
+        color: np.ndarray,
+        redshift: np.ndarray,
+        observed_covariance: np.ndarray,
+        calibrator_indeces: np.ndarray,
+        calibrator_distance_modulus: np.ndarray,
+        selection_bias_correction: np.ndarray = None,
+        upper_bound_E_BV: Union[float, np.ndarray] = 10.0,
+        use_log_marginalization: bool = False,
+    ) -> np.ndarray:
+        """
+        Calculate the log likehood for the Tripp calibration with dust.
+
+        Args:
+            apparent_B_mag (np.ndarray): The apparent B-band magnitudes.
+            stretch (np.ndarray): The stretch of the SNe.
+            color (np.ndarray): The color of the SNe.
+            redshift (np.ndarray): The redshift of the SNe.
+            observed_covariance (np.ndarray): The observed covariance matrix.
+            calibrator_indeces (np.ndarray): The indeces of the calibrators.
+            calibrator_distance_modulus (np.ndarray): The distance modulus of the calibrators.
+            selection_bias_correction (np.ndarray, optional): The selection bias correction. Defaults to None.
+            upper_bound_E_BV (Union[float, np.ndarray], optional): The upper bound for the E(B-V) integral. Is
+                a float or a (2, N) array of gamma values and upper bounds. Defaults to 10.0.
+            use_log_marginalization (bool, optional): Whether to use log marginalization. Defaults to False.
+
+        Returns:
+            np.ndarray: The log likehood for the Tripp calibration with dust with shape (n_sne,).
+        """
+
+        residual = self.residual(
+            apparent_B_mag=apparent_B_mag,
+            stretch=stretch,
+            color=color,
+            redshift=redshift,
+            calibrator_indeces=calibrator_indeces,
+            calibrator_distance_modulus=calibrator_distance_modulus,
+        )
+
+        covariance = self.covariance(
+            redshift=redshift,
+            observed_covariance=observed_covariance,
+            calibratior_indeces=calibrator_indeces,
+        )
+
+        marginalization_func = _E_BV_log_marginalization if use_log_marginalization else _E_BV_marginalization
+        
+        upper_bound_E_BV = self.get_upper_bound_E_BV(
+            upper_bound_E_BV=upper_bound_E_BV,
+        )
+
+        if selection_bias_correction is None:
+            selection_bias_correction = np.ones(len(residual))
+
+        # TODO: Add debug logging for marginalization status
+        E_BV_marginalization, status = marginalization_func(
+            covariance=covariance,
+            residual=residual,
+            R_B=self.R_B,
+            sigma_R_B=self.sigma_R_B,
+            tau_E_BV=self.tau_E_BV,
+            gamma_E_BV=self.gamma_E_BV,
+            upper_bound_E_BV=upper_bound_E_BV,
+            selection_bias_correction=selection_bias_correction,
+        )
+
+        log_likehood = E_BV_marginalization
+        if not use_log_marginalization:
+            log_likehood = np.log(E_BV_marginalization)
+        
+        return log_likehood
