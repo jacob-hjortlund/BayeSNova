@@ -20,4 +20,11 @@ class Gaussian(Model):
     def covariance(self, **kwargs):
         
         raise NotImplementedError
+    
+class Mixture(Model):
+
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__()
         
