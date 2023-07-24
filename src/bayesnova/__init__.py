@@ -10,4 +10,4 @@ import bayesnova.models as models
 import bayesnova.postprocessing as postprocessing
 import bayesnova.preprocessing as preprocessing
 import bayesnova.utils as utils
-
+import bayesnova.cosmology as cosmology

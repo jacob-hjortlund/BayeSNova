@@ -238,7 +238,7 @@ def N_delayed_integral(zp, args):
     return value
 N_delayed_integral_ptr = N_delayed_integral.address
 
-@nb.jit()
+#@nb.jit()
 def volumetric_rates(
     z, integral_limits,
     H0, Om0, w0, wa,
