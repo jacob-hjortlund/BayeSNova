@@ -432,10 +432,6 @@ class TrippDustCalibration(TrippCalibration):
 
     def __init__(
         self,
-        H0: float = 70.0,
-        Om0: float = 0.3,
-        w0: float = -1.0,
-        wa: float = 0.0,
         M_int: float = -19.3,
         sigma_M_int: float = 0.1,
         alpha: float = 0.141,
@@ -449,13 +445,10 @@ class TrippDustCalibration(TrippCalibration):
         sigma_R_B: float = 0.0,
         gamma_E_BV: float = 1.,
         tau_E_BV: float = 1.,
+        **kwargs,
     ):
         
         super().__init__(
-            H0=H0,
-            Om0=Om0,
-            w0=w0,
-            wa=wa,
             M_int=M_int,
             sigma_M_int=sigma_M_int,
             alpha=alpha,
@@ -465,6 +458,7 @@ class TrippDustCalibration(TrippCalibration):
             color_int=color_int,
             sigma_color_int=sigma_color_int,
             peculiar_velocity_dispersion=peculiar_velocity_dispersion,
+            **kwargs,
         )
 
         self.R_B = R_B
