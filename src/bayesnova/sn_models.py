@@ -258,10 +258,6 @@ class TrippCalibration(Gaussian):
 
     def __init__(
         self,
-        H0: float = 70.0,
-        Om0: float = 0.3,
-        w0: float = -1.0,
-        wa: float = 0.0,
         M_int: float = -19.3,
         sigma_M_int: float = 0.1,
         alpha: float = 0.141,
@@ -271,12 +267,9 @@ class TrippCalibration(Gaussian):
         color_int: float = -0.1,
         sigma_color_int: float = 0.0,
         peculiar_velocity_dispersion: float = 200.0,
+        **kwargs,
     ):
         
-        self.H0 = H0
-        self.Om0 = Om0
-        self.w0 = w0
-        self.wa = wa
         self.M_int = M_int
         self.sigma_M_int = sigma_M_int
         self.alpha = alpha
@@ -286,8 +279,12 @@ class TrippCalibration(Gaussian):
         self.color_int = color_int
         self.sigma_color_int = sigma_color_int
         self.peculiar_velocity_dispersion = peculiar_velocity_dispersion
-
-        self.cosmo = cosmo.Flatw0waCDM(H0=H0, Om0=Om0, w0=w0)
+        self.cosmo = kwargs.get(
+            'cosmology',
+            None
+        )
+        if self.cosmo is None:
+            raise ValueError('A Cosmology model must be provided.')
     
     def residual(
         self,
@@ -317,7 +314,7 @@ class TrippCalibration(Gaussian):
         M_B = self.M_int + self.alpha * stretch + self.beta * color
 
         # Calculate the distance modulus
-        mu = self.cosmo.distmod(redshift).value
+        mu = self.cosmo.distance_modulus(redshift)
         mu[calibrator_indeces] = calibrator_distance_modulus
 
         # Calculate the residuals
