@@ -1,7 +1,7 @@
 import numpy as np
 import astropy.cosmology as cosmo
 
-from src.bayesnova.base_models import Model
+from base_models import Model
 
 class Cosmology(Model):
 

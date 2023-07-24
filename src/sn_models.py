@@ -6,7 +6,7 @@ import astropy.cosmology as cosmo
 
 from astropy.units import Gyr
 from typing import Union
-from src.bayesnova.base_models import Gaussian
+from base_models import Gaussian
 from NumbaQuadpack import quadpack_sig, dqags, ldqag
 
 NULL_VALUE = -9999.0
