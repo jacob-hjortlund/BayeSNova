@@ -1,0 +1,83 @@
+TrippCalibration:
+  M_int:
+    type: Uniform
+    lower_limit: -100.
+    upper_limit: 100.
+  sigma_M_int:
+    type: Uniform
+    lower_limit: -100.
+    upper_limit: 100.
+  alpha:
+    type: Uniform
+    lower_limit: -100.
+    upper_limit: 100.
+  stretch_int:
+    type: Uniform
+    lower_limit: -100.
+    upper_limit: 100.
+  sigma_stretch_int:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 100.
+  beta:
+    type: Uniform
+    lower_limit: 1.
+    upper_limit: 5.
+  color_int:
+    type: Uniform
+    lower_limit: -100.
+    upper_limit: 100.
+  sigma_color_int:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 100.
+
+TrippDustCalibration:
+  M_int:
+    type: Uniform
+    lower_limit: -100.
+    upper_limit: 100.
+  sigma_M_int:
+    type: Uniform
+    lower_limit: -100.
+    upper_limit: 100.
+  alpha:
+    type: Uniform
+    lower_limit: -100.
+    upper_limit: 100.
+  stretch_int:
+    type: Uniform
+    lower_limit: -100.
+    upper_limit: 100.
+  sigma_stretch_int:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 100.
+  beta:
+    type: Uniform
+    lower_limit: 1.
+    upper_limit: 5.
+  color_int:
+    type: Uniform
+    lower_limit: -100.
+    upper_limit: 100.
+  sigma_color_int:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 100.
+  R_B:
+    type: Uniform
+    lower_limit: 1.
+    upper_limit: 10.
+  sigma_R_B:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 100.
+  gamma_E_BV:
+    type: Uniform
+    lower_limit: 1.
+    upper_limit: 20.
+  tau_E_BV:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 100.

@@ -1,0 +1,41 @@
+FlatLambdaCDM:
+  H0:
+    type: Uniform
+    lower_limit: 50.
+    upper_limit: 90.
+  Om0:
+    type: Uniform
+    lower_limit: 0.01
+    upper_limit: 0.99
+
+FlatwCDM:
+  H0:
+    type: Uniform
+    lower_limit: 50.
+    upper_limit: 90.
+  Om0:
+    type: Uniform
+    lower_limit: 0.01
+    upper_limit: 0.99
+  w0:
+    type: Uniform
+    lower_limit: -5.
+    upper_limit: 5.
+  
+Flatw0waCDM:
+  H0:
+    type: Uniform
+    lower_limit: 50.
+    upper_limit: 90.
+  Om0:
+    type: Uniform
+    lower_limit: 0.01
+    upper_limit: 0.99
+  w0:
+    type: Uniform
+    lower_limit: -5.
+    upper_limit: 5.
+  wa:
+    type: Uniform
+    lower_limit: -5.
+    upper_limit: 5.
