@@ -146,7 +146,7 @@ def _E_BV_i_integral(x, data):
     )
 _E_BV_i_integral_ptr = _E_BV_i_integral.address
 
-@nb.njit
+#@nb.njit
 def _E_BV_marginalization(
     covariance: np.ndarray, residual: np.ndarray,
     R_B: float, sigma_R_B: float, 
@@ -254,6 +254,110 @@ def _E_BV_log_marginalization(
 
 # ---------------------- MODELS ----------------------------
 
+class OldTrippCalibration(Gaussian):
+
+    def __init__(
+        self,
+        M_int: float = -19.3,
+        sigma_M_int: float = 0.1,
+        alpha: float = 0.141,
+        beta: float = 3.101,
+        **kwargs,
+    ):
+        
+        self.M_int = M_int
+        self.sigma_M_int = sigma_M_int
+        self.alpha = alpha
+        self.beta = beta
+        self.peculiar_velocity_dispersion = kwargs.get(
+            'peculiar_velocity_dispersion',
+            250.0
+        )
+        self.cosmo = kwargs.get(
+            'cosmology',
+            None
+        )
+        if self.cosmo is None:
+            raise ValueError('A Cosmology model must be provided.')
+    
+    def residual(
+        self,
+        apparent_B_mag: np.ndarray,
+        stretch: np.ndarray,
+        color: np.ndarray,
+        redshift: np.ndarray,
+        calibrator_indeces: np.ndarray,
+        calibrator_distance_modulus: np.ndarray,
+    ):
+        
+        mu = self.cosmo.distance_modulus(redshift)
+        residuals = (
+            apparent_B_mag -
+            self.M_int -
+            self.alpha * stretch -
+            self.beta * color -
+            mu
+        )
+
+        return residuals
+    
+    def covariance(
+        self,
+        redshift: np.ndarray,
+        observed_covariance: np.ndarray,
+        calibratior_indeces: np.ndarray,
+    ):
+        
+        cov_tmp = np.diagonal(
+            observed_covariance,
+            axis1=1, axis2=2
+        )
+        cov = cov_tmp.copy()
+        cov[:,1] = cov_tmp[:,1] * self.alpha**2
+        cov[:,2] = cov_tmp[:,2] * self.beta**2
+        cov = np.sum(cov, axis=1)
+        cov += (
+            (5 / np.log(10)) *
+            (self.peculiar_velocity_dispersion / (SPEED_OF_LIGHT * redshift))
+        )**2
+        cov -= 2 * self.beta * observed_covariance[:, 0, 2]
+        cov += 2 * self.alpha * observed_covariance[:, 0, 1]
+        cov -= 2 * self.alpha * self.beta * observed_covariance[:, 1, 2]
+        cov += self.sigma_M_int ** 2
+
+        return cov
+
+    def log_likelihood(
+        self,
+        apparent_B_mag: np.ndarray,
+        stretch: np.ndarray,
+        color: np.ndarray,
+        redshift: np.ndarray,
+        observed_covariance: np.ndarray,
+        calibrator_indeces: np.ndarray,
+        calibrator_distance_modulus: np.ndarray,
+    ):
+
+        residual = self.residual(
+            apparent_B_mag=apparent_B_mag,
+            stretch=stretch,
+            color=color,
+            redshift=redshift,
+            calibrator_indeces=calibrator_indeces,
+            calibrator_distance_modulus=calibrator_distance_modulus,
+        )
+    
+        covariance = self.covariance(
+            redshift=redshift,
+            observed_covariance=observed_covariance,
+            calibratior_indeces=calibrator_indeces,
+        )
+
+
+        log_likelihood = -0.5 * (residual**2 / covariance + np.log(covariance))
+    
+        return log_likelihood
+
 class TrippCalibration(Gaussian):
 
     def __init__(
@@ -266,7 +370,6 @@ class TrippCalibration(Gaussian):
         beta: float = 3.101,
         color_int: float = -0.1,
         sigma_color_int: float = 0.0,
-        peculiar_velocity_dispersion: float = 200.0,
         **kwargs,
     ):
         
@@ -278,7 +381,10 @@ class TrippCalibration(Gaussian):
         self.beta = beta
         self.color_int = color_int
         self.sigma_color_int = sigma_color_int
-        self.peculiar_velocity_dispersion = peculiar_velocity_dispersion
+        self.peculiar_velocity_dispersion = kwargs.get(
+            'peculiar_velocity_dispersion',
+            250.0
+        )
         self.cosmo = kwargs.get(
             'cosmology',
             None
@@ -318,7 +424,14 @@ class TrippCalibration(Gaussian):
         mu[calibrator_indeces] = calibrator_distance_modulus
 
         # Calculate the residuals
-        residuals = apparent_B_mag - M_B - mu
+        m_B_residual = apparent_B_mag - M_B - mu
+        stretch_residual = stretch - self.stretch_int
+        color_residual = color - self.color_int
+
+        residuals = np.hstack(
+            [m_B_residual[:, None], stretch_residual[:, None], color_residual[:, None]]
+        )
+        residuals = np.atleast_3d(residuals)
 
         return residuals
     
@@ -377,7 +490,7 @@ class TrippCalibration(Gaussian):
 
         return cov
     
-    def log_likehood(
+    def log_likelihood(
         self,
         apparent_B_mag: np.ndarray,
         stretch: np.ndarray,
@@ -388,7 +501,7 @@ class TrippCalibration(Gaussian):
         calibrator_distance_modulus: np.ndarray,
     ) -> np.ndarray:
         """
-        Calculate the log likehood for the Tripp calibration.
+        Calculate the log likelihood for the Tripp calibration.
 
         Args:
             apparent_B_mag (np.ndarray): The apparent B-band magnitudes.
@@ -424,9 +537,9 @@ class TrippCalibration(Gaussian):
             np.linalg.solve(covariance, residual)
         )
 
-        log_likehood = -0.5 * (logdets + exponent + 3 * np.log(2 * np.pi))
+        log_likelihood = -0.5 * (logdets + exponent + 3 * np.log(2 * np.pi))
 
-        return log_likehood
+        return log_likelihood
         
 class TrippDustCalibration(TrippCalibration):
 
@@ -440,7 +553,6 @@ class TrippDustCalibration(TrippCalibration):
         beta: float = 3.101,
         color_int: float = -0.1,
         sigma_color_int: float = 0.0,
-        peculiar_velocity_dispersion: float = 200.0,
         R_B: float = 3.1,
         sigma_R_B: float = 0.0,
         gamma_E_BV: float = 1.,
@@ -457,7 +569,6 @@ class TrippDustCalibration(TrippCalibration):
             beta=beta,
             color_int=color_int,
             sigma_color_int=sigma_color_int,
-            peculiar_velocity_dispersion=peculiar_velocity_dispersion,
             **kwargs,
         )
 
@@ -548,7 +659,7 @@ class TrippDustCalibration(TrippCalibration):
         )
 
         if selection_bias_correction is None:
-            selection_bias_correction = np.ones(len(residual))
+            selection_bias_correction = np.ones_like(redshift)
 
         # TODO: Add debug logging for marginalization status
         E_BV_marginalization, status = marginalization_func(
@@ -565,5 +676,8 @@ class TrippDustCalibration(TrippCalibration):
         log_likehood = E_BV_marginalization
         if not use_log_marginalization:
             log_likehood = np.log(E_BV_marginalization)
+        
+        if np.any(np.isfinite(log_likehood) == False):
+            log_likehood = np.ones_like(log_likehood) * np.finfo(np.float64).min
         
         return log_likehood
