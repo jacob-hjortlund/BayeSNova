@@ -658,6 +658,11 @@ class TrippDustCalibration(TrippCalibration):
             upper_bound_E_BV=upper_bound_E_BV,
         )
 
+        E_BV_norm = (
+            np.log(special.gammainc(self.gamma_E_BV, upper_bound_E_BV)) +
+            special.loggamma(self.gamma_E_BV)
+        )
+
         if selection_bias_correction is None:
             selection_bias_correction = np.ones_like(redshift)
 
@@ -677,7 +682,6 @@ class TrippDustCalibration(TrippCalibration):
         if not use_log_marginalization:
             log_likehood = np.log(E_BV_marginalization)
         
-        if np.any(np.isfinite(log_likehood) == False):
-            log_likehood = np.ones_like(log_likehood) * np.finfo(np.float64).min
-        
+        log_likehood -= E_BV_norm
+
         return log_likehood

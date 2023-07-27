@@ -1,3 +1,25 @@
+OldTrippCalibration:
+  M_int:
+    type: Gaussian
+    mean: -19.4
+    sigma: 0.1
+  sigma_M_int:
+    type: Gaussian
+    mean: 0.1
+    sigma: 0.05
+    lower_limit: 0.
+    upper_limit: 1.
+  alpha:
+    type: Gaussian
+    mean: -0.14
+    sigma: 0.01
+  beta:
+    type: Gaussian
+    mean: 3.1
+    sigma: 0.1
+    lower_limit: 1.
+    upper_limit: 5.
+
 TrippCalibration:
   M_int:
     type: Uniform
@@ -5,16 +27,16 @@ TrippCalibration:
     upper_limit: 100.
   sigma_M_int:
     type: Uniform
-    lower_limit: -100.
-    upper_limit: 100.
+    lower_limit: 0.
+    upper_limit: 10.
   alpha:
     type: Uniform
     lower_limit: -100.
     upper_limit: 100.
   stretch_int:
     type: Uniform
-    lower_limit: -100.
-    upper_limit: 100.
+    lower_limit: -10.
+    upper_limit: 10.
   sigma_stretch_int:
     type: Uniform
     lower_limit: 0.
@@ -30,7 +52,7 @@ TrippCalibration:
   sigma_color_int:
     type: Uniform
     lower_limit: 0.
-    upper_limit: 100.
+    upper_limit: 10.
 
 TrippDustCalibration:
   M_int:
@@ -39,7 +61,7 @@ TrippDustCalibration:
     upper_limit: 100.
   sigma_M_int:
     type: Uniform
-    lower_limit: -100.
+    lower_limit: 0.
     upper_limit: 100.
   alpha:
     type: Uniform
@@ -80,4 +102,112 @@ TrippDustCalibration:
   tau_E_BV:
     type: Uniform
     lower_limit: 0.
-    upper_limit: 100.
+    upper_limit: 10.
+
+# TrippCalibration:
+#   M_int:
+#     type: Gaussian
+#     mean: -19.4
+#     sigma: 0.1
+#   sigma_M_int:
+#     type: Gaussian
+#     mean: 0.1
+#     sigma: 0.05
+#     lower_limit: 0.
+#     upper_limit: 1.
+#   alpha:
+#     type: Gaussian
+#     mean: -0.14
+#     sigma: 0.01
+#   stretch_int:
+#     type: Gaussian
+#     mean: -0.250
+#     sigma: 0.01
+#   sigma_stretch_int:
+#     type: Gaussian
+#     mean: 1.
+#     sigma: 0.05
+#     lower_limit: 0.
+#     upper_limit: 2.
+#   beta:
+#     type: Gaussian
+#     mean: 3.1
+#     sigma: 0.1
+#     lower_limit: 1.
+#     upper_limit: 5.
+#   color_int:
+#     type: Gaussian
+#     mean: -0.102
+#     sigma: 0.01
+#   sigma_color_int:
+#     type: Gaussian
+#     mean: 0.05
+#     sigma: 0.01
+#     lower_limit: 0.
+#     upper_limit: 1.
+
+# TrippDustCalibration:
+#   M_int:
+#     type: Gaussian
+#     mean: -19.4
+#     sigma: 0.1
+#   sigma_M_int:
+#     type: Gaussian
+#     mean: 0.1
+#     sigma: 0.05
+#     lower_limit: 0.
+#     upper_limit: 1.
+#   alpha:
+#     type: Gaussian
+#     mean: -0.14
+#     sigma: 0.01
+#   stretch_int:
+#     type: Gaussian
+#     mean: -0.250
+#     sigma: 0.01
+#   sigma_stretch_int:
+#     type: Gaussian
+#     mean: 1.
+#     sigma: 0.05
+#     lower_limit: 0.
+#     upper_limit: 2.
+#   beta:
+#     type: Gaussian
+#     mean: 3.1
+#     sigma: 0.1
+#     lower_limit: 1.
+#     upper_limit: 5.
+#   color_int:
+#     type: Gaussian
+#     mean: -0.102
+#     sigma: 0.01
+#   sigma_color_int:
+#     type: Gaussian
+#     mean: 0.05
+#     sigma: 0.01
+#     lower_limit: 0.
+#     upper_limit: 1.
+#   R_B:
+#     type: Gaussian
+#     mean: 3.704
+#     sigma: 0.1
+#     lower_limit: 1.
+#     upper_limit: 10.
+#   sigma_R_B:
+#     type: Gaussian
+#     mean: 0.8
+#     sigma: 0.1
+#     lower_limit: 0.
+#     upper_limit: 5.
+#   gamma_E_BV:
+#     type: Gaussian
+#     mean: 3.107
+#     sigma: 0.1
+#     lower_limit: 1.
+#     upper_limit: 20.
+#   tau_E_BV:
+#     type: Gaussian
+#     mean: 0.035
+#     sigma: 0.01
+#     lower_limit: 0.
+#     upper_limit: 1.
