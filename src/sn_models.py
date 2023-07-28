@@ -417,7 +417,7 @@ class TrippCalibration(Gaussian):
         """
         
         # Calculate the absolute magnitude
-        M_B = self.M_int + self.alpha * stretch + self.beta * color
+        M_B = self.M_int + self.alpha * self.stretch_int + self.beta * self.color_int
 
         # Calculate the distance modulus
         mu = self.cosmo.distance_modulus(redshift)
@@ -485,7 +485,7 @@ class TrippCalibration(Gaussian):
         cov[:, 2, 2] += self.sigma_color_int ** 2
         cov[:, 0, 1] += self.alpha * self.sigma_stretch_int ** 2
         cov[:, 0, 2] += self.beta * self.sigma_color_int ** 2
-        cov[:, 1,0] = cov[:, 0, 1]
+        cov[:, 1, 0] = cov[:, 0, 1]
         cov[:, 2, 0] = cov[:, 0, 2]
 
         return cov
@@ -537,7 +537,7 @@ class TrippCalibration(Gaussian):
             np.linalg.solve(covariance, residual)
         )
 
-        log_likelihood = -0.5 * (logdets + exponent + 3 * np.log(2 * np.pi))
+        log_likelihood = -.5 * (logdets + exponent + np.log(2 * np.pi))
 
         return log_likelihood
         
