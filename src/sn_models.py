@@ -4,10 +4,10 @@ import scipy.stats as stats
 import scipy.special as special
 import astropy.cosmology as cosmo
 
-from astropy.units import Gyr
 from typing import Union
-from base_models import Gaussian
+from astropy.units import Gyr
 from NumbaQuadpack import quadpack_sig, dqags, ldqag
+from base_models import Gaussian, Mixture, Weighting, ConstantWeighting
 
 NULL_VALUE = -9999.0
 H0_CONVERSION_FACTOR = 0.001022
@@ -254,7 +254,7 @@ def _E_BV_log_marginalization(
 
 # ---------------------- MODELS ----------------------------
 
-class OldTrippCalibration(Gaussian):
+class OldTripp(Gaussian):
 
     def __init__(
         self,
@@ -358,7 +358,7 @@ class OldTrippCalibration(Gaussian):
     
         return log_likelihood
 
-class TrippCalibration(Gaussian):
+class Tripp(Gaussian):
 
     def __init__(
         self,
@@ -541,7 +541,7 @@ class TrippCalibration(Gaussian):
 
         return log_likelihood
         
-class TrippDustCalibration(TrippCalibration):
+class TrippDust(Tripp):
 
     def __init__(
         self,
@@ -685,3 +685,60 @@ class TrippDustCalibration(TrippCalibration):
         log_likehood -= E_BV_norm
 
         return log_likehood
+
+class TwoSNPopulation(Mixture):
+
+    def __init__(
+        self,
+        population_models: list[Gaussian],
+        weighting_model: Gaussian,
+    ):
+        super().__init__(
+            population_models=population_models,
+            weighting_model=weighting_model,
+        )
+        self.n_populations = len(population_models)
+        if self.n_populations != 2:
+            raise ValueError(f"Expected 2 population models, got {self.n_populations}.")
+    
+    def log_likelihood(
+        self,
+        apparent_B_mag: np.ndarray,
+        stretch: np.ndarray,
+        color: np.ndarray,
+        redshift: np.ndarray,
+        observed_covariance: np.ndarray,
+        calibrator_indeces: np.ndarray,
+        calibrator_distance_modulus: np.ndarray,
+        **kwargs,
+    ) -> np.ndarray:
+        
+        log_likelihoods = np.zeros(
+            shape=(len(apparent_B_mag), self.n_populations)
+        )
+
+        for i, population_model in enumerate(self.population_models):
+            log_likelihoods[:, i] = population_model.log_likelihood(
+                apparent_B_mag=apparent_B_mag,
+                stretch=stretch,
+                color=color,
+                redshift=redshift,
+                observed_covariance=observed_covariance,
+                calibrator_indeces=calibrator_indeces,
+                calibrator_distance_modulus=calibrator_distance_modulus,
+                **kwargs,
+            )
+        
+        population_1_weight = self.weighting_model.calculate_weight(
+            redshift=redshift, **kwargs
+        )
+        population_2_weight = 1.0 - population_1_weight
+
+        log_likelihoods = np.logaddexp(
+            np.log(population_1_weight) + log_likelihoods[:, 0],
+            np.log(population_2_weight) + log_likelihoods[:, 1],
+            axis=1,
+        )
+        log_likelihood = np.sum(log_likelihoods)
+
+        return log_likelihood
