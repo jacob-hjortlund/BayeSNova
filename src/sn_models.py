@@ -737,7 +737,6 @@ class TwoSNPopulation(Mixture):
         log_likelihoods = np.logaddexp(
             np.log(population_1_weight) + log_likelihoods[:, 0],
             np.log(population_2_weight) + log_likelihoods[:, 1],
-            axis=1,
         )
         log_likelihood = np.sum(log_likelihoods)
 

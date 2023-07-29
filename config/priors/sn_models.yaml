@@ -1,4 +1,4 @@
-OldTrippCalibration:
+OldTripp:
   M_int:
     type: Gaussian
     mean: -19.4
@@ -20,7 +20,7 @@ OldTrippCalibration:
     lower_limit: 1.
     upper_limit: 5.
 
-TrippCalibration:
+Tripp:
   M_int:
     type: Uniform
     lower_limit: -100.
@@ -54,21 +54,27 @@ TrippCalibration:
     lower_limit: 0.
     upper_limit: 100.
 
-TrippDustCalibration:
+TrippDust:
   M_int:
-    type: Uniform
+    type: Gaussian
+    mean: -19.4
+    sigma: 1.
     lower_limit: -100.
     upper_limit: 100.
   sigma_M_int:
     type: Uniform
     lower_limit: 0.
-    upper_limit: 100.
+    upper_limit: 5.
   alpha:
-    type: Uniform
+    type: Gaussian
+    mean: 0.
+    sigma: 3.
     lower_limit: -100.
     upper_limit: 100.
   stretch_int:
-    type: Uniform
+    type: Gaussian
+    mean: 0.
+    sigma: 1.
     lower_limit: -100.
     upper_limit: 100.
   sigma_stretch_int:
@@ -76,17 +82,21 @@ TrippDustCalibration:
     lower_limit: 0.
     upper_limit: 10.
   beta:
-    type: Uniform
+    type: Gaussian
+    mean: 3.1
+    sigma: 3.
     lower_limit: 1.
     upper_limit: 5.
   color_int:
-    type: Uniform
+    type: Gaussian
+    mean: 0.
+    sigma: 1.
     lower_limit: -100.
     upper_limit: 100.
   sigma_color_int:
     type: Uniform
     lower_limit: 0.
-    upper_limit: 100.
+    upper_limit: 5.
   R_B:
     type: Uniform
     lower_limit: 1.
@@ -104,7 +114,7 @@ TrippDustCalibration:
     lower_limit: 0.
     upper_limit: 10.
 
-# TrippCalibration:
+# Tripp:
 #   M_int:
 #     type: Gaussian
 #     mean: -19.4
@@ -146,7 +156,7 @@ TrippDustCalibration:
 #     lower_limit: 0.
 #     upper_limit: 1.
 
-# TrippDustCalibration:
+# TrippDust:
 #   M_int:
 #     type: Gaussian
 #     mean: -19.4
