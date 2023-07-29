@@ -1,0 +1,19 @@
+label:
+  label:
+    M_int: M_{int}
+    sigma_M_int: \sigma_{M_{int}}
+    alpha: \alpha
+    stretch_int: x_{1,int}
+    sigma_stretch_int: \sigma_{x_{1,int}}
+    beta: \beta
+    color_int: c_{int}
+    sigma_color_int: \sigma_{c_{int}}
+    R_B: R_B
+    sigma_R_B: \sigma_{R_B}
+    gamma_E_BV: \gamma_{E(B-V)}
+    tau_E_BV: \tau_{E(B-V)}
+  superscript:
+    OldTrippCalibration: ""
+    TrippCalibration: ""
+    TrippDustCalibration: ""
+

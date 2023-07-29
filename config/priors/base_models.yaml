@@ -1,0 +1,5 @@
+ConstantWeighting:
+  weight:
+    type: Uniform
+    lower_limit: 0.15
+    upper_limit: 0.85
