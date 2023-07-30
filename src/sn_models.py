@@ -370,6 +370,7 @@ class Tripp(Gaussian):
         beta: float = 3.101,
         color_int: float = -0.1,
         sigma_color_int: float = 0.0,
+        peculiar_velocity_dispersion: float = 200.0,
         **kwargs,
     ):
         
@@ -381,10 +382,7 @@ class Tripp(Gaussian):
         self.beta = beta
         self.color_int = color_int
         self.sigma_color_int = sigma_color_int
-        self.peculiar_velocity_dispersion = kwargs.get(
-            'peculiar_velocity_dispersion',
-            250.0
-        )
+        self.peculiar_velocity_dispersion = peculiar_velocity_dispersion
         self.cosmo = kwargs.get(
             'cosmology',
             None
@@ -557,6 +555,7 @@ class TrippDust(Tripp):
         sigma_R_B: float = 0.0,
         gamma_E_BV: float = 1.,
         tau_E_BV: float = 1.,
+        peculiar_velocity_dispersion: float = 200.,
         **kwargs,
     ):
         
@@ -569,6 +568,7 @@ class TrippDust(Tripp):
             beta=beta,
             color_int=color_int,
             sigma_color_int=sigma_color_int,
+            peculiar_velocity_dispersion=peculiar_velocity_dispersion,
             **kwargs,
         )
 
@@ -738,6 +738,5 @@ class TwoSNPopulation(Mixture):
             np.log(population_1_weight) + log_likelihoods[:, 0],
             np.log(population_2_weight) + log_likelihoods[:, 1],
         )
-        log_likelihood = np.sum(log_likelihoods)
 
-        return log_likelihood
+        return log_likelihoods
