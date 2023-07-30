@@ -38,7 +38,7 @@ class Analysis(af.Analysis):
         )
 
         if np.any(np.isfinite(log_likelihoods) == False):
-            log_likelihood = np.finfo(np.float64).min
+            log_likelihood = -1e99
         else:
             log_likelihood = np.sum(log_likelihoods)
 
