@@ -31,23 +31,6 @@ class Weighting(Model):
         
         raise NotImplementedError
 
-class ConstantWeighting(Weighting):
-
-    def __init__(
-        self,
-        weight: float
-    ) -> None:
-        super().__init__()
-        self.weight = weight
-    
-    def calculate_weight(
-        self,
-        redshift: float,
-        **kwargs
-    ):
-        
-        return np.ones_like(redshift) * self.weight
-
 class Mixture(Model):
 
     def __init__(

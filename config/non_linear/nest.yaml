@@ -32,7 +32,6 @@ Nautilus:
     force_x1_cpu: false             # Force Dynesty to not use Python multiprocessing Pool, which can fix issues on certain operating systems.
   printing:
     silence: false                  # If True, the default print output of the non-linear search is silenced and not printed by the Python interpreter.
-
 DynestyStatic:
   search:
     bootstrap: null

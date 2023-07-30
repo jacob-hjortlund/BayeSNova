@@ -454,8 +454,8 @@ class Model():
         stretch_2_par = prep.global_model_cfg.stretch_par_name + "_2"
         galaxy_means_names = np.repeat(
             np.array(
-                prep.global_model_cfg['host']['shared_property_names'] +
-                prep.global_model_cfg['host']['independent_property_names']
+                prep.global_model_cfg['host_galaxy_cfg']['shared_property_names'] +
+                prep.global_model_cfg['host_galaxy_cfg']['independent_property_names']
             ), 2
         )
         galaxy_sig_names = [
@@ -567,7 +567,7 @@ class Model():
 
         cov = np.tile(prep.sn_covariances, (2, 1, 1, 1))
         disp_v_pec = 200. # km / s
-        c = 300000. # km / s
+        c = 299792.458 #300000. # km / s
         
         cov[:,:,0,0] += np.array([
             [sig_int_1**2 + alpha_1**2 * sig_s_1**2 + beta_1**2 * sig_c_1**2],
@@ -1000,7 +1000,7 @@ class Model():
 
             warnings.warn(warning_string)
 
-            using_host_galaxy_properties = prep.global_model_cfg['host']['use_properties']
+            using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
                 3 + prep.n_independent_host_properties +
                 (not using_host_galaxy_properties)
@@ -1033,7 +1033,7 @@ class Model():
                     " ----------------------------------------------- \n"
                 )
                 warnings.warn(warning_str)
-                using_host_galaxy_properties = prep.global_model_cfg['host']['use_properties']
+                using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
                 number_of_blobs = (
                     3 + prep.n_independent_host_properties +
                     (not using_host_galaxy_properties)
@@ -1050,7 +1050,7 @@ class Model():
         log_w_1 = np.log(w_vector)
         log_w_2 = np.log(1-w_vector)
 
-        use_host_galaxy_properties = prep.global_model_cfg['host']['use_properties']
+        use_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
         if use_host_galaxy_properties:
             host_log_probs_1, host_log_probs_2 = self.host_galaxy_log_probs(
                 host_galaxy_means=host_galaxy_means,
@@ -1128,7 +1128,7 @@ class Model():
             warnings.warn(
                 "Log posterior probability is not finite. Returning -np.inf. "
             )
-            using_host_galaxy_properties = prep.global_model_cfg['host']['use_properties']
+            using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
                 3 + prep.n_independent_host_properties +
                 (not using_host_galaxy_properties)
@@ -1157,7 +1157,7 @@ class Model():
         log_prior = self.log_prior(param_dict)
         if np.isinf(log_prior):
 
-            using_host_galaxy_properties = prep.global_model_cfg['host']['use_properties']
+            using_host_galaxy_properties = prep.global_model_cfg['host_galaxy_cfg']['use_properties']
             number_of_blobs = (
                 3 + prep.n_independent_host_properties +
                 (not using_host_galaxy_properties)

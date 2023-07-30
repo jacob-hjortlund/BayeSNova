@@ -22,19 +22,25 @@ OldTripp:
 
 Tripp:
   M_int:
-    type: Uniform
+    type: Gaussian
+    mean: -19.4
+    sigma: 1.
     lower_limit: -100.
     upper_limit: 100.
   sigma_M_int:
     type: Uniform
     lower_limit: 0.
-    upper_limit: 100.
+    upper_limit: 5.
   alpha:
-    type: Uniform
+    type: Gaussian
+    mean: 0.
+    sigma: 3.
     lower_limit: -100.
     upper_limit: 100.
   stretch_int:
-    type: Uniform
+    type: Gaussian
+    mean: 0.
+    sigma: 1.
     lower_limit: -100.
     upper_limit: 100.
   sigma_stretch_int:
@@ -42,17 +48,25 @@ Tripp:
     lower_limit: 0.
     upper_limit: 10.
   beta:
-    type: Uniform
+    type: Gaussian
+    mean: 3.1
+    sigma: 3.
     lower_limit: 1.
     upper_limit: 5.
   color_int:
-    type: Uniform
+    type: Gaussian
+    mean: 0.
+    sigma: 1.
     lower_limit: -100.
     upper_limit: 100.
   sigma_color_int:
     type: Uniform
     lower_limit: 0.
-    upper_limit: 100.
+    upper_limit: 5.
+  peculiar_velocity_dispersion:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 1000.
 
 TrippDust:
   M_int:
@@ -97,6 +111,10 @@ TrippDust:
     type: Uniform
     lower_limit: 0.
     upper_limit: 5.
+  peculiar_velocity_dispersion:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 1000.
   R_B:
     type: Uniform
     lower_limit: 1.

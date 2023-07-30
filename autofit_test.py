@@ -1,6 +1,7 @@
 import os
 import yaml
 import shutil
+import corner
 import numpy as np
 import pandas as pd
 import autofit as af
@@ -8,9 +9,9 @@ import bayesnova.preprocessing as prep
 
 from pyprojroot import here
 from src.analysis import Analysis
-from base_models import ConstantWeighting
-from src.cosmo_models import FlatLambdaCDM
-from src.sn_models import Tripp, TrippDust, OldTripp, TwoSNPopulation
+from cosmo import FlatLambdaCDM
+from calibration import Tripp, TrippDust, OldTripp
+from mixture import ConstantWeighting, TwoPopulationMixture
 
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -24,7 +25,7 @@ os.chdir(workspace_path)
 def main():
 
     try:
-        shutil.rmtree("/home/jacob/Uni/Msc/Thesis/BayeSNova/output/tripp_calibration")
+        shutil.rmtree("/home/jacob/Uni/Msc/Thesis/BayeSNova/output")
     except:
         pass
 
@@ -58,52 +59,54 @@ def main():
     )
 
     pop_1 = af.Model(
-        TrippDust,
+        Tripp,
         cosmology=cosmology,
         peculiar_velocity_dispersion=200.0
     )
 
-    pop_2 = af.Model(
-        TrippDust,
-        cosmology=cosmology,
-        peculiar_velocity_dispersion=200.0
-    )
+    # pop_2 = af.Model(
+    #     TrippDust,
+    #     cosmology=cosmology,
+    #     peculiar_velocity_dispersion=200.0
+    # )
 
-    weighting_model = af.Model(
-        ConstantWeighting
-    )
+    # weighting_model = af.Model(
+    #     ConstantWeighting
+    # )
 
-    sn_model = af.Model(
-        TwoSNPopulation,
-        population_models=[pop_1, pop_2],
-        weighting_model=weighting_model
-    )
+    # sn_model = af.Model(
+    #     TwoSNPopulation,
+    #     population_models=[pop_1, pop_2],
+    #     weighting_model=weighting_model
+    # )
 
-    population_models = sn_model.population_models
-    n_populations = len(population_models)
-    reference_population_attributes = vars(population_models[0])
-    shared_parameter_names = [
-        "sigma_M_int",
-        "alpha",
-        "beta",
-        "R_B",
-        "sigma_R_B",
-        "gamma_E_BV"
-    ]
+    sn_model = pop_1
+
+    # population_models = sn_model.population_models
+    # n_populations = len(population_models)
+    # reference_population_attributes = vars(population_models[0])
+    # shared_parameter_names = [
+    #     "sigma_M_int",
+    #     "alpha",
+    #     "beta",
+    #     "R_B",
+    #     "sigma_R_B",
+    #     "gamma_E_BV"
+    # ]
     
-    for i in range(1,n_populations):
-        population = population_models[i]
-        population_attributes = vars(population)
-        population_attributes['cosmology'] = reference_population_attributes['cosmology']
+    # for i in range(1,n_populations):
+    #     population = population_models[i]
+    #     population_attributes = vars(population)
+    #     population_attributes['cosmology'] = reference_population_attributes['cosmology']
         
-        for param in shared_parameter_names:
-            population_attributes[param] = reference_population_attributes[param]
+    #     for param in shared_parameter_names:
+    #         population_attributes[param] = reference_population_attributes[param]
 
-        population.__dict__.update(population_attributes)   
+    #     population.__dict__.update(population_attributes)   
 
-    sn_model.add_assertion(
-        population_models[-1].stretch_int > population_models[0].stretch_int
-    ) 
+    # sn_model.add_assertion(
+    #     population_models[-1].stretch_int > population_models[0].stretch_int
+    # ) 
 
     print("\nSN model pre-fit:")
     print(sn_model.info)
@@ -117,59 +120,52 @@ def main():
         observed_covariance=observed_covariance,
     )
 
-    instance_created = False
-    while not instance_created:
-        try:
-            instance = sn_model.random_instance_from_priors_within_limits()
-            instance_created = True
-        except:
-            pass
+    # instance_created = False
+    # while not instance_created:
+    #     try:
+    #         instance = sn_model.random_instance_from_priors_within_limits()
+    #         instance_created = True
+    #     except:
+    #         pass
 
-    print("\nInstance:")
-    param_names = sn_model.parameter_names
+    # print("\nInstance:")
+    # param_names = sn_model.parameter_names
     
-    for param in param_names:
-        for i, model in enumerate(instance.population_models):
-            model_vars = vars(model)
-            model_name = f"Pop {i+1}"
-            if param in model_vars.keys():
-                print(f"{model_name}: {param} = {model_vars[param]}")
-        print("\n")
+    # for param in param_names:
+    #     for i, model in enumerate(instance.population_models):
+    #         model_vars = vars(model)
+    #         model_name = f"Pop {i+1}"
+    #         if param in model_vars.keys():
+    #             print(f"{model_name}: {param} = {model_vars[param]}")
+    #     print("\n")
 
-        weight_model_vars = vars(instance.weighting_model)
-        if param in weight_model_vars.keys():
-            print(f"Weighting: {param} = {weight_model_vars[param]}")
+    #     weight_model_vars = vars(instance.weighting_model)
+    #     if param in weight_model_vars.keys():
+    #         print(f"Weighting: {param} = {weight_model_vars[param]}")
         
-    analysis.log_likelihood_function(instance=instance)
+    # analysis.log_likelihood_function(instance=instance)
 
     search = af.DynestyStatic(
         name="tripp_calibration",
-        nlive=1000,
-        sample='rslice',
+        sample='rwalk',
+        nlive=500,
         number_of_cores=4,
         iterations_per_update=int(1e6),
-        #dlogz=500.
+        walks=50,
     )
 
     result = search.fit(model=sn_model, analysis=analysis)
 
-    print("\nSN model:")
-    print(sn_model.info)
-    print("\n")
+    import time
+    from dynesty import plotting as dyplot
 
-    print("\nResult:")
-    print(result.info)
+    samples = result.samples
 
-    # import time
-    # from dynesty import plotting as dyplot
-
-    # samples = result.samples
-
-    # fig, _ = dyplot.cornerplot(
-    #     results=samples.results_internal,
-    #     labels=param_names
-    # )
-    # fig.savefig("corner.png")
+    fig, _ = dyplot.cornerplot(
+        results=samples.results_internal,
+        labels=sn_model.parameter_names
+    )
+    fig.savefig("corner.png")
 
     # N = 1000
     # instances = [

@@ -1,7 +1,7 @@
 import numpy as np
 import astropy.cosmology as cosmo
 
-from base_models import Model
+from base import Model
 
 class Cosmology(Model):
 
