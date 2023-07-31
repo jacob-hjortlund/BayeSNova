@@ -9,9 +9,10 @@ import bayesnova.preprocessing as prep
 
 from pyprojroot import here
 from src.analysis import Analysis
+from base import UnivariateGaussian
 from cosmo import FlatLambdaCDM
 from calibration import Tripp, TrippDust, OldTripp
-from mixture import ConstantWeighting, TwoPopulationMixture
+from mixture import ConstantWeighting, LogisticLinearWeighting, TwoPopulationMixture
 
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -36,6 +37,9 @@ def main():
     data_path = "/home/jacob/Uni/Msc/Thesis/Msc_Thesis/src/data/supercal_hubble_flow/supercal_hubble_flow.dat"
     data = pd.read_csv(data_path, sep=" ")
 
+    old_config['model_cfg']['host_galaxy_cfg']['use_properties'] = True
+    old_config['model_cfg']['host_galaxy_cfg']['independent_property_names'] = ['global_mass']
+
     prep.init_global_data(data, None, old_config['model_cfg'])
     
     print(f"N SNe: {len(prep.sn_observables)}")
@@ -51,65 +55,109 @@ def main():
     color = sn_observables[:,2]
     redshift = sn_redshifts
     observed_covariance = sn_covariances
+    host_properties = prep.host_galaxy_observables[not_calibrator_indeces]
+    host_covariances = prep.host_galaxy_covariances[not_calibrator_indeces]
     
+    # SNe Ia model
+
     cosmology = af.Model(
         FlatLambdaCDM,
         H0=73.0,
         Om0=0.3
     )
 
-    pop_1 = af.Model(
-        Tripp,
+    sn_pop_1 = af.Model(
+        TrippDust,
         cosmology=cosmology,
         peculiar_velocity_dispersion=200.0
     )
 
-    # pop_2 = af.Model(
-    #     TrippDust,
-    #     cosmology=cosmology,
-    #     peculiar_velocity_dispersion=200.0
-    # )
+    sn_pop_2 = af.Model(
+        TrippDust,
+        cosmology=cosmology,
+        peculiar_velocity_dispersion=200.0
+    )
 
-    # weighting_model = af.Model(
-    #     ConstantWeighting
-    # )
+    sn_weighting_model = af.Model(
+        ConstantWeighting
+    )
 
-    # sn_model = af.Model(
-    #     TwoSNPopulation,
-    #     population_models=[pop_1, pop_2],
-    #     weighting_model=weighting_model
-    # )
+    sn_model = af.Model(
+        TwoPopulationMixture,
+        population_models=[sn_pop_1, sn_pop_2],
+        weighting_model=sn_weighting_model
+    )
 
-    sn_model = pop_1
-
-    # population_models = sn_model.population_models
-    # n_populations = len(population_models)
-    # reference_population_attributes = vars(population_models[0])
-    # shared_parameter_names = [
-    #     "sigma_M_int",
-    #     "alpha",
-    #     "beta",
-    #     "R_B",
-    #     "sigma_R_B",
-    #     "gamma_E_BV"
-    # ]
+    population_models = sn_model.population_models
+    n_populations = len(population_models)
+    reference_population_attributes = vars(population_models[0])
+    shared_parameter_names = [
+        "sigma_M_int",
+        "alpha",
+        "beta",
+        "R_B",
+        "sigma_R_B",
+        "gamma_E_BV"
+    ]
     
-    # for i in range(1,n_populations):
-    #     population = population_models[i]
-    #     population_attributes = vars(population)
-    #     population_attributes['cosmology'] = reference_population_attributes['cosmology']
+    for i in range(1,n_populations):
+        population = population_models[i]
+        population_attributes = vars(population)
+        population_attributes['cosmology'] = reference_population_attributes['cosmology']
         
-    #     for param in shared_parameter_names:
-    #         population_attributes[param] = reference_population_attributes[param]
+        for param in shared_parameter_names:
+            population_attributes[param] = reference_population_attributes[param]
 
-    #     population.__dict__.update(population_attributes)   
+        population.__dict__.update(population_attributes)   
 
-    # sn_model.add_assertion(
-    #     population_models[-1].stretch_int > population_models[0].stretch_int
-    # ) 
+    sn_model.add_assertion(
+        population_models[-1].stretch_int > population_models[0].stretch_int
+    )
 
-    print("\nSN model pre-fit:")
-    print(sn_model.info)
+    # Host mass model
+
+    # host_mass_pop_1 = af.Model(
+    #     UnivariateGaussian,
+    # )
+
+    # host_mass_pop_2 = af.Model(
+    #     UnivariateGaussian,
+    # )
+
+    # host_mass_weighting_model = af.Model(
+    #     LogisticLinearWeighting,
+    # )
+
+    # host_mass_model = af.Model(
+    #     TwoPopulationMixture,
+    #     population_models=[host_mass_pop_1, host_mass_pop_2],
+    #     weighting_model=host_mass_weighting_model
+    # )
+
+    # host_mass_model.population_models[0].mu = af.UniformPrior(lower_limit=6.0, upper_limit=16.0)
+    # host_mass_model.population_models[1].mu = af.UniformPrior(lower_limit=6.0, upper_limit=16.0)
+
+    # host_mass_model.add_assertion(
+    #     host_mass_model.population_models[0].mu > host_mass_model.population_models[1].mu
+    # )
+
+    # sn_and_host_model = af.Collection(
+    #     sn=sn_model,
+    #     host_models=[host_mass_model]
+    # )
+
+    model = sn_model
+
+    instance_created = False
+    while not instance_created:
+        try:
+            instance = model.random_instance_from_priors_within_limits()
+            instance_created = True
+        except:
+            pass
+
+    print("\nModel Info:")
+    print(model.info)
     print("\n")
 
     analysis = Analysis(
@@ -118,32 +166,11 @@ def main():
         color=color,
         redshift=redshift,
         observed_covariance=observed_covariance,
+        host_properties=host_properties,
+        host_covariances=host_covariances,
     )
-
-    # instance_created = False
-    # while not instance_created:
-    #     try:
-    #         instance = sn_model.random_instance_from_priors_within_limits()
-    #         instance_created = True
-    #     except:
-    #         pass
-
-    # print("\nInstance:")
-    # param_names = sn_model.parameter_names
-    
-    # for param in param_names:
-    #     for i, model in enumerate(instance.population_models):
-    #         model_vars = vars(model)
-    #         model_name = f"Pop {i+1}"
-    #         if param in model_vars.keys():
-    #             print(f"{model_name}: {param} = {model_vars[param]}")
-    #     print("\n")
-
-    #     weight_model_vars = vars(instance.weighting_model)
-    #     if param in weight_model_vars.keys():
-    #         print(f"Weighting: {param} = {weight_model_vars[param]}")
         
-    # analysis.log_likelihood_function(instance=instance)
+    analysis.log_likelihood_function(instance=instance)
 
     search = af.DynestyStatic(
         name="tripp_calibration",
@@ -151,21 +178,24 @@ def main():
         nlive=500,
         number_of_cores=4,
         iterations_per_update=int(1e6),
-        walks=50,
+        #walks=50,
     )
 
-    result = search.fit(model=sn_model, analysis=analysis)
+    result = search.fit(model=model, analysis=analysis)
 
-    import time
-    from dynesty import plotting as dyplot
+    print("\nResult:")
+    print(result.info)
 
-    samples = result.samples
+    # import time
+    # from dynesty import plotting as dyplot
 
-    fig, _ = dyplot.cornerplot(
-        results=samples.results_internal,
-        labels=sn_model.parameter_names
-    )
-    fig.savefig("corner.png")
+    # samples = result.samples
+
+    # fig, _ = dyplot.cornerplot(
+    #     results=samples.results_internal,
+    #     labels=sn_model.parameter_names
+    # )
+    # fig.savefig("corner.png")
 
     # N = 1000
     # instances = [

@@ -19,6 +19,41 @@ class ConstantWeighting(Weighting):
         
         return np.ones_like(redshift) * self.weight
 
+class LogisticLinearWeighting(Weighting):
+
+    def __init__(
+        self,
+        scale: float = 1.0,
+        offset: float = 0.0,
+    ):
+        super().__init__()
+        self.scale = scale
+        self.offset = offset
+    
+    def logistic(
+        self,
+        x: np.ndarray,
+    ) -> np.ndarray:
+        return 1.0 / (1.0 + np.exp(-x))
+    
+    def inverse_logistic(
+        self,
+        y: np.ndarray,
+    ) -> np.ndarray:
+        return np.log(y / (1.0 - y))
+
+    def calculate_weight(
+        self,
+        weights: np.ndarray,
+        **kwargs
+    ):
+        
+        unbound_weights = self.logistic(weights)
+        linear_unbound_weights = self.scale * unbound_weights + self.offset
+        linear_weights = self.inverse_logistic(linear_unbound_weights)
+        
+        return linear_weights
+
 class TwoPopulationMixture(Mixture):
 
     def __init__(
@@ -34,7 +69,7 @@ class TwoPopulationMixture(Mixture):
         if self.n_populations != 2:
             raise ValueError(f"Expected 2 population models, got {self.n_populations}.")
     
-    def _log_likelihood(
+    def log_likelihood(
         self,
         **kwargs,
     ) -> np.ndarray:
@@ -53,8 +88,8 @@ class TwoPopulationMixture(Mixture):
         population_2_weight = 1.0 - population_1_weight
 
         log_likelihoods = np.logaddexp(
-            np.log(population_1_weight) + log_likelihoods[:, 0],
-            np.log(population_2_weight) + log_likelihoods[:, 1],
+            np.log(population_1_weight) + log_likelihoods[0],
+            np.log(population_2_weight) + log_likelihoods[1],
         )
         log_likelihood = np.sum(log_likelihoods)
 

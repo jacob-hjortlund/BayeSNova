@@ -281,7 +281,7 @@ def init_global_data(
         )
         calibrator_distance_moduli = calibrator_distance_moduli[idx_calibrator_sn].squeeze()
 
-    host_galaxy_cfg = cfg.get('host', {})
+    host_galaxy_cfg = cfg.get('host_galaxy_cfg', {})
     independent_host_property_keys = host_galaxy_cfg.get('independent_property_names', [])
     independent_host_property_err_keys = [
         key + "_err" for key in independent_host_property_keys

@@ -12,6 +12,8 @@ class Analysis(af.Analysis):
         observed_covariance: np.ndarray,
         calibrator_indeces: np.ndarray = None,
         calibrator_distance_modulus: np.ndarray = None,
+        host_properties: np.ndarray = np.zeros((0, 0)),
+        host_covariances: np.ndarray = np.zeros((0, 0))
     ):
         
         self.apparent_B_mag = apparent_B_mag
@@ -21,21 +23,55 @@ class Analysis(af.Analysis):
         self.observed_covariance = observed_covariance
         self.calibrator_indeces = calibrator_indeces
         self.calibrator_distance_modulus = calibrator_distance_modulus
+        self.host_properties = host_properties
+        self.host_covariances = host_covariances
 
         if self.calibrator_indeces is None:
             self.calibrator_indeces = np.zeros_like(self.apparent_B_mag, dtype=bool)
 
     def log_likelihood_function(self, instance) -> float:
 
-        log_likelihoods = instance.log_likelihood(
-            apparent_B_mag=self.apparent_B_mag,
-            stretch=self.stretch,
-            color=self.color,
-            redshift=self.redshift,
-            observed_covariance=self.observed_covariance,
-            calibrator_indeces=self.calibrator_indeces,
-            calibrator_distance_modulus=self.calibrator_distance_modulus,
-        )
+        instance_vars = vars(instance)
+        host_model_in_instance = "host_models" in instance_vars
+
+        if not host_model_in_instance:
+            log_likelihoods = instance.log_likelihood(
+                apparent_B_mag=self.apparent_B_mag,
+                stretch=self.stretch,
+                color=self.color,
+                redshift=self.redshift,
+                observed_covariance=self.observed_covariance,
+                calibrator_indeces=self.calibrator_indeces,
+                calibrator_distance_modulus=self.calibrator_distance_modulus,
+            )
+        else:
+            sn_log_likelihoods = instance.sn.log_likelihood(
+                apparent_B_mag=self.apparent_B_mag,
+                stretch=self.stretch,
+                color=self.color,
+                redshift=self.redshift,
+                observed_covariance=self.observed_covariance,
+                calibrator_indeces=self.calibrator_indeces,
+                calibrator_distance_modulus=self.calibrator_distance_modulus,
+            )
+
+            sn_weights = instance.sn.weighting_model.calculate_weight(redshift=self.redshift)
+
+            host_log_likelihoods = np.zeros_like(sn_log_likelihoods)
+            for i, host_model in enumerate(instance.host_models):
+                
+                idx_obs = self.host_covariances[:,i] < 1e150
+                observations = self.host_properties[idx_obs,i]
+                variance = self.host_covariances[idx_obs,i]
+                weights = sn_weights[idx_obs]
+
+                host_log_likelihoods += host_model.log_likelihood(
+                    observations=observations,
+                    variance=variance,
+                    weights=weights
+                )
+            
+            log_likelihoods = sn_log_likelihoods + host_log_likelihoods
 
         if np.any(np.isfinite(log_likelihoods) == False):
             log_likelihood = -1e99

@@ -1,5 +1,9 @@
-ConstantWeighting:
-  weight:
+UnivariateGaussian:
+  mu:
     type: Uniform
-    lower_limit: 0.15
-    upper_limit: 0.85
+    lower_limit: -100.
+    upper_limit: 100.
+  sigma:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 10.0

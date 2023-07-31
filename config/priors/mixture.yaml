@@ -1,0 +1,21 @@
+ConstantWeighting:
+  weight:
+    type: Gaussian
+    mean: 0.5
+    sigma: 0.1
+    lower_limit: 0.15
+    upper_limit: 0.85
+
+LogisticLinearWeighting:
+  scale:
+    type: Gaussian
+    mean: 1.0
+    sigma: 0.5
+    lower_limit: -10.0
+    upper_limit: 10.0
+  offset:
+    type: Gaussian
+    mean: 0.0
+    sigma: 0.5
+    lower_limit: -10.0
+    upper_limit: 10.0
