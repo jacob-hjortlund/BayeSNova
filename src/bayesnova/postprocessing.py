@@ -64,13 +64,13 @@ def mcmc_statistics(
     print("Optimized log(P):", opt_log_prob, "\n")
 
     # Log chain settings and log(P) values
-    clearml_logger.report_single_value(
-        name='acceptance_fraction', value=acceptance_fraction
-    )
-    clearml_logger.report_single_value(name='tau', value=tau)
-    clearml_logger.report_single_value(name='burnin', value=burnin)
-    clearml_logger.report_single_value(name="max_sample_log_prob", value=max_sample_log_prob)
-    clearml_logger.report_single_value(name="opt_log_prob", value=opt_log_prob)
+    # clearml_logger.report_single_value(
+    #     name='acceptance_fraction', value=acceptance_fraction
+    # )
+    # clearml_logger.report_single_value(name='tau', value=tau)
+    # clearml_logger.report_single_value(name='burnin', value=burnin)
+    # clearml_logger.report_single_value(name="max_sample_log_prob", value=max_sample_log_prob)
+    # clearml_logger.report_single_value(name="opt_log_prob", value=opt_log_prob)
 
     # Save locally in dataframe
     metrics_df = pd.DataFrame(
@@ -150,17 +150,17 @@ def map_mmap_comparison(
         )
     )
 
-    clearml_logger.report_single_value(name='rms_Z', value=rms_value)
+    #clearml_logger.report_single_value(name='rms_Z', value=rms_value)
     
     map_mmap_df = pd.DataFrame(
         map_mmap_values, index=['MAP', 'MMAP', 'sigma', 'sym_sigma', 'Z'], columns=par_names
     )
-    clearml_logger.report_table(
-        title='MAP_MMAP_Distance',
-        series='MAP_MMAP_Distance',
-        iteration=0,
-        table_plot=map_mmap_df
-    )
+    # clearml_logger.report_table(
+    #     title='MAP_MMAP_Distance',
+    #     series='MAP_MMAP_Distance',
+    #     iteration=0,
+    #     table_plot=map_mmap_df
+    # )
 
     map_mmap_df.to_csv(os.path.join(save_path, "map_mmap.csv"))
     print(f"\nRMS value: {rms_value}\n")
@@ -210,19 +210,19 @@ def parameter_values(
         )
     )
 
-    clearml_logger.report_table(
-        title='Medians_and_Errors',
-        series='Medians_and_Errors',
-        iteration=0,
-        table_plot=val_errors_df
-    )
+    # clearml_logger.report_table(
+    #     title='Medians_and_Errors',
+    #     series='Medians_and_Errors',
+    #     iteration=0,
+    #     table_plot=val_errors_df
+    # )
 
-    clearml_logger.report_table(
-        title='Z_Scores',
-        series='Z_Scores',
-        iteration=0,
-        table_plot=z_score_df
-    )
+    # clearml_logger.report_table(
+    #     title='Z_Scores',
+    #     series='Z_Scores',
+    #     iteration=0,
+    #     table_plot=z_score_df
+    # )
 
     val_errors_df.to_csv(os.path.join(save_path, "medians_and_errors.csv"))
     z_score_df.to_csv(os.path.join(save_path, "z_scores.csv"))

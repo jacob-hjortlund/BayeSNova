@@ -162,11 +162,15 @@ def init_global_data(
     global observed_volumetric_rate_errors
     global observed_volumetric_rate_redshifts
 
+    # rename any columns with names mu_calibrator to distmod_calibrator
+    if 'mu_calibrator' in data.columns:
+        data.rename(columns={'mu_calibrator': 'distmod_calibrator'}, inplace=True)
+
     calibrator_flags_available = (
         'is_calibrator' in data.columns
     )
     if calibrator_flags_available:
-        idx_calibrator_sn = data['is_calibrator'].copy().to_numpy() != 1
+        idx_calibrator_sn = data['is_calibrator'].copy().to_numpy() == 1
         data.drop(['is_calibrator'], axis=1, inplace=True)
     else:
         idx_calibrator_sn = np.zeros(len(data), dtype=bool)

@@ -43,13 +43,14 @@ def main(cfg: omegaconf.DictConfig) -> None:
     using_multiprocessing = cfg['emcee_cfg']['pool_type'] == 'MP'
     no_pool = cfg['emcee_cfg']['pool_type'] == ''
 
-    if using_MPI_and_is_master or using_multiprocessing or no_pool:
-        cl.Task.set_offline(offline_mode=cfg['clearml_cfg']['offline_mode'])
-        task = cl.Task.init(
-            project_name=cfg['clearml_cfg']['project_name'],
-            task_name=task_name, tags=tags, task_type=cfg['clearml_cfg']['task_type']
-        )
-        clearml_logger = task.get_logger()
+    # if using_MPI_and_is_master or using_multiprocessing or no_pool:
+    #     cl.Task.set_offline(offline_mode=cfg['clearml_cfg']['offline_mode'])
+    #     task = cl.Task.init(
+    #         project_name=cfg['clearml_cfg']['project_name'],
+    #         task_name=task_name, tags=tags, task_type=cfg['clearml_cfg']['task_type']
+    #     )
+    #     clearml_logger = task.get_logger()
+    clearml_logger = None
 
     # Setup results dir
     path = os.path.join(

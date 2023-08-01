@@ -1,1 +1,5 @@
+analysis
+base_models
 bayesnova
+cosmo_models
+sn_models

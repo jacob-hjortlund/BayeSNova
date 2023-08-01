@@ -23,22 +23,24 @@ os.chdir(workspace_path)
 
 def main():
 
+    name = "test_rwalk_50_run_4"
     try:
-        shutil.rmtree("/home/jacob/Uni/Msc/Thesis/BayeSNova/output/tripp_calibration")
+        shutil.rmtree("/groups/dark/osman/BayeSNova/output/" + name)
     except:
         pass
 
-    with open("/home/jacob/Uni/Msc/Thesis/BayeSNova/examples/configs/config.yaml") as f:
+    with open("/groups/dark/osman/BayeSNova/examples/configs/config.yaml") as f:
         old_config = yaml.safe_load(f)
 
     # Load data
-    data_path = "/home/jacob/Uni/Msc/Thesis/Msc_Thesis/src/data/supercal_hubble_flow/supercal_hubble_flow.dat"
+    data_path = "/groups/dark/osman/Thesis_old/data/processed_data/supercal"
+    # data_path = "/groups/dark/osman/Msc_Thesis/src/data/supercal_hubble_flow/supercal_hubble_flow.dat"
     data = pd.read_csv(data_path, sep=" ")
 
     prep.init_global_data(data, None, old_config['model_cfg'])
     
     print(f"N SNe: {len(prep.sn_observables)}")
-    not_calibrator_indeces = prep.idx_calibrator_sn
+    not_calibrator_indeces = ~prep.idx_calibrator_sn
     print(f"N Calibrators: {np.sum(~not_calibrator_indeces)}")
     sn_observables = prep.sn_observables[not_calibrator_indeces]
     sn_redshifts = prep.sn_redshifts[not_calibrator_indeces]
@@ -60,17 +62,42 @@ def main():
     pop_1 = af.Model(
         TrippDust,
         cosmology=cosmology,
-        peculiar_velocity_dispersion=200.0
+        peculiar_velocity_dispersion=200.0,
+        sigma_M_int=0.,
+        # alpha=-0.206,
+        # beta=2.936,
+        # R_B=3.661,
+        # sigma_R_B=0.685,
+        # gamma_E_BV=4.385,
+        # M_int=-19.462,
+        # color_int=-0.064,
+        # sigma_color_int=0.086,
+        # stretch_int=-1.491,
+        # sigma_stretch_int=0.646,
+        # tau_E_BV=0.022,
     )
 
     pop_2 = af.Model(
         TrippDust,
         cosmology=cosmology,
-        peculiar_velocity_dispersion=200.0
+        peculiar_velocity_dispersion=200.0,
+        sigma_M_int=0.,
+        # alpha=-0.206,
+        # beta=2.936,
+        # R_B=3.661,
+        # sigma_R_B=0.685,
+        # gamma_E_BV=4.385,
+        # M_int=-19.317,
+        # color_int=-0.151,
+        # sigma_color_int=0.031,
+        # stretch_int=0.326,
+        # sigma_stretch_int=0.647,
+        # tau_E_BV=0.033,
     )
 
     weighting_model = af.Model(
-        ConstantWeighting
+        ConstantWeighting,
+        #weight=0.3178
     )
 
     sn_model = af.Model(
@@ -117,6 +144,7 @@ def main():
         observed_covariance=observed_covariance,
     )
 
+    # instance = sn_model.instance_from_unit_vector([])
     instance_created = False
     while not instance_created:
         try:
@@ -140,22 +168,33 @@ def main():
         if param in weight_model_vars.keys():
             print(f"Weighting: {param} = {weight_model_vars[param]}")
         
-    analysis.log_likelihood_function(instance=instance)
+    print(analysis.log_likelihood_function(instance=instance))
+
+    # search = af.Emcee(
+    #     name=name,
+    #     nwalkers=256,
+    #     nsteps=100000,
+    #     initializer=af.InitializerBall(lower_limit=0.4995, upper_limit=0.5005),
+    #     number_of_cores=257,
+    #     iterations_per_update=int(1e100),
+    # )
 
     search = af.DynestyStatic(
-        name="tripp_calibration",
+        name=name,
         nlive=1000,
-        sample='rslice',
-        number_of_cores=4,
-        iterations_per_update=int(1e6),
+        sample='rwalk',
+        number_of_cores=257,
+        iterations_per_update=int(1e100),
+        walks=50,
+        slices=50
         #dlogz=500.
     )
 
     result = search.fit(model=sn_model, analysis=analysis)
 
-    print("\nSN model:")
-    print(sn_model.info)
-    print("\n")
+    # print("\nSN model:")
+    # print(sn_model.info)
+    # print("\n")
 
     print("\nResult:")
     print(result.info)

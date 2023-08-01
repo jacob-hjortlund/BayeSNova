@@ -68,7 +68,7 @@ TrippDust:
   alpha:
     type: Gaussian
     mean: 0.
-    sigma: 3.
+    sigma: 1.
     lower_limit: -100.
     upper_limit: 100.
   stretch_int:
@@ -80,17 +80,15 @@ TrippDust:
   sigma_stretch_int:
     type: Uniform
     lower_limit: 0.
-    upper_limit: 10.
+    upper_limit: 5.
   beta:
-    type: Gaussian
-    mean: 3.1
-    sigma: 3.
+    type: Uniform
     lower_limit: 1.
     upper_limit: 5.
   color_int:
     type: Gaussian
     mean: 0.
-    sigma: 1.
+    sigma: 10.
     lower_limit: -100.
     upper_limit: 100.
   sigma_color_int:
@@ -112,7 +110,7 @@ TrippDust:
   tau_E_BV:
     type: Uniform
     lower_limit: 0.
-    upper_limit: 10.
+    upper_limit: 1.
 
 # Tripp:
 #   M_int:

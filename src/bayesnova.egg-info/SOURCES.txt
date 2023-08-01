@@ -1,6 +1,10 @@
 LICENSE
 README.md
 pyproject.toml
+src/analysis.py
+src/base_models.py
+src/cosmo_models.py
+src/sn_models.py
 src/bayesnova/__init__.py
 src/bayesnova/cosmology_utils.py
 src/bayesnova/generative_models.py
