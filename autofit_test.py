@@ -174,14 +174,6 @@ def main():
 
     model = sn_and_host_model
 
-    instance_created = False
-    while not instance_created:
-        try:
-            instance = model.random_instance_from_priors_within_limits()
-            instance_created = True
-        except:
-            pass
-
     print("\nModel Info:")
     print(model.info)
     print("\n")
@@ -195,41 +187,6 @@ def main():
         host_properties=host_properties,
         host_covariances=host_covariances,
     )
-
-    # instance = sn_model.instance_from_unit_vector([])
-    instance_created = False
-    while not instance_created:
-        try:
-            instance = model.random_instance_from_priors_within_limits()
-            instance_created = True
-        except:
-            pass
-
-    print("\nInstance:")
-    param_names = model.parameter_names
-    
-    for param in param_names:
-        for i, model in enumerate(instance.population_models):
-            model_vars = vars(model)
-            model_name = f"Pop {i+1}"
-            if param in model_vars.keys():
-                print(f"{model_name}: {param} = {model_vars[param]}")
-        print("\n")
-
-        weight_model_vars = vars(instance.weighting_model)
-        if param in weight_model_vars.keys():
-            print(f"Weighting: {param} = {weight_model_vars[param]}")
-        
-    print(analysis.log_likelihood_function(instance=instance))
-
-    # search = af.Emcee(
-    #     name=name,
-    #     nwalkers=256,
-    #     nsteps=100000,
-    #     initializer=af.InitializerBall(lower_limit=0.4995, upper_limit=0.5005),
-    #     number_of_cores=257,
-    #     iterations_per_update=int(1e100),
-    # )
 
     search = af.DynestyStatic(
         name=name,
