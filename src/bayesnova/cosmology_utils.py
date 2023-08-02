@@ -20,7 +20,6 @@ DH_70 = 4282.7494
 def E(z, args):
     _, Om, Ode, w0, wa = args
     zp1 = 1+z
-    #Ode = 1. - Om
     mass_term = Om * zp1**3.
     de_term = Ode * zp1**(3.*(1.+w0+wa)) * jnp.exp(-3. * wa * z/zp1)
     Ez = jnp.sqrt(mass_term + de_term)
