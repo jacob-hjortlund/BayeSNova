@@ -23,7 +23,7 @@ os.chdir(workspace_path)
 
 def main():
 
-    name = "test_rwalk_50_run_4"
+    name = "test_rwalk_50_run_1_uniform"
     try:
         shutil.rmtree("/groups/dark/osman/BayeSNova/output/" + name)
     except:

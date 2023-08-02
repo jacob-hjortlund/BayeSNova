@@ -1,7 +1,8 @@
 ConstantWeighting:
   weight:
-    type: Gaussian
-    mean: 0.5
-    sigma: 0.075
+    # type: Gaussian
+    # mean: 0.5
+    # sigma: 0.1
+    type: Uniform
     lower_limit: 0.15
     upper_limit: 0.85
