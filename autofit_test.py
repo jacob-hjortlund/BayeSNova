@@ -25,7 +25,7 @@ os.chdir(workspace_path)
 
 def main():
 
-    name = "test_rwalk_50_run_1_uniform"
+    name = "test_rwalk_50_run_1_sn_host"
     try:
         shutil.rmtree("/groups/dark/osman/BayeSNova/output/" + name)
     except:
@@ -142,37 +142,37 @@ def main():
 
     # Host mass model
 
-    # host_mass_pop_1 = af.Model(
-    #     UnivariateGaussian,
-    # )
+    host_mass_pop_1 = af.Model(
+        UnivariateGaussian,
+    )
 
-    # host_mass_pop_2 = af.Model(
-    #     UnivariateGaussian,
-    # )
+    host_mass_pop_2 = af.Model(
+        UnivariateGaussian,
+    )
 
-    # host_mass_weighting_model = af.Model(
-    #     LogisticLinearWeighting,
-    # )
+    host_mass_weighting_model = af.Model(
+        LogisticLinearWeighting,
+    )
 
-    # host_mass_model = af.Model(
-    #     TwoPopulationMixture,
-    #     population_models=[host_mass_pop_1, host_mass_pop_2],
-    #     weighting_model=host_mass_weighting_model
-    # )
+    host_mass_model = af.Model(
+        TwoPopulationMixture,
+        population_models=[host_mass_pop_1, host_mass_pop_2],
+        weighting_model=host_mass_weighting_model
+    )
 
-    # host_mass_model.population_models[0].mu = af.UniformPrior(lower_limit=6.0, upper_limit=16.0)
-    # host_mass_model.population_models[1].mu = af.UniformPrior(lower_limit=6.0, upper_limit=16.0)
+    host_mass_model.population_models[0].mu = af.UniformPrior(lower_limit=6.0, upper_limit=16.0)
+    host_mass_model.population_models[1].mu = af.UniformPrior(lower_limit=6.0, upper_limit=16.0)
 
-    # host_mass_model.add_assertion(
-    #     host_mass_model.population_models[0].mu > host_mass_model.population_models[1].mu
-    # )
+    host_mass_model.add_assertion(
+        host_mass_model.population_models[0].mu > host_mass_model.population_models[1].mu
+    )
 
-    # sn_and_host_model = af.Collection(
-    #     sn=sn_model,
-    #     host_models=[host_mass_model]
-    # )
+    sn_and_host_model = af.Collection(
+        sn=sn_model,
+        host_models=[host_mass_model]
+    )
 
-    model = sn_model
+    model = sn_and_host_model
 
     instance_created = False
     while not instance_created:
