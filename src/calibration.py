@@ -251,7 +251,6 @@ def _E_BV_log_marginalization(
 
     return log_probs, status
 
-
 # ---------------------- MODELS ----------------------------
 
 class OldTripp(Gaussian):
