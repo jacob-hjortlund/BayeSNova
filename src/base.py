@@ -22,6 +22,32 @@ class Gaussian(Model):
         
         raise NotImplementedError
 
+class UnivariateGaussian(Gaussian):
+
+    def __init__(
+        self,
+        mu: float,
+        sigma: float
+    ) -> None:
+        super().__init__()
+
+        self.mu = mu
+        self.sigma = sigma
+
+    def log_likelihood(
+        self,
+        observations: np.ndarray,
+        variance: np.ndarray,
+        **kwargs
+    ) -> np.ndarray:
+        
+        var = self.sigma**2 + variance
+        norm = -0.5 * np.log(2 * np.pi * var)
+        idx_inf = np.isinf(norm)
+        norm[idx_inf] = -1e99
+
+        return norm - 0.5 * (observations - self.mu)**2 / var
+    
 class Weighting(Model):
 
     def __init__(self) -> None:
@@ -30,23 +56,6 @@ class Weighting(Model):
     def calculate_weight(self, **kwargs):
         
         raise NotImplementedError
-
-class ConstantWeighting(Weighting):
-
-    def __init__(
-        self,
-        weight: float
-    ) -> None:
-        super().__init__()
-        self.weight = weight
-    
-    def calculate_weight(
-        self,
-        redshift: float,
-        **kwargs
-    ):
-        
-        return np.ones_like(redshift) * self.weight
 
 class Mixture(Model):
 

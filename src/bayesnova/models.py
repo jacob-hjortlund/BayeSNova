@@ -567,7 +567,7 @@ class Model():
 
         cov = np.tile(prep.sn_covariances, (2, 1, 1, 1))
         disp_v_pec = 200. # km / s
-        c = 300000. # km / s
+        c = 299792.458 #300000. # km / s
         
         cov[:,:,0,0] += np.array([
             [sig_int_1**2 + alpha_1**2 * sig_s_1**2 + beta_1**2 * sig_c_1**2],

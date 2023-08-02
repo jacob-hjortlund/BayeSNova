@@ -1,6 +1,7 @@
 import os
 import yaml
 import shutil
+import corner
 import numpy as np
 import pandas as pd
 import autofit as af
@@ -8,9 +9,10 @@ import bayesnova.preprocessing as prep
 
 from pyprojroot import here
 from src.analysis import Analysis
-from base_models import ConstantWeighting
-from src.cosmo_models import FlatLambdaCDM
-from src.sn_models import Tripp, TrippDust, OldTripp, TwoSNPopulation
+from base import UnivariateGaussian
+from cosmo import FlatLambdaCDM
+from calibration import Tripp, TrippDust, OldTripp
+from mixture import ConstantWeighting, LogisticLinearWeighting, TwoPopulationMixture
 
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -37,6 +39,9 @@ def main():
     # data_path = "/groups/dark/osman/Msc_Thesis/src/data/supercal_hubble_flow/supercal_hubble_flow.dat"
     data = pd.read_csv(data_path, sep=" ")
 
+    old_config['model_cfg']['host_galaxy_cfg']['use_properties'] = True
+    old_config['model_cfg']['host_galaxy_cfg']['independent_property_names'] = ['global_mass']
+
     prep.init_global_data(data, None, old_config['model_cfg'])
     
     print(f"N SNe: {len(prep.sn_observables)}")
@@ -52,14 +57,18 @@ def main():
     color = sn_observables[:,2]
     redshift = sn_redshifts
     observed_covariance = sn_covariances
+    host_properties = prep.host_galaxy_observables[not_calibrator_indeces]
+    host_covariances = prep.host_galaxy_covariances[not_calibrator_indeces]
     
+    # SNe Ia model
+
     cosmology = af.Model(
         FlatLambdaCDM,
         H0=73.0,
         Om0=0.3
     )
 
-    pop_1 = af.Model(
+    sn_pop_1 = af.Model(
         TrippDust,
         cosmology=cosmology,
         peculiar_velocity_dispersion=200.0,
@@ -77,7 +86,7 @@ def main():
         # tau_E_BV=0.022,
     )
 
-    pop_2 = af.Model(
+    sn_pop_2 = af.Model(
         TrippDust,
         cosmology=cosmology,
         peculiar_velocity_dispersion=200.0,
@@ -95,15 +104,14 @@ def main():
         # tau_E_BV=0.033,
     )
 
-    weighting_model = af.Model(
-        ConstantWeighting,
-        #weight=0.3178
+    sn_weighting_model = af.Model(
+        ConstantWeighting
     )
 
     sn_model = af.Model(
-        TwoSNPopulation,
-        population_models=[pop_1, pop_2],
-        weighting_model=weighting_model
+        TwoPopulationMixture,
+        population_models=[sn_pop_1, sn_pop_2],
+        weighting_model=sn_weighting_model
     )
 
     population_models = sn_model.population_models
@@ -130,10 +138,52 @@ def main():
 
     sn_model.add_assertion(
         population_models[-1].stretch_int > population_models[0].stretch_int
-    ) 
+    )
 
-    print("\nSN model pre-fit:")
-    print(sn_model.info)
+    # Host mass model
+
+    # host_mass_pop_1 = af.Model(
+    #     UnivariateGaussian,
+    # )
+
+    # host_mass_pop_2 = af.Model(
+    #     UnivariateGaussian,
+    # )
+
+    # host_mass_weighting_model = af.Model(
+    #     LogisticLinearWeighting,
+    # )
+
+    # host_mass_model = af.Model(
+    #     TwoPopulationMixture,
+    #     population_models=[host_mass_pop_1, host_mass_pop_2],
+    #     weighting_model=host_mass_weighting_model
+    # )
+
+    # host_mass_model.population_models[0].mu = af.UniformPrior(lower_limit=6.0, upper_limit=16.0)
+    # host_mass_model.population_models[1].mu = af.UniformPrior(lower_limit=6.0, upper_limit=16.0)
+
+    # host_mass_model.add_assertion(
+    #     host_mass_model.population_models[0].mu > host_mass_model.population_models[1].mu
+    # )
+
+    # sn_and_host_model = af.Collection(
+    #     sn=sn_model,
+    #     host_models=[host_mass_model]
+    # )
+
+    model = sn_model
+
+    instance_created = False
+    while not instance_created:
+        try:
+            instance = model.random_instance_from_priors_within_limits()
+            instance_created = True
+        except:
+            pass
+
+    print("\nModel Info:")
+    print(model.info)
     print("\n")
 
     analysis = Analysis(
@@ -142,6 +192,8 @@ def main():
         color=color,
         redshift=redshift,
         observed_covariance=observed_covariance,
+        host_properties=host_properties,
+        host_covariances=host_covariances,
     )
 
     # instance = sn_model.instance_from_unit_vector([])
@@ -206,7 +258,7 @@ def main():
 
     # fig, _ = dyplot.cornerplot(
     #     results=samples.results_internal,
-    #     labels=param_names
+    #     labels=sn_model.parameter_names
     # )
     # fig.savefig("corner.png")
 

@@ -1,0 +1,9 @@
+UnivariateGaussian:
+  mu:
+    type: Uniform
+    lower_limit: -100.
+    upper_limit: 100.
+  sigma:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 10.0
