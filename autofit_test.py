@@ -200,13 +200,13 @@ def main():
     instance_created = False
     while not instance_created:
         try:
-            instance = sn_model.random_instance_from_priors_within_limits()
+            instance = model.random_instance_from_priors_within_limits()
             instance_created = True
         except:
             pass
 
     print("\nInstance:")
-    param_names = sn_model.parameter_names
+    param_names = model.parameter_names
     
     for param in param_names:
         for i, model in enumerate(instance.population_models):
@@ -242,35 +242,11 @@ def main():
         #dlogz=500.
     )
 
-    result = search.fit(model=sn_model, analysis=analysis)
-
-    # print("\nSN model:")
-    # print(sn_model.info)
-    # print("\n")
+    result = search.fit(model=model, analysis=analysis)
 
     print("\nResult:")
     print(result.info)
 
-    # import time
-    # from dynesty import plotting as dyplot
-
-    # samples = result.samples
-
-    # fig, _ = dyplot.cornerplot(
-    #     results=samples.results_internal,
-    #     labels=sn_model.parameter_names
-    # )
-    # fig.savefig("corner.png")
-
-    # N = 1000
-    # instances = [
-    #     samples.from_sample_index(sample_index=i) for i in range(len(samples))[:N]
-    # ]
-    # t0 = time.time()
-    # for i in range(len(instances)):
-    #     analysis.log_likelihood_function(instance=instances[i])
-    # t1 = time.time()
-    # print(f"Time per likelihood evaluation: {(t1-t0)/N}")
     
 if __name__ == "__main__":
     main()
