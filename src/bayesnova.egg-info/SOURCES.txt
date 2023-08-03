@@ -2,9 +2,11 @@ LICENSE
 README.md
 pyproject.toml
 src/analysis.py
-src/base_models.py
-src/cosmo_models.py
-src/sn_models.py
+src/base.py
+src/calibration.py
+src/cosmo.py
+src/mixture.py
+src/volumetric_rate.py
 src/bayesnova/__init__.py
 src/bayesnova/cosmology_utils.py
 src/bayesnova/generative_models.py
@@ -17,6 +19,9 @@ src/bayesnova.egg-info/SOURCES.txt
 src/bayesnova.egg-info/dependency_links.txt
 src/bayesnova.egg-info/requires.txt
 src/bayesnova.egg-info/top_level.txt
+src/bayesnova/new_utils/__init__.py
+src/bayesnova/new_utils/constants.py
+src/bayesnova/new_utils/utils.py
 tests/test_models.py
 tests/test_preprocessing.py
 tests/test_utils.py

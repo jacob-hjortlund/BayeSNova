@@ -1,5 +1,7 @@
 analysis
-base_models
+base
 bayesnova
-cosmo_models
-sn_models
+calibration
+cosmo
+mixture
+volumetric_rate

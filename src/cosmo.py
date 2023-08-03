@@ -1,11 +1,13 @@
 import warnings
+import numba as nb
 import numpy as np
 import astropy.cosmology as cosmo
 
 from base import Model
 from astropy.units import Gyr
+from numbalsoda import lsoda_sig, lsoda, dop853
 
-
+@nb.njit
 def E(
     z: np.ndarray, args: np.ndarray
 ) -> np.ndarray:
@@ -19,7 +21,7 @@ def E(
         ArrayLike: The E(z) function evaluated at z.
     """
 
-    _, Om0, w0, wa = args
+    _, _, Om0, w0, wa = args
     Ode0 = 1-Om0
     zp1 = 1+z
     mass_term = Om0 * zp1**3.
@@ -28,25 +30,41 @@ def E(
 
     return Ez
 
-def ode(
-    t: float, z: np.ndarray, args: np.ndarray
+@nb.cfunc(lsoda_sig)
+def z_ode(
+    t, z, dz, cosmology_args
 ):
     """The RHS of ODE for the redshift at times.
 
     Args:
-        t (ArrayLike): The time, unused since RHS doesnt depend on t.
-        z (ArrayLike): Array of redshifts.
-        args (ArrayLike): Array containing H0, Om0, w0, wa.
+        t (float): The time, unused since RHS doesnt depend on t.
+        z (np.ndarray): Array of redshifts.
+        cosmology_args (np.ndarray): Array containing H0, Om0, w0, wa.
 
     Returns:
         ArrayLike: The ODE at the given redshift.
     """
 
-    H0, _, _, _ = args
-    zp1 = 1+z
-    Ez = E(z, args)
+    cosmology_args = nb.carray(cosmology_args, (5,))
+    z = nb.carray(z, (1,))
 
-    return -H0 * zp1 * Ez
+    t_H0, _, _, _, _ = cosmology_args
+    zp1 = 1+z
+    Ez = E(z, cosmology_args)
+    dz[0] = -1. / t_H0 * zp1 * Ez
+z_ode_ptr = z_ode.address
+
+def redshift_at_times(
+    evaluation_times: np.ndarray,
+    z0: float, cosmology_args: np.ndarray
+):
+    
+    z0 = np.array([z0])
+    usol, success = lsoda(
+        z_ode_ptr, z0, t_eval=evaluation_times, data=cosmology_args
+    )
+
+    return usol, success
 
 class Cosmology(Model):
 
