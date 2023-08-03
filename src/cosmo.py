@@ -70,10 +70,24 @@ class Cosmology(Model):
 
     def __init__(
         self,
+        H0: float = 70.0,
+        Om0: float = 0.3,
+        Ode0: float = 0.7,
+        Tcmb0: float = 2.725, #update to planck value
+        Neff: float = 3.046, #update to planck value
+        m_nu: float = 0.0, #update to planck value
+        Ob0: float = 0.05,
     ):
         
         super().__init__()
         self.cosmology = None
+        self.H0 = H0
+        self.Om0 = Om0
+        self.Ode0 = Ode0
+        self.Tcmb0 = Tcmb0
+        self.Neff = Neff
+        self.m_nu = m_nu
+        self.Ob0 = Ob0
 
     def distance_modulus(self, z: np.ndarray) -> np.ndarray:
         raise NotImplementedError
@@ -88,12 +102,26 @@ class FlatLambdaCDM(Cosmology):
         self,
         H0: float = 70.0,
         Om0: float = 0.3,
+        Tcmb0: float = 2.725, #update to planck value
+        Neff: float = 3.046, #update to planck value
+        m_nu: float = 0.0, #update to planck value
+        Ob0: float = 0.05,
     ):
         
-        super().__init__()
-        self.H0 = H0
-        self.Om0 = Om0
-        self.cosmo = cosmo.FlatLambdaCDM(H0=self.H0, Om0=self.Om0)
+        super().__init__(
+            H0=H0,
+            Om0=Om0,
+            Ode0=1-Om0,
+            Tcmb0=Tcmb0,
+            Neff=Neff,
+            m_nu=m_nu,
+            Ob0=Ob0,
+        )
+        self.cosmo = cosmo.FlatLambdaCDM(
+            H0=self.H0, Om0=self.Om0,
+            Tcmb0=self.Tcmb0, Neff=self.Neff,
+            m_nu=self.m_nu, Ob0=self.Ob0,
+        )
     
     def distance_modulus(self, z: np.ndarray) -> np.ndarray:
         return self.cosmo.distmod(z).value
@@ -104,14 +132,29 @@ class FlatwCDM(Cosmology):
         self,
         H0: float = 70.0,
         Om0: float = 0.3,
+        Tcmb0: float = 2.725, #update to planck value
+        Neff: float = 3.046, #update to planck value
+        m_nu: float = 0.0, #update to planck value
+        Ob0: float = 0.05,
         w0: float = -1.0,
     ):
         
-        super().__init__()
-        self.H0 = H0
-        self.Om0 = Om0
+        super().__init__(
+            H0=H0,
+            Om0=Om0,
+            Ode0=1-Om0,
+            Tcmb0=Tcmb0,
+            Neff=Neff,
+            m_nu=m_nu,
+            Ob0=Ob0,
+        )
         self.w0 = w0
-        self.cosmo = cosmo.FlatwCDM(H0=self.H0, Om0=self.Om0, w0=self.w0)
+        self.cosmo = cosmo.FlatwCDM(
+            H0=self.H0, Om0=self.Om0,
+            Tcmb0=self.Tcmb0, Neff=self.Neff,
+            m_nu=self.m_nu, Ob0=self.Ob0,
+            w0=self.w0,
+        )
     
     def distance_modulus(self, z: np.ndarray) -> np.ndarray:
         return self.cosmo.distmod(z).value
@@ -122,16 +165,31 @@ class Flatw0waCDM(Cosmology):
         self,
         H0: float = 70.0,
         Om0: float = 0.3,
+        Tcmb0: float = 2.725, #update to planck value
+        Neff: float = 3.046, #update to planck value
+        m_nu: float = 0.0, #update to planck value
+        Ob0: float = 0.05,
         w0: float = -1.0,
         wa: float = 0.0,
     ):
         
-        super().__init__()
-        self.H0 = H0
-        self.Om0 = Om0
+        super().__init__(
+            H0=H0,
+            Om0=Om0,
+            Ode0=1-Om0,
+            Tcmb0=Tcmb0,
+            Neff=Neff,
+            m_nu=m_nu,
+            Ob0=Ob0,
+        )
         self.w0 = w0
         self.wa = wa
-        self.cosmo = cosmo.Flatw0waCDM(H0=self.H0, Om0=self.Om0, w0=self.w0, wa=self.wa)
+        self.cosmo = cosmo.Flatw0waCDM(
+            H0=self.H0, Om0=self.Om0,
+            Tcmb0=self.Tcmb0, Neff=self.Neff,
+            m_nu=self.m_nu, Ob0=self.Ob0,
+            w0=self.w0, wa=self.wa,
+        )
     
     def distance_modulus(self, z: np.ndarray) -> np.ndarray:
         return self.cosmo.distmod(z).value
