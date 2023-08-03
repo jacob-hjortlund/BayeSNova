@@ -11,38 +11,30 @@ from numbalsoda import lsoda_sig, lsoda, dop853
 
 @nb.njit
 def nu_relative_density(
-    z: np.ndarray, massive_nu: float,
+    z: float, massive_nu: float,
     N_eff: float, nu_y: float, n_massless_nu: float,
     N_eff_per_nu: float
-) -> np.ndarray:
+) -> float:
 
     prefac = 0.22710731766 
     p = 1.83
     invp = 0.54644808743
     k = 0.3173
 
-    if not massive_nu:
+    curr_nu_y = nu_y / (1 + z)
+    relative_mass_per = (
+        (1.0 + (k * curr_nu_y)**p)**invp
+    )
+    relative_mass = relative_mass_per + n_massless_nu
 
-        relative_density = prefac * N_eff * (
-            np.ones(z.shape) if hasattr(z, "shape") else 1.0
-        )
-    
-    else:
-        
-        curr_nu_y = nu_y / (1 + np.array([z]))
-        relative_mass_per = (
-            (1.0 + (k * curr_nu_y)**p)**invp
-        )
-        relative_mass = relative_mass_per.sum(-1) + n_massless_nu
-
-        relative_density = prefac * N_eff_per_nu * relative_mass
+    relative_density = prefac * N_eff_per_nu * relative_mass
 
     return relative_density
 
 @nb.njit
 def de_density_scale(
-    z: np.ndarray, w0: float, wa: float
-) -> np.ndarray:
+    z: float, w0: float, wa: float
+) -> float:
 
     zp1 = 1 + z
     de_term = zp1**(3.*(1.+w0+wa)) * np.exp(-3. * wa * z/zp1)
@@ -51,8 +43,8 @@ def de_density_scale(
 
 @nb.njit
 def E(
-    z: np.ndarray, args: np.ndarray
-) -> np.ndarray:
+    z: float, args: np.ndarray
+) -> float:
     """The E(z) function for a Lambda + mattter universe.
 
     Args:
@@ -71,14 +63,10 @@ def E(
         w0, wa
     ) = args
 
-    nu_y = np.array(nu_y)
-
     zp1 = 1 + z
 
     Or = Ogamma0 + (
-            Onu0
-            if not massive_nu
-            else Ogamma0 * nu_relative_density(
+                Ogamma0 * nu_relative_density(
                 z, massive_nu, N_eff,
                 nu_y, n_massless_nu,
                 N_eff_per_nu
@@ -92,7 +80,7 @@ def E(
 
     return Ez
 
-#@nb.cfunc(lsoda_sig)
+@nb.cfunc(lsoda_sig)
 def z_ode(
     t, z, dz, cosmology_args
 ):
@@ -113,7 +101,7 @@ def z_ode(
     t_H0 = cosmology_args[0]
     zp1 = 1+z
     Ez = E(z, cosmology_args)
-    dz[0] = -1 * t_H0 / ( zp1 * Ez)
+    dz[0] = -1 * ( zp1 * Ez) / t_H0
 z_ode_ptr = z_ode.address
 
 def redshift_at_times(
@@ -181,8 +169,8 @@ class Cosmology(Model):
         
         args = np.array(
             [
-                self.cosmo._Ogamma0, self.cosmo._Onu0,
-                self.Om0, self.Ode0,
+                self.t_H, self.cosmo._Ogamma0, 
+                self.cosmo._Onu0, self.Om0, self.Ode0,
                 self.cosmo._massivenu, self.cosmo._Neff,
                 self.cosmo._nu_y[0], self.cosmo._nmasslessnu,
                 self.cosmo._neff_per_nu, self.w0, self.wa
@@ -190,11 +178,76 @@ class Cosmology(Model):
         )
         return E(z, args)
 
+    def initial_redshift_value(
+        self, initial_time: float,
+        z_at_value_kwargs: dict = {'method': 'Bounded', 'zmax': 1000},
+        zmax: float = 1e10, factor: float = 10, n_repeats: int = 0, **kwargs
+    ) -> float:
+        """The initial redshift value for the redshift at times ODE.
+
+        Args:
+            initial_time (float): The initial time in Gyrs.
+            cosmo_kwargs (dict, optional): The kwargs for the z_at_value function. Defaults to {'method': 'Bounded', 'zmax': 1000}.
+            zmax (float, optional): The maximum redshift for z_at_value. Defaults to 1e10.
+            factor (float, optional): The factor to increase z_at_value zmax by. Defaults to 10.
+            n_repeats (int, optional): The number of times to repeat the z_at_value function. Defaults to 0.
+            cosmology (cosmo.Cosmology, optional): The AstroPy cosmology. Defaults to None.
+            H0 (float, optional): The Hubble constant. Defaults to None.
+            Om0 (float, optional): The matter density. Defaults to None.
+            w0 (float, optional): The dark energy equation of state. Defaults to None.
+            wa (float, optional): The dark energy equation of state evolution. Defaults to None.
+
+        Returns:
+            float: The initial redshift value.
+        """
+
+        if z_at_value_kwargs['zmax'] > zmax:
+            raise ValueError(
+                'Upper limit for initial age to redshift ODE ' +
+                'is above 1e10, something is wrong.'
+            )
+
+        warnings.filterwarnings('ignore')
+        try:
+            z0 = cosmo.z_at_value(
+                self.cosmo.age, initial_time * Gyr,
+                **z_at_value_kwargs
+            ).value
+        except:
+            warnings.resetwarnings()
+            warning_str = (
+                f"Failure to find z0 for minimum convolution time of {initial_time} Gyr."
+            )
+            if n_repeats > 0:
+                warning_str += f" Trying again with zmax = {zmax * factor}."
+                warnings.warn(warning_str)
+                z_at_value_kwargs['zmax'] *= factor
+                z0 = self.initial_redshift_value(
+                    initial_time=initial_time,
+                    z_at_value_kwargs=z_at_value_kwargs,
+                    zmax=zmax, factor=factor
+                )
+            else:
+                warnings.warn(warning_str)
+                z0 = np.nan
+
+        return z0
+
     def redshift_at_times(self, evaluation_times: np.ndarray) -> np.ndarray:
         
-        z0 = "placeholder"
+        idx_sort = np.argsort(evaluation_times)
+        idx_unsort = np.argsort(idx_sort)
+        evaluation_times = evaluation_times[idx_sort]
+
+        z0 = self.initial_redshift_value(
+            evaluation_times[0],
+        )
+
+        print(f"z0 = {z0}")
+
         usol, success = redshift_at_times(
-            evaluation_times, z0, self.cosmo._Ogamma0, 
+            evaluation_times, z0, 
+            self.t_H, self.cosmo._Ogamma0, 
             self.cosmo._Onu0, self.Om0, self.Ode0,
             self.cosmo._massivenu, self.cosmo._Neff,
             self.cosmo._nu_y[0], self.cosmo._nmasslessnu,
