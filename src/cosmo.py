@@ -7,6 +7,7 @@ import astropy.cosmology as cosmo
 
 from base import Model
 from astropy.units import Gyr
+from NumbaQuadpack import quadpack_sig, dqags
 from numbalsoda import lsoda_sig, lsoda, dop853
 
 @nb.njit
@@ -129,6 +130,46 @@ def redshift_at_times(
     )
 
     return usol, success
+
+@nb.cfunc(quadpack_sig)
+def lookback_time_integral(
+    z, cosmology_args
+):
+    
+    cosmology_args = nb.carray(cosmology_args, (12,))
+    z = nb.carray(z, (1,))
+
+    t_H0 = cosmology_args[0]
+    zp1 = 1+z
+    Ez = E(z, cosmology_args)
+    integral_value = t_H0 / (zp1 * Ez)
+
+    return integral_value
+lookback_time_integral_ptr = lookback_time_integral.address
+
+def lookback_time(
+    z_low: float, z_high: float, t_H: float, Ogamma0: float,
+    Onu0: float, Om0: float, Ode0: float,
+    massive_nu: float, N_eff: float, nu_y: float,
+    n_massless_nu: float, N_eff_per_nu: float,
+    w0: float, wa: float
+) -> float:
+    
+    cosmology_args = np.array(
+        [
+            t_H, Ogamma0, Onu0,
+            Om0, Ode0, massive_nu,
+            N_eff, nu_y, n_massless_nu,
+            N_eff_per_nu,
+            w0, wa
+        ]
+    )
+
+    integral, _, _, _ = dqags(
+        lookback_time_integral_ptr, z_low, z_high, cosmology_args
+    )
+
+    return integral
 
 class Cosmology(Model):
 
