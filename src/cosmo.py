@@ -57,7 +57,7 @@ def E(
     """
     
     (
-        t_H, Ogamma0, Onu0,
+        t_H, H0, Ogamma0, Onu0,
         Om0, Ode0, massive_nu,
         N_eff, nu_y, n_massless_nu,
         N_eff_per_nu,
@@ -96,7 +96,7 @@ def z_ode(
         np.ndarray: The ODE at the given redshift.
     """
 
-    cosmology_args = nb.carray(cosmology_args, (12,))
+    cosmology_args = nb.carray(cosmology_args, (13,))
     z = nb.carray(z, (1,))
 
     t_H0 = cosmology_args[0]
@@ -107,7 +107,7 @@ z_ode_ptr = z_ode.address
 
 def redshift_at_times(
     evaluation_times: np.ndarray,
-    z0: float, t_H: float, Ogamma0: float,
+    z0: float, t_H: float, H0: float, Ogamma0: float,
     Onu0: float, Om0: float, Ode0: float,
     massive_nu: float, N_eff: float, nu_y: float,
     n_massless_nu: float, N_eff_per_nu: float,
@@ -117,7 +117,7 @@ def redshift_at_times(
     z0 = np.array([z0])
     cosmology_args = np.array(
         [
-            t_H, Ogamma0, Onu0,
+            t_H, H0, Ogamma0, Onu0,
             Om0, Ode0, massive_nu,
             N_eff, nu_y, n_massless_nu,
             N_eff_per_nu,
@@ -131,25 +131,32 @@ def redshift_at_times(
 
     return usol, success
 
+def lookback_time_integrand(
+    z: float, cosmology_args: np.ndarray
+) -> float:
+
+    t_H0 = cosmology_args[0]
+    zp1 = 1+z
+    Ez = E(z, cosmology_args)
+    integrand = t_H0 / (zp1 * Ez)
+
+    return integrand
+
 @nb.cfunc(quadpack_sig)
 def lookback_time_integral(
     z, cosmology_args
 ):
     
-    cosmology_args = nb.carray(cosmology_args, (12,))
+    cosmology_args = nb.carray(cosmology_args, (13,))
     z = nb.carray(z, (1,))
-
-    t_H0 = cosmology_args[0]
-    zp1 = 1+z
-    Ez = E(z, cosmology_args)
-    integral_value = t_H0 / (zp1 * Ez)
+    integral_value = lookback_time_integrand(z, cosmology_args)
 
     return integral_value
 lookback_time_integral_ptr = lookback_time_integral.address
 
 def lookback_time(
-    z_low: float, z_high: float, t_H: float, Ogamma0: float,
-    Onu0: float, Om0: float, Ode0: float,
+    z_low: float, z_high: float, t_H: float, H0: float, 
+    Ogamma0: float, Onu0: float, Om0: float, Ode0: float,
     massive_nu: float, N_eff: float, nu_y: float,
     n_massless_nu: float, N_eff_per_nu: float,
     w0: float, wa: float
@@ -157,7 +164,7 @@ def lookback_time(
     
     cosmology_args = np.array(
         [
-            t_H, Ogamma0, Onu0,
+            t_H, H0, Ogamma0, Onu0,
             Om0, Ode0, massive_nu,
             N_eff, nu_y, n_massless_nu,
             N_eff_per_nu,
@@ -202,22 +209,22 @@ class Cosmology(Model):
         )
 
         self.t_H = self.cosmo.hubble_time.to_value("Gyr")
-
-    def distance_modulus(self, z: np.ndarray) -> np.ndarray:
-        raise NotImplementedError
-
-    def E(self, z: np.ndarray) -> np.ndarray:
-        
-        args = np.array(
+        self.cosmo_args = np.array(
             [
-                self.t_H, self.cosmo._Ogamma0, 
+                self.t_H, self.H0, self.cosmo._Ogamma0, 
                 self.cosmo._Onu0, self.Om0, self.Ode0,
                 self.cosmo._massivenu, self.cosmo._Neff,
                 self.cosmo._nu_y[0], self.cosmo._nmasslessnu,
                 self.cosmo._neff_per_nu, self.w0, self.wa
             ]
         )
-        return E(z, args)
+
+    def distance_modulus(self, z: np.ndarray) -> np.ndarray:
+        raise NotImplementedError
+
+    def E(self, z: np.ndarray) -> np.ndarray:
+        
+        return E(z, self.cosmo_args)
 
     def initial_redshift_value(
         self, initial_time: float,
@@ -288,12 +295,9 @@ class Cosmology(Model):
 
         usol, success = redshift_at_times(
             evaluation_times, z0, 
-            self.t_H, self.cosmo._Ogamma0, 
-            self.cosmo._Onu0, self.Om0, self.Ode0,
-            self.cosmo._massivenu, self.cosmo._Neff,
-            self.cosmo._nu_y[0], self.cosmo._nmasslessnu,
-            self.cosmo._neff_per_nu, self.w0, self.wa
+            *self.cosmo_args
         )
+        usol = usol[idx_unsort]
 
         return usol, success
 
