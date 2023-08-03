@@ -25,7 +25,7 @@ def _prompt_delay_time_distribution(
 ) -> np.ndarray:
 
     h = H0 / 70
-    K = np.log( ( tau_max / tau_1 ) / (tau_1 - tau_0) )
+    K = np.log( tau_max / tau_1 ) / (tau_1 - tau_0) 
     f_frac = f_prompt / (1 - f_prompt)
     dtd = (K * eta * f_frac * h**2 )* np.ones_like(tau)
 
@@ -169,9 +169,9 @@ class SNeProgenitors(Model):
 
     def __init__(
         self,
-        eta: float,
-        f_prompt: float,
-        cosmology: Cosmology
+        cosmology: Cosmology,
+        eta: float = 1.02e-4,
+        f_prompt: float = 0.63,
     ):
         
         super().__init__()
