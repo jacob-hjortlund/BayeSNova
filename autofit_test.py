@@ -40,7 +40,7 @@ def main():
     data = pd.read_csv(data_path, sep=" ")
 
     old_config['model_cfg']['host_galaxy_cfg']['use_properties'] = True
-    old_config['model_cfg']['host_galaxy_cfg']['independent_property_names'] = ['global_mass']
+    old_config['model_cfg']['host_galaxy_cfg']['independent_property_names'] = ['global_mass','t',]
 
     prep.init_global_data(data, None, old_config['model_cfg'])
     
@@ -152,6 +152,7 @@ def main():
 
     host_mass_weighting_model = af.Model(
         LogisticLinearWeighting,
+        offset=0.
     )
 
     host_mass_model = af.Model(
@@ -167,9 +168,35 @@ def main():
         host_mass_model.population_models[0].mu > host_mass_model.population_models[1].mu
     )
 
+    host_morphology_pop_1 = af.Model(
+        UnivariateGaussian,
+    )
+
+    host_morphology_pop_2 = af.Model(
+        UnivariateGaussian,
+    )
+
+    host_morphology_weighting_model = af.Model(
+        LogisticLinearWeighting,
+        offset=0.
+    )
+
+    host_morphology_model = af.Model(
+        TwoPopulationMixture,
+        population_models=[host_morphology_pop_1, host_morphology_pop_2],
+        weighting_model=host_morphology_weighting_model
+    )
+
+    host_morphology_model.population_models[0].mu = af.UniformPrior(lower_limit=-10., upper_limit=10.)
+    host_morphology_model.population_models[1].mu = af.UniformPrior(lower_limit=-10., upper_limit=10.)
+
+    host_morphology_model.add_assertion(
+        host_morphology_model.population_models[0].mu > host_morphology_model.population_models[1].mu
+    )
+
     sn_and_host_model = af.Collection(
         sn=sn_model,
-        host_models=[host_mass_model]
+        host_models=[host_mass_model, host_morphology_model]
     )
 
     model = sn_and_host_model
