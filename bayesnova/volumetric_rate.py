@@ -3,10 +3,10 @@ import numba as nb
 import numpy as np
 import astropy.cosmology as cosmo
 
-from base import Model
+from bayesnova.base import Model
 from astropy.units import Gyr, yr
 from NumbaQuadpack import quadpack_sig, dqags
-from cosmo import Cosmology, lookback_time, lookback_time_integrand
+from bayesnova.cosmo import Cosmology, lookback_time, lookback_time_integrand
 
 
 

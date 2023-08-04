@@ -1,6 +1,6 @@
 import numpy as np
 
-from base import Gaussian, Mixture, Weighting
+from bayesnova.base import Gaussian, Mixture, Weighting
 
 class ConstantWeighting(Weighting):
 

@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
-import src.preprocessing as prep
+import bayesnova.preprocessing as prep
 
 from typing import Tuple
 
