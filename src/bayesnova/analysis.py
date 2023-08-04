@@ -1,6 +1,6 @@
 import numpy as np
 import autofit as af
-from bayesnova.mixture import TwoPopulationMixture, LogisticLinearWeighting
+from src.bayesnova.mixture import TwoPopulationMixture, LogisticLinearWeighting
 
 class Analysis(af.Analysis):
 

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import astropy.units as u
-import bayesnova.old_src.utils as utils
+import src.bayesnova.old_src.utils as utils
 
 from typing import Tuple
 from astropy.coordinates import SkyCoord

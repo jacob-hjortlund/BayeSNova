@@ -5,7 +5,7 @@ import astropy.units as u
 import astropy.constants as const
 import astropy.cosmology as cosmo
 
-from bayesnova.base import Model
+from src.bayesnova.base import Model
 from astropy.units import Gyr
 from NumbaQuadpack import quadpack_sig, dqags
 from numbalsoda import lsoda_sig, lsoda, dop853
