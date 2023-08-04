@@ -2,7 +2,7 @@ import inspect
 import warnings
 import numpy as np
 import numba as nb
-import src.bayesnova.old_src.utils as utils
+import bayesnova.old_src.utils as utils
 import scipy.stats as stats
 import scipy.special as sp_special
 import astropy.cosmology as apy_cosmo
@@ -11,8 +11,8 @@ from functools import partial
 from astropy.units import Gyr
 from NumbaQuadpack import quadpack_sig, dqags, ldqag
 
-import src.bayesnova.old_src.preprocessing as prep
-import src.bayesnova.old_src.cosmology_utils as cosmo_utils
+import bayesnova.old_src.preprocessing as prep
+import bayesnova.old_src.cosmology_utils as cosmo_utils
 
 NULL_VALUE = -9999.0
 H0_CONVERSION_FACTOR = 0.001022
