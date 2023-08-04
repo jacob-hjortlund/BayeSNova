@@ -31,7 +31,7 @@ dependencies = [
     "astropy==5.1", # c
     "numbalsoda==0.3.4",
     "NumbaQuadPack@git+https://github.com/jacob-hjortlund/NumbaLogQuadpack.git",
-    "autofit@git+https://github.com/rhayes777/PyAutoFit@refactor_sneaky_pool",
+    "autofit@git+https://github.com/rhayes777/PyAutoFit@feature/refactor_sneaky_pool",
     "hydra-core==1.3.2", # cf 
     "jax==0.4.12", # cf
     "jaxlib==0.4.12", # cf
