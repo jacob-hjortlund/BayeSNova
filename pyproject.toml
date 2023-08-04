@@ -29,7 +29,7 @@ dependencies = [
     "h5py==3.7.0", # c
     "numba==0.57.0", # c
     "astropy==5.1", # c
-    "numbalsoda==0.3.5",
+    "numbalsoda==0.3.4",
     "NumbaQuadPack@git+https://github.com/jacob-hjortlund/NumbaLogQuadpack.git",
     "hydra-core==1.3.2", # cf 
     "jax==0.4.12", # cf
