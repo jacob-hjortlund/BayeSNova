@@ -12,7 +12,7 @@ from NumbaQuadpack import quadpack_sig, dqags, ldqag
 from diffrax import diffeqsolve, Tsit5, ODETerm, SaveAt, PIDController
 
 NULL_VALUE = -9999.
-H0_CONVERSION_FACTOR = 0.001022
+H0_CONVERSION_FACTOR = 0.0010227121650456948#0.001022
 DH_70 = 4282.7494
 
 # ---------- z(T) ODE ------------

@@ -111,7 +111,10 @@ def redshift_at_times(
     Onu0: float, Om0: float, Ode0: float,
     massive_nu: float, N_eff: float, nu_y: float,
     n_massless_nu: float, N_eff_per_nu: float,
-    w0: float, wa: float
+    w0: float, wa: float,
+    rtol: float = 1e-8, atol: float = 1e-8,
+    mxstep: int = 10000000
+
 ):
     
     z0 = np.array([z0])
@@ -126,11 +129,13 @@ def redshift_at_times(
     )
 
     usol, success = lsoda(
-        z_ode_ptr, z0, t_eval=evaluation_times, data=cosmology_args
+        z_ode_ptr, z0, t_eval=evaluation_times, data=cosmology_args,
+        rtol=rtol, atol=atol, mxstep=mxstep
     )
 
     return usol, success
 
+@nb.njit
 def lookback_time_integrand(
     z: float, cosmology_args: np.ndarray
 ) -> float:
@@ -148,12 +153,12 @@ def lookback_time_integral(
 ):
     
     cosmology_args = nb.carray(cosmology_args, (13,))
-    z = nb.carray(z, (1,))
     integral_value = lookback_time_integrand(z, cosmology_args)
 
     return integral_value
 lookback_time_integral_ptr = lookback_time_integral.address
 
+@nb.njit
 def lookback_time(
     z_low: float, z_high: float, t_H: float, H0: float, 
     Ogamma0: float, Onu0: float, Om0: float, Ode0: float,
@@ -297,7 +302,7 @@ class Cosmology(Model):
             evaluation_times, z0, 
             *self.cosmo_args
         )
-        usol = usol[idx_unsort]
+        usol = usol[idx_unsort, 0]
 
         return usol, success
 
