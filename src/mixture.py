@@ -16,7 +16,6 @@ class ConstantWeighting(Weighting):
         redshift: float,
         **kwargs
     ):
-        
         return np.ones_like(redshift) * self.weight
 
 class LogisticLinearWeighting(Weighting):
@@ -29,13 +28,13 @@ class LogisticLinearWeighting(Weighting):
         super().__init__()
         self.scale = scale
         self.offset = offset
-    
+
     def logistic(
         self,
         x: np.ndarray,
     ) -> np.ndarray:
         return 1.0 / (1.0 + np.exp(-x))
-    
+
     def inverse_logistic(
         self,
         y: np.ndarray,
@@ -48,9 +47,9 @@ class LogisticLinearWeighting(Weighting):
         **kwargs
     ):
         
-        unbound_weights = self.logistic(weights)
+        unbound_weights = self.inverse_logistic(weights)
         linear_unbound_weights = self.scale * unbound_weights + self.offset
-        linear_weights = self.inverse_logistic(linear_unbound_weights)
+        linear_weights = self.logistic(linear_unbound_weights)
         
         return linear_weights
 
