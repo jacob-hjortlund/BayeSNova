@@ -65,7 +65,13 @@ def main():
     cosmology = af.Model(
         FlatLambdaCDM,
         H0=73.0,
-        Om0=0.3
+        Om0=0.3,
+        Tcmb0=2.725,
+        Neff=3.046,
+        m_nu_1=0.0,
+        m_nu_2=0.0,
+        m_nu_3=0.06,
+        Ob0=0.04897,
     )
 
     sn_pop_1 = af.Model(
@@ -165,7 +171,7 @@ def main():
     host_mass_model.population_models[1].mu = af.UniformPrior(lower_limit=6.0, upper_limit=16.0)
 
     host_mass_model.add_assertion(
-        host_mass_model.population_models[0].mu > host_mass_model.population_models[1].mu
+        host_mass_model.population_models[0].mu < host_mass_model.population_models[1].mu
     )
 
     host_morphology_pop_1 = af.Model(
@@ -191,7 +197,7 @@ def main():
     host_morphology_model.population_models[1].mu = af.UniformPrior(lower_limit=-10., upper_limit=10.)
 
     host_morphology_model.add_assertion(
-        host_morphology_model.population_models[0].mu > host_morphology_model.population_models[1].mu
+        host_morphology_model.population_models[0].mu < host_morphology_model.population_models[1].mu
     )
 
     sn_and_host_model = af.Collection(

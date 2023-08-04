@@ -192,7 +192,9 @@ class Cosmology(Model):
         Ode0: float = 0.7,
         Tcmb0: float = 2.725, #update to planck value
         Neff: float = 3.046, #update to planck value
-        m_nu: np.ndarray = np.array([0, 0, 0.06]), #update to planck value
+        m_nu_1: float = 0.0,
+        m_nu_2: float = 0.0,
+        m_nu_3: float = 0.06,
         Ob0: float = 0.04897,
     ):
         
@@ -202,7 +204,10 @@ class Cosmology(Model):
         self.Ode0 = Ode0
         self.Tcmb0 = Tcmb0
         self.Neff = Neff
-        self.m_nu = m_nu
+        self.m_nu_1 = m_nu_1
+        self.m_nu_2 = m_nu_2
+        self.m_nu_3 = m_nu_3
+        self.m_nu = np.array([m_nu_1, m_nu_2, m_nu_3])
         self.Ob0 = Ob0
         self.w0 = -1.0
         self.wa = 0.0
@@ -314,7 +319,9 @@ class FlatLambdaCDM(Cosmology):
         Om0: float = 0.3,
         Tcmb0: float = 2.725, #update to planck value
         Neff: float = 3.046, #update to planck value
-        m_nu: np.ndarray = np.array([0, 0, 6]), #update to planck value
+        m_nu_1: float = 0.0,
+        m_nu_2: float = 0.0,
+        m_nu_3: float = 0.06,
         Ob0: float = 0.04897,
     ):
         
@@ -324,13 +331,16 @@ class FlatLambdaCDM(Cosmology):
             Ode0=1-Om0,
             Tcmb0=Tcmb0,
             Neff=Neff,
-            m_nu=m_nu,
+            m_nu_1=m_nu_1,
+            m_nu_2=m_nu_2,
+            m_nu_3=m_nu_3,
             Ob0=Ob0,
         )
         self.cosmo = cosmo.FlatLambdaCDM(
             H0=self.H0, Om0=self.Om0,
             Tcmb0=self.Tcmb0, Neff=self.Neff,
-            m_nu=self.m_nu, Ob0=self.Ob0,
+            m_nu=self.m_nu,
+            Ob0=self.Ob0,
         )
     
     def distance_modulus(self, z: np.ndarray) -> np.ndarray:
@@ -344,7 +354,9 @@ class FlatwCDM(Cosmology):
         Om0: float = 0.3,
         Tcmb0: float = 2.725, #update to planck value
         Neff: float = 3.046, #update to planck value
-        m_nu: np.ndarray = np.array([0, 0, 6]), #update to planck value
+        m_nu_1: float = 0.0,
+        m_nu_2: float = 0.0,
+        m_nu_3: float = 0.06,
         Ob0: float = 0.04897,
         w0: float = -1.0,
     ):
@@ -355,15 +367,17 @@ class FlatwCDM(Cosmology):
             Ode0=1-Om0,
             Tcmb0=Tcmb0,
             Neff=Neff,
-            m_nu=m_nu,
+            m_nu_1=m_nu_1,
+            m_nu_2=m_nu_2,
+            m_nu_3=m_nu_3,
             Ob0=Ob0,
         )
         self.w0 = w0
         self.cosmo = cosmo.FlatwCDM(
             H0=self.H0, Om0=self.Om0,
             Tcmb0=self.Tcmb0, Neff=self.Neff,
-            m_nu=self.m_nu, Ob0=self.Ob0,
-            w0=self.w0,
+            m_nu=self.m_nu,
+            Ob0=self.Ob0, w0=self.w0,
         )
     
     def distance_modulus(self, z: np.ndarray) -> np.ndarray:
@@ -377,7 +391,9 @@ class Flatw0waCDM(Cosmology):
         Om0: float = 0.3,
         Tcmb0: float = 2.725, #update to planck value
         Neff: float = 3.046, #update to planck value
-        m_nu: np.ndarray = np.array([0, 0, 6]), #update to planck value
+        m_nu_1: float = 0.0,
+        m_nu_2: float = 0.0,
+        m_nu_3: float = 0.06,
         Ob0: float = 0.04897,
         w0: float = -1.0,
         wa: float = 0.0,
@@ -389,7 +405,9 @@ class Flatw0waCDM(Cosmology):
             Ode0=1-Om0,
             Tcmb0=Tcmb0,
             Neff=Neff,
-            m_nu=m_nu,
+            m_nu_1=m_nu_1,
+            m_nu_2=m_nu_2,
+            m_nu_3=m_nu_3,
             Ob0=Ob0,
         )
         self.w0 = w0
@@ -397,8 +415,8 @@ class Flatw0waCDM(Cosmology):
         self.cosmo = cosmo.Flatw0waCDM(
             H0=self.H0, Om0=self.Om0,
             Tcmb0=self.Tcmb0, Neff=self.Neff,
-            m_nu=self.m_nu, Ob0=self.Ob0,
-            w0=self.w0, wa=self.wa,
+            m_nu=self.m_nu,
+            Ob0=self.Ob0, w0=self.w0, wa=self.wa,
         )
     
     def distance_modulus(self, z: np.ndarray) -> np.ndarray:

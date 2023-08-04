@@ -7,6 +7,30 @@ FlatLambdaCDM:
     type: Uniform
     lower_limit: 0.01
     upper_limit: 0.99
+  Tcmb0:
+    type: Uniform
+    lower_limit: 2.7
+    upper_limit: 3.5
+  Neff:
+    type: Uniform
+    lower_limit: 0.05
+    upper_limit: 10.
+  m_nu_1:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 10.
+  m_nu_2:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 10.
+  m_nu_3:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 10.
+  Ob0:
+    type: Uniform
+    lower_limit: 0.001
+    upper_limit: 0.1
 
 FlatwCDM:
   H0:
