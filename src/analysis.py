@@ -1,5 +1,6 @@
 import numpy as np
 import autofit as af
+from mixture import TwoPopulationMixture, LogisticLinearWeighting
 
 class Analysis(af.Analysis):
 
@@ -13,7 +14,8 @@ class Analysis(af.Analysis):
         calibrator_indeces: np.ndarray = None,
         calibrator_distance_modulus: np.ndarray = None,
         host_properties: np.ndarray = np.zeros((0, 0)),
-        host_covariances: np.ndarray = np.zeros((0, 0))
+        host_covariances: np.ndarray = np.zeros((0, 0)),
+        logistic_linear_bounds: tuple = (0.15, 0.85),
     ):
         
         self.apparent_B_mag = apparent_B_mag
@@ -25,6 +27,7 @@ class Analysis(af.Analysis):
         self.calibrator_distance_modulus = calibrator_distance_modulus
         self.host_properties = host_properties
         self.host_covariances = host_covariances
+        self.logistic_linear_bounds = logistic_linear_bounds
 
         if self.calibrator_indeces is None:
             self.calibrator_indeces = np.zeros_like(self.apparent_B_mag, dtype=bool)
@@ -54,7 +57,7 @@ class Analysis(af.Analysis):
                 calibrator_indeces=self.calibrator_indeces,
                 calibrator_distance_modulus=self.calibrator_distance_modulus,
             )
-
+            
             sn_weights = instance.sn.weighting_model.calculate_weight(redshift=self.redshift)
 
             host_log_likelihoods = np.zeros_like(sn_log_likelihoods)
@@ -64,6 +67,19 @@ class Analysis(af.Analysis):
                 observations = self.host_properties[idx_obs,i]
                 variance = self.host_covariances[idx_obs,i]
                 weights = sn_weights[idx_obs]
+
+                if isinstance(host_model, TwoPopulationMixture):
+                    
+                    if isinstance(host_model.weighting_model, LogisticLinearWeighting):
+                    
+                        host_weights = host_model.weighting_model.calculate_weight(weights=weights)
+                        prior_assertion = np.all(
+                            (host_weights > self.logistic_linear_bounds[0]) &
+                            (host_weights < self.logistic_linear_bounds[1])
+                        )
+
+                        if not prior_assertion:
+                            return -1e99
 
                 host_log_likelihoods += host_model.log_likelihood(
                     observations=observations,

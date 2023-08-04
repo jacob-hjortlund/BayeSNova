@@ -36,7 +36,7 @@ def main():
 
     # Load data
     data_path = "/groups/dark/osman/Thesis_old/data/processed_data/supercal"
-    # data_path = "/groups/dark/osman/Msc_Thesis/src/data/supercal_hubble_flow/supercal_hubble_flow.dat"
+    #data_path = "/groups/dark/osman/Msc_Thesis/src/data/supercal_hubble_flow/supercal_hubble_flow.dat"
     data = pd.read_csv(data_path, sep=" ")
 
     old_config['model_cfg']['host_galaxy_cfg']['use_properties'] = True
@@ -110,8 +110,9 @@ def main():
         # tau_E_BV=0.033,
     )
 
+    sn_weighting_class = ConstantWeighting
     sn_weighting_model = af.Model(
-        ConstantWeighting
+        sn_weighting_class
     )
 
     sn_model = af.Model(
@@ -207,10 +208,6 @@ def main():
 
     model = sn_and_host_model
 
-    print("\nModel Info:")
-    print(model.info)
-    print("\n")
-
     analysis = Analysis(
         apparent_B_mag=apparent_B_mag,
         stretch=stretch,
@@ -220,6 +217,23 @@ def main():
         host_properties=host_properties,
         host_covariances=host_covariances,
     )
+
+    # instance_created = False
+    # while not instance_created:
+    #     try:
+    #         instance = model.random_instance_from_priors_within_limits()
+    #         llh_value = analysis.log_likelihood_function(instance)
+    #         if llh_value == -1e99:
+    #             pass
+    #         else:
+    #             instance_created = True
+    #     except:
+    #         pass
+    
+    # analysis.log_likelihood_function(instance)
+    # print("\nModel Info:")
+    # print(model.info)
+    # print("\n")
 
     search = af.DynestyStatic(
         name=name,

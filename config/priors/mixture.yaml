@@ -9,14 +9,16 @@ ConstantWeighting:
 
 LogisticLinearWeighting:
   scale:
-    type: Gaussian
-    mean: 1.0
-    sigma: 0.5
+    # type: Gaussian
+    # mean: 1.0
+    # sigma: 0.5
+    type: Uniform
     lower_limit: -10.0
     upper_limit: 10.0
   offset:
-    type: Gaussian
-    mean: 0.0
-    sigma: 0.5
+    # type: Gaussian
+    # mean: 0.0
+    # sigma: 0.5
+    type: Uniform
     lower_limit: -10.0
     upper_limit: 10.0
