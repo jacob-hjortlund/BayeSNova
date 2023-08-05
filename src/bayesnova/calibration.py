@@ -335,6 +335,7 @@ class OldTripp(Gaussian):
         observed_covariance: np.ndarray,
         calibrator_indeces: np.ndarray,
         calibrator_distance_modulus: np.ndarray,
+        **kwargs,
     ):
 
         residual = self.residual(
@@ -496,6 +497,7 @@ class Tripp(Gaussian):
         observed_covariance: np.ndarray,
         calibrator_indeces: np.ndarray,
         calibrator_distance_modulus: np.ndarray,
+        **kwargs,
     ) -> np.ndarray:
         """
         Calculate the log likelihood for the Tripp calibration.
@@ -615,6 +617,7 @@ class TrippDust(Tripp):
         selection_bias_correction: np.ndarray = None,
         upper_bound_E_BV: Union[float, np.ndarray] = 10.0,
         use_log_marginalization: bool = False,
+        **kwargs,
     ) -> np.ndarray:
         """
         Calculate the log likehood for the Tripp calibration with dust.

@@ -16,6 +16,7 @@ class Analysis(af.Analysis):
         host_properties: np.ndarray = np.zeros((0, 0)),
         host_covariances: np.ndarray = np.zeros((0, 0)),
         logistic_linear_bounds: tuple = (0.15, 0.85),
+        **kwargs
     ):
         
         self.apparent_B_mag = apparent_B_mag
@@ -28,6 +29,7 @@ class Analysis(af.Analysis):
         self.host_properties = host_properties
         self.host_covariances = host_covariances
         self.logistic_linear_bounds = logistic_linear_bounds
+        self.kwargs = kwargs
 
         if self.calibrator_indeces is None:
             self.calibrator_indeces = np.zeros_like(self.apparent_B_mag, dtype=bool)
@@ -46,6 +48,7 @@ class Analysis(af.Analysis):
                 observed_covariance=self.observed_covariance,
                 calibrator_indeces=self.calibrator_indeces,
                 calibrator_distance_modulus=self.calibrator_distance_modulus,
+                **self.kwargs
             )
         else:
             sn_log_likelihoods = instance.sn.log_likelihood(
@@ -56,6 +59,7 @@ class Analysis(af.Analysis):
                 observed_covariance=self.observed_covariance,
                 calibrator_indeces=self.calibrator_indeces,
                 calibrator_distance_modulus=self.calibrator_distance_modulus,
+                **self.kwargs
             )
             
             sn_weights = instance.sn.weighting_model.calculate_weight(redshift=self.redshift)
