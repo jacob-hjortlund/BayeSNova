@@ -25,7 +25,7 @@ os.chdir(workspace_path)
 
 def main():
 
-    name = "test_rwalk_50_run_1_sn_host"
+    name = "test_rwalk_50_run_2_sn_host"
     try:
         shutil.rmtree("/groups/dark/osman/BayeSNova/output/" + name)
     except:
@@ -35,8 +35,8 @@ def main():
         old_config = yaml.safe_load(f)
 
     # Load data
-    data_path = "/groups/dark/osman/Thesis_old/data/processed_data/supercal"
-    #data_path = "/groups/dark/osman/Msc_Thesis/src/data/supercal_hubble_flow/supercal_hubble_flow.dat"
+    #data_path = "/groups/dark/osman/Thesis_old/data/processed_data/supercal"
+    data_path = "/groups/dark/osman/Msc_Thesis/src/data/supercal_hubble_flow/supercal_hubble_flow.dat"
     data = pd.read_csv(data_path, sep=" ")
 
     old_config['model_cfg']['host_galaxy_cfg']['use_properties'] = True
@@ -206,7 +206,7 @@ def main():
         host_models=[host_mass_model, host_morphology_model]
     )
 
-    model = sn_and_host_model
+    model = sn_model
 
     analysis = Analysis(
         apparent_B_mag=apparent_B_mag,
@@ -216,24 +216,25 @@ def main():
         observed_covariance=observed_covariance,
         host_properties=host_properties,
         host_covariances=host_covariances,
+        use_log_marginalization=True,
     )
 
-    # instance_created = False
-    # while not instance_created:
-    #     try:
-    #         instance = model.random_instance_from_priors_within_limits()
-    #         llh_value = analysis.log_likelihood_function(instance)
-    #         if llh_value == -1e99:
-    #             pass
-    #         else:
-    #             instance_created = True
-    #     except:
-    #         pass
+    instance_created = False
+    while not instance_created:
+        try:
+            instance = model.random_instance_from_priors_within_limits()
+            llh_value = analysis.log_likelihood_function(instance)
+            if llh_value == -1e99:
+                pass
+            else:
+                instance_created = True
+        except:
+            pass
     
-    # analysis.log_likelihood_function(instance)
-    # print("\nModel Info:")
-    # print(model.info)
-    # print("\n")
+    analysis.log_likelihood_function(instance)
+    print("\nModel Info:")
+    print(model.info)
+    print("\n")
 
     search = af.DynestyStatic(
         name=name,

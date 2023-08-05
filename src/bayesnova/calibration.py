@@ -199,7 +199,7 @@ def _E_BV_marginalization(
 
     return probs, status
 
-@nb.njit
+#@nb.njit
 def _E_BV_log_marginalization(
     covariance: np.ndarray, residual: np.ndarray,
     R_B: float, sigma_R_B: float,

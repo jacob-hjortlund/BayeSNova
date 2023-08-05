@@ -8,10 +8,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.stats as stats
-import bayesnova.utils as utils
-import bayesnova.models as model
-import bayesnova.preprocessing as prep
-import bayesnova.postprocessing as post
+import bayesnova.old_src.utils as utils
+import bayesnova.old_src.models as model
+import bayesnova.old_src.preprocessing as prep
+import bayesnova.old_src.postprocessing as post
 
 from time import time
 from mpi4py import MPI
