@@ -241,7 +241,7 @@ class SNeProgenitors(Model):
             z_inf=z_inf, cosmology_args=self.cosmo.cosmo_args
         )
 
-        return volumetric_rates, convolution_time_limits, convolution_redshift_limits
+        return volumetric_rates
 
 
         
