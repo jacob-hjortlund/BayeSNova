@@ -301,8 +301,6 @@ class Cosmology(Model):
             evaluation_times[0],
         )
 
-        print(f"z0 = {z0}")
-
         usol, success = redshift_at_times(
             evaluation_times, z0, 
             *self.cosmo_args
