@@ -5,7 +5,7 @@ import astropy.units as u
 import astropy.constants as const
 import astropy.cosmology as cosmo
 
-from base import Model
+from bayesnova.base import Model
 from astropy.units import Gyr
 from NumbaQuadpack import quadpack_sig, dqags
 from numbalsoda import lsoda_sig, lsoda, dop853
@@ -300,8 +300,6 @@ class Cosmology(Model):
         z0 = self.initial_redshift_value(
             evaluation_times[0],
         )
-
-        print(f"z0 = {z0}")
 
         usol, success = redshift_at_times(
             evaluation_times, z0, 

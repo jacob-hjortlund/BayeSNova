@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
-import src.model as models
-import src.preprocessing as prep
+import bayesnova.model as models
+import bayesnova.preprocessing as prep
 
 NULL_VALUE = -9999.
 

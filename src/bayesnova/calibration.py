@@ -7,7 +7,7 @@ import astropy.cosmology as cosmo
 from typing import Union
 from astropy.units import Gyr
 from NumbaQuadpack import quadpack_sig, dqags, ldqag
-from base import Gaussian
+from bayesnova.base import Gaussian
 
 NULL_VALUE = -9999.0
 H0_CONVERSION_FACTOR = 0.001022

@@ -1,7 +1,1 @@
-analysis
-base
 bayesnova
-calibration
-cosmo
-mixture
-volumetric_rate

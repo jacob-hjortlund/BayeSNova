@@ -5,14 +5,14 @@ import corner
 import numpy as np
 import pandas as pd
 import autofit as af
-import bayesnova.preprocessing as prep
+import bayesnova.old_src.preprocessing as prep
 
 from pyprojroot import here
-from src.analysis import Analysis
-from base import UnivariateGaussian
-from cosmo import FlatLambdaCDM
-from calibration import Tripp, TrippDust, OldTripp
-from mixture import ConstantWeighting, LogisticLinearWeighting, TwoPopulationMixture
+from bayesnova.analysis import Analysis
+from bayesnova.base import UnivariateGaussian
+from bayesnova.cosmo import FlatLambdaCDM
+from bayesnova.calibration import Tripp, TrippDust, OldTripp
+from bayesnova.mixture import ConstantWeighting, LogisticLinearWeighting, TwoPopulationMixture
 
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"

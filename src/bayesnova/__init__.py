@@ -4,10 +4,12 @@ from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWa
 warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
 warnings.simplefilter('ignore', category=NumbaPendingDeprecationWarning)
 
-import bayesnova.cosmology_utils as cosmology_utils
-import bayesnova.generative_models as generative_models
-import bayesnova.models as models
-import bayesnova.postprocessing as postprocessing
-import bayesnova.preprocessing as preprocessing
-import bayesnova.utils as utils
+import bayesnova.analysis as analysis
+import bayesnova.calibration as calibration
+import bayesnova.cosmo as cosmo
+import bayesnova.volumetric_rate as volumetric_rate
+import bayesnova.mixture as mixture
+import bayesnova.base as base
 
+import autoconf.conf as conf
+conf.instance.register(__file__)
