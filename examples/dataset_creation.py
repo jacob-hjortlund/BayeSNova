@@ -5,7 +5,7 @@ import omegaconf
 import numpy as np
 import pandas as pd
 import astropy.units as u
-import bayesnova.preprocessing as prep
+import bayesnova.old_src.preprocessing as prep
 
 from astropy.cosmology import Planck18
 from astropy.coordinates import SkyCoord

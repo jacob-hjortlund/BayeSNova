@@ -5,6 +5,7 @@ import corner
 import numpy as np
 import pandas as pd
 import autofit as af
+import anesthetic as an
 import bayesnova.old_src.preprocessing as prep
 
 from pyprojroot import here
@@ -25,7 +26,7 @@ os.chdir(workspace_path)
 
 def main():
 
-    name = "test_rwalk_50_run_1_sn_host"
+    name = "test_rwalk_50_run_2_sn_host_long"
     try:
         shutil.rmtree("/groups/dark/osman/BayeSNova/output/" + name)
     except:
@@ -35,8 +36,8 @@ def main():
         old_config = yaml.safe_load(f)
 
     # Load data
-    data_path = "/groups/dark/osman/Thesis_old/data/processed_data/supercal"
-    #data_path = "/groups/dark/osman/Msc_Thesis/src/data/supercal_hubble_flow/supercal_hubble_flow.dat"
+    #data_path = "/groups/dark/osman/Thesis_old/data/processed_data/supercal"
+    data_path = "/groups/dark/osman/Msc_Thesis/src/data/supercal_hubble_flow/supercal_hubble_flow.dat"
     data = pd.read_csv(data_path, sep=" ")
 
     old_config['model_cfg']['host_galaxy_cfg']['use_properties'] = True
@@ -206,7 +207,7 @@ def main():
         host_models=[host_mass_model, host_morphology_model]
     )
 
-    model = sn_and_host_model
+    model = sn_model
 
     analysis = Analysis(
         apparent_B_mag=apparent_B_mag,
@@ -216,31 +217,32 @@ def main():
         observed_covariance=observed_covariance,
         host_properties=host_properties,
         host_covariances=host_covariances,
+        use_log_marginalization=True,
     )
 
-    # instance_created = False
-    # while not instance_created:
-    #     try:
-    #         instance = model.random_instance_from_priors_within_limits()
-    #         llh_value = analysis.log_likelihood_function(instance)
-    #         if llh_value == -1e99:
-    #             pass
-    #         else:
-    #             instance_created = True
-    #     except:
-    #         pass
+    instance_created = False
+    while not instance_created:
+        try:
+            instance = model.random_instance_from_priors_within_limits()
+            llh_value = analysis.log_likelihood_function(instance)
+            if llh_value == -1e99:
+                pass
+            else:
+                instance_created = True
+        except:
+            pass
     
-    # analysis.log_likelihood_function(instance)
-    # print("\nModel Info:")
-    # print(model.info)
-    # print("\n")
+    analysis.log_likelihood_function(instance)
+    print("\nModel Info:")
+    print(model.info)
+    print("\n")
 
     search = af.DynestyStatic(
         name=name,
         nlive=1000,
         sample='rwalk',
         number_of_cores=257,
-        iterations_per_update=int(1e100),
+        iterations_per_update=int(5e6),
         walks=50,
         slices=50
         #dlogz=500.
@@ -250,6 +252,34 @@ def main():
 
     print("\nResult:")
     print(result.info)
+
+    sampler = result.samples
+    samples = np.array(sampler.parameter_lists)
+    weights = np.array(sampler.weight_list)
+    llh = np.array(sampler.log_likelihood_list)
+    n_live = sampler.number_live_points
+    param_names = model.model_component_and_parameter_names
+    anesthetic_samples = an.NestedSamples(
+        data=samples, weights=weights, logL=llh, logL_birth=n_live, columns=param_names
+    )
+
+    bayesian_stats = anesthetic_samples.stats(1000)
+    stat_names = [tup[0] for tup in list(bayesian_stats.keys())]
+    percs = np.percentile(bayesian_stats.values, [16, 50, 84], axis=0)
+    percs_df = pd.DataFrame(
+        data=percs,
+        index=['16th', '50th', '84th'],
+        columns=stat_names
+    )
+
+    save_path = str(search.paths)
+    bayesian_stats.to_csv(save_path + "/bayesian_stats.csv")
+    percs_df.to_csv(save_path + "/percentiles.csv")
+
+    print("\nBayesian Stats:")
+    for i in range(len(stat_names)):
+        print(f"{stat_names[i]}: {percs[:,i]:.3f} +/- {0.5*(percs[2,i]-percs[0,i]):.3f}")
+
 
     
 if __name__ == "__main__":
