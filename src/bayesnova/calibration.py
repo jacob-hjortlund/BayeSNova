@@ -1,5 +1,6 @@
 import numpy as np
 import numba as nb
+import math as math
 import scipy.stats as stats
 import scipy.special as special
 import astropy.cosmology as cosmo
@@ -15,6 +16,14 @@ DH_70 = 4282.7494
 SPEED_OF_LIGHT = 299792.458 # km/s
 
 # ---------- E(B-V)_i MARGINALIZATION INTEGRAL ------------
+
+@nb.njit
+def norm_cdf(x, mean, sigma):
+
+    erf_term = math.erf( (x-mean) / (sigma * np.sqrt(2)) )
+    cdf_value = 0.5 * (1 + erf_term)
+
+    return cdf_value
 
 @nb.jit()
 def _E_BV_i_log_integral_body(
@@ -99,6 +108,80 @@ def _E_BV_i_log_integral(x, data):
 _E_BV_i_log_integral_ptr = _E_BV_i_log_integral.address
 
 @nb.jit()
+def _E_BV_trunc_R_B_i_log_integral_body(
+    x, cov_i1, cov_i2, cov_i3, cov_i4,
+    cov_i5, cov_i6, cov_i7, cov_i8, cov_i9,
+    res_i1, res_i2, res_i3,
+    selection_bias_correction,
+    R_B, sigma_R_B, R_B_min,
+    tau_E_BV, gamma_E_BV,
+):
+    
+    res = np.array(
+        [
+            res_i1, res_i2, res_i3,
+        ], dtype=np.float64
+    )
+    cov = np.array(
+        [
+            [cov_i1, cov_i2, cov_i3],
+            [cov_i4, cov_i5, cov_i6],
+            [cov_i7, cov_i8, cov_i9],
+        ], dtype=np.float64
+    )
+    cov_inv = np.linalg.inv(cov)
+
+    M = np.array([tau_E_BV * x, 0., 0.], dtype=np.float64)
+    A_inv = sigma_R_B**-2 + np.dot(M, np.dot(cov_inv, M))
+    A = 1. / A_inv
+    a = A * (R_B * sigma_R_B**-2 + np.dot(M, np.dot(cov_inv, res)))
+
+    norm = 1. - norm_cdf(R_B_min, mean=a, sigma=A)
+    lognorm = np.log(norm)
+
+    log_integral = _E_BV_i_log_integral_body(
+        x, cov_i1, cov_i2, cov_i3, cov_i4,
+        cov_i5, cov_i6, cov_i7, cov_i8, cov_i9, 
+        res_i1, res_i2, res_i3,
+        selection_bias_correction,
+        R_B, sigma_R_B, tau_E_BV, gamma_E_BV,
+    )
+
+    log_integral += lognorm
+
+    return log_integral
+
+@nb.cfunc(quadpack_sig)
+def _E_BV_trunc_R_B_i_log_integral(x, data):
+    _data = nb.carray(data, (18,))
+    cov_i1 = _data[0]
+    cov_i2 = _data[1]
+    cov_i3 = _data[2]
+    cov_i4 = _data[3]
+    cov_i5 = _data[4]
+    cov_i6 = _data[5]
+    cov_i7 = _data[6]
+    cov_i8 = _data[7]
+    cov_i9 = _data[8]
+    res_i1 = _data[9]
+    res_i2 = _data[10]
+    res_i3 = _data[11]
+    selection_bias_correction = _data[12]
+    R_B = _data[13]
+    sigma_R_B = _data[14]
+    R_B_min = _data[15]
+    tau_E_BV = _data[16]
+    gamma_E_BV = _data[17]
+    return _E_BV_trunc_R_B_i_log_integral_body(
+        x, cov_i1, cov_i2, cov_i3, cov_i4,
+        cov_i5, cov_i6, cov_i7, cov_i8, cov_i9, 
+        res_i1, res_i2, res_i3,
+        selection_bias_correction,
+        R_B, sigma_R_B, R_B_min, tau_E_BV, gamma_E_BV,
+    )
+_E_BV_trunc_R_B_i_log_integral_ptr = _E_BV_trunc_R_B_i_log_integral.address
+
+@nb.jit()
 def _E_BV_i_integral_body(
     x, cov_i1, cov_i2, cov_i3, cov_i4,
     cov_i5, cov_i6, cov_i7, cov_i8, cov_i9,
@@ -153,6 +236,7 @@ def _E_BV_marginalization(
     tau_E_BV: float, gamma_E_BV: float,
     upper_bound_E_BV: float,
     selection_bias_correction: np.ndarray,
+    **kwargs,
 ):
     """
     Calculate the marginalization integral for the E(B-V) parameter.
@@ -199,13 +283,14 @@ def _E_BV_marginalization(
 
     return probs, status
 
-@nb.njit
+#@nb.njit
 def _E_BV_log_marginalization(
     covariance: np.ndarray, residual: np.ndarray,
     R_B: float, sigma_R_B: float,
     tau_E_BV: float, gamma_E_BV: float,
     upper_bound_E_BV: float,
     selection_bias_correction: np.ndarray,
+    **kwargs,
 ):
     """
     Calculate the log likelihood using log marginalization of the latent E(B-V) parameter.
@@ -243,6 +328,59 @@ def _E_BV_log_marginalization(
         
         log_prob_i, _, status_i, _ = ldqag(
             funcptr=_E_BV_i_log_integral_ptr, a=0,
+            b=upper_bound_E_BV, data=inputs_i
+        )
+
+        log_probs[i] = log_prob_i
+        status[i] = status_i
+
+    return log_probs, status
+
+#@nb.njit
+def _E_BV_trunc_R_B_log_marginalization(
+    covariance: np.ndarray, residual: np.ndarray,
+    R_B: float, sigma_R_B: float,
+    tau_E_BV: float, gamma_E_BV: float,
+    upper_bound_E_BV: float,
+    selection_bias_correction: np.ndarray,
+    R_B_min: float = 1.5,
+):
+    """
+    Calculate the log likelihood using log marginalization of the latent E(B-V) parameter.
+
+    Args:
+        covariance (np.ndarray): The covariance matrix for the SNe.
+        residual (np.ndarray): The residual for the SNe.
+        R_B (float): The R_B parameter.
+        sigma_R_B (float): The sigma_R_B parameter.
+        tau_E_BV (float): The tau_E_BV parameter.
+        gamma_E_BV (float): The gamma_E_BV parameter.
+        upper_bound_E_BV (float): The upper bound for the E(B-V) integral.
+        selection_bias_correction (np.ndarray): The selection bias correction.
+
+    Returns:
+        np.ndarray: The log marginalization integral for the E(B-V) parameter.
+    """
+    
+    n_sne = len(covariance)
+    log_probs = np.zeros(n_sne)
+    status = np.ones(n_sne, dtype='bool')
+    params = np.array([
+        R_B, sigma_R_B, R_B_min, tau_E_BV, gamma_E_BV
+    ])
+
+    for i in range(n_sne):
+        bias_corr = [selection_bias_correction[i]]
+        inputs_i = np.concatenate((
+            covariance[i].ravel(),
+            residual[i].ravel(),
+            bias_corr,
+            params
+        )).copy()
+        inputs_i.astype(np.float64)
+        
+        log_prob_i, _, status_i, _ = ldqag(
+            funcptr=_E_BV_trunc_R_B_i_log_integral_ptr, a=0,
             b=upper_bound_E_BV, data=inputs_i
         )
 
@@ -554,6 +692,7 @@ class TrippDust(Tripp):
         sigma_color_int: float = 0.0,
         R_B: float = 3.1,
         sigma_R_B: float = 0.0,
+        R_B_min: float = 1.5,
         gamma_E_BV: float = 1.,
         tau_E_BV: float = 1.,
         peculiar_velocity_dispersion: float = 200.,
@@ -575,6 +714,7 @@ class TrippDust(Tripp):
 
         self.R_B = R_B
         self.sigma_R_B = sigma_R_B
+        self.R_B_min = R_B_min
         self.gamma_E_BV = gamma_E_BV
         self.tau_E_BV = tau_E_BV
 
@@ -617,6 +757,7 @@ class TrippDust(Tripp):
         selection_bias_correction: np.ndarray = None,
         upper_bound_E_BV: Union[float, np.ndarray] = 10.0,
         use_log_marginalization: bool = False,
+        use_truncated_R_B_prior: bool = False,
         **kwargs,
     ) -> np.ndarray:
         """
@@ -654,8 +795,16 @@ class TrippDust(Tripp):
             calibratior_indeces=calibrator_indeces,
         )
 
-        marginalization_func = _E_BV_log_marginalization if use_log_marginalization else _E_BV_marginalization
-        
+        trunc_norm = 0.
+        if use_log_marginalization:
+            if use_truncated_R_B_prior:
+                marginalization_func = _E_BV_trunc_R_B_log_marginalization
+                trunc_norm = np.log(norm_cdf(self.R_B_min, self.R_B, self.sigma_R_B))
+            else:
+                marginalization_func = _E_BV_log_marginalization
+        else:
+            marginalization_func = _E_BV_marginalization
+
         upper_bound_E_BV = self.get_upper_bound_E_BV(
             upper_bound_E_BV=upper_bound_E_BV,
         )
@@ -663,7 +812,7 @@ class TrippDust(Tripp):
         E_BV_norm = (
             np.log(special.gammainc(self.gamma_E_BV, upper_bound_E_BV)) +
             special.loggamma(self.gamma_E_BV)
-        )
+        ) + trunc_norm
 
         if selection_bias_correction is None:
             selection_bias_correction = np.ones_like(redshift)
@@ -674,6 +823,7 @@ class TrippDust(Tripp):
             residual=residual,
             R_B=self.R_B,
             sigma_R_B=self.sigma_R_B,
+            R_B_min=self.R_B_min,
             tau_E_BV=self.tau_E_BV,
             gamma_E_BV=self.gamma_E_BV,
             upper_bound_E_BV=upper_bound_E_BV,
