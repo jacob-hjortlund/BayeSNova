@@ -1,5 +1,7 @@
 import numpy as np
 import autofit as af
+import scipy.special as special
+
 from bayesnova.mixture import TwoPopulationMixture, LogisticLinearWeighting
 
 class Analysis(af.Analysis):
@@ -16,6 +18,12 @@ class Analysis(af.Analysis):
         host_properties: np.ndarray = np.zeros((0, 0)),
         host_covariances: np.ndarray = np.zeros((0, 0)),
         logistic_linear_bounds: tuple = (0.15, 0.85),
+        gamma_quantiles_cfg: dict = {
+            "lower": 1.,
+            "upper": 20.,
+            "resolution": 0.001,
+            "cdf_limit": 0.995
+        },
         **kwargs
     ):
         
@@ -33,6 +41,24 @@ class Analysis(af.Analysis):
 
         if self.calibrator_indeces is None:
             self.calibrator_indeces = np.zeros_like(self.apparent_B_mag, dtype=bool)
+        
+        if isinstance(gamma_quantiles_cfg, dict):
+            self.gamma_quantiles = self.create_gamma_quantiles(**gamma_quantiles_cfg)
+        else:
+            self.gamma_quantiles = 10.
+
+    def create_gamma_quantiles(
+        self, lower: float, upper: float,
+        resolution: float, cdf_limit: float
+    ):
+        vals = np.arange(lower, upper, resolution)
+        quantiles = np.stack((
+            vals, special.gammaincinv(
+                vals, cdf_limit
+            )
+        ))
+
+        return quantiles
 
     def log_likelihood_function(self, instance) -> float:
 
@@ -48,6 +74,7 @@ class Analysis(af.Analysis):
                 observed_covariance=self.observed_covariance,
                 calibrator_indeces=self.calibrator_indeces,
                 calibrator_distance_modulus=self.calibrator_distance_modulus,
+                upper_bound_E_BV=self.gamma_quantiles,
                 **self.kwargs
             )
         else:
@@ -59,6 +86,7 @@ class Analysis(af.Analysis):
                 observed_covariance=self.observed_covariance,
                 calibrator_indeces=self.calibrator_indeces,
                 calibrator_distance_modulus=self.calibrator_distance_modulus,
+                upper_bound_E_BV=self.gamma_quantiles,
                 **self.kwargs
             )
             
