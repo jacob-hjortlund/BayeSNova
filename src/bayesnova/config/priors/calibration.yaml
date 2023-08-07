@@ -121,6 +121,10 @@ TrippDust:
     type: Uniform
     lower_limit: 0.
     upper_limit: 5.
+  R_B_min:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 5.
   gamma_E_BV:
     type: Uniform
     lower_limit: 1.

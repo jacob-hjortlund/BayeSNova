@@ -107,7 +107,6 @@ def _E_BV_i_log_integral(x, data):
     )
 _E_BV_i_log_integral_ptr = _E_BV_i_log_integral.address
 
-@nb.jit()
 def _E_BV_trunc_R_B_i_log_integral_body(
     x, cov_i1, cov_i2, cov_i3, cov_i4,
     cov_i5, cov_i6, cov_i7, cov_i8, cov_i9,
@@ -117,24 +116,19 @@ def _E_BV_trunc_R_B_i_log_integral_body(
     tau_E_BV, gamma_E_BV,
 ):
     
-    res = np.array(
-        [
-            res_i1, res_i2, res_i3,
-        ], dtype=np.float64
-    )
-    cov = np.array(
-        [
-            [cov_i1, cov_i2, cov_i3],
-            [cov_i4, cov_i5, cov_i6],
-            [cov_i7, cov_i8, cov_i9],
-        ], dtype=np.float64
-    )
-    cov_inv = np.linalg.inv(cov)
+    cov_adj_1 = cov_i5 * cov_i9 - cov_i6 * cov_i6
+    cov_adj_2 = -(cov_i2 * cov_i9 - cov_i3 * cov_i6)
+    cov_adj_3 = cov_i2 * cov_i6 - cov_i3 * cov_i5
+    determinant = cov_i1 * cov_adj_1 + cov_i2 * cov_adj_2 + cov_i3 * cov_adj_3
 
-    M = np.array([tau_E_BV * x, 0., 0.], dtype=np.float64)
-    A_inv = sigma_R_B**-2 + np.dot(M, np.dot(cov_inv, M))
-    A = 1. / A_inv
-    a = A * (R_B * sigma_R_B**-2 + np.dot(M, np.dot(cov_inv, res)))
+    A = (
+        sigma_R_B**-2 + cov_adj_1 * (tau_E_BV * x )**2 / determinant
+    )**-1
+    a = A * (
+        R_B * sigma_R_B**-2 + tau_E_BV * x * determinant**-1 * (
+            cov_adj_1 * res_i1 + cov_adj_2 * res_i2 + cov_adj_3 * res_i3
+        )
+    )
 
     norm = 1. - norm_cdf(R_B_min, mean=a, sigma=A)
     lognorm = np.log(norm)
@@ -150,6 +144,7 @@ def _E_BV_trunc_R_B_i_log_integral_body(
     log_integral += lognorm
 
     return log_integral
+
 
 @nb.cfunc(quadpack_sig)
 def _E_BV_trunc_R_B_i_log_integral(x, data):
