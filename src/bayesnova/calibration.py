@@ -107,6 +107,7 @@ def _E_BV_i_log_integral(x, data):
     )
 _E_BV_i_log_integral_ptr = _E_BV_i_log_integral.address
 
+@nb.jit()
 def _E_BV_trunc_R_B_i_log_integral_body(
     x, cov_i1, cov_i2, cov_i3, cov_i4,
     cov_i5, cov_i6, cov_i7, cov_i8, cov_i9,
@@ -144,7 +145,6 @@ def _E_BV_trunc_R_B_i_log_integral_body(
     log_integral += lognorm
 
     return log_integral
-
 
 @nb.cfunc(quadpack_sig)
 def _E_BV_trunc_R_B_i_log_integral(x, data):
