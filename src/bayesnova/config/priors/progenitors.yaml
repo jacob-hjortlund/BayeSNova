@@ -1,0 +1,9 @@
+SNeProgenitors:
+  eta:
+    type: LogUniform
+    lower_limit: 0.000001
+    upper_limit: 100.
+  f_prompt:
+    type: Uniform
+    lower_limit: 0.15
+    upper_limit: 0.85
