@@ -1,5 +1,6 @@
 import numpy as np
 
+from bayesnova.progenitors import SNeProgenitors
 from bayesnova.base import Gaussian, Mixture, Weighting
 
 class ConstantWeighting(Weighting):
@@ -52,6 +53,27 @@ class LogisticLinearWeighting(Weighting):
         linear_weights = self.logistic(linear_unbound_weights)
         
         return linear_weights
+
+class RedshiftDependentWeighting(Weighting):
+
+    def __init__(
+        self,
+        progenitor_model: SNeProgenitors,
+    ):
+        super().__init__()
+        self.progenitor_model = progenitor_model
+    
+    def calculate_weight(
+        self,
+        redshift: float,
+        **kwargs
+    ):
+        rates = self.progenitor_model.volumetric_rates(redshift)
+        total_rate = rates[:,0]
+        delayed_rate = rates[:,2]
+        weight = delayed_rate / total_rate
+        
+        return weight
 
 class TwoPopulationMixture(Mixture):
 
