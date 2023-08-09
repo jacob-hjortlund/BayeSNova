@@ -17,6 +17,9 @@ class Analysis(af.Analysis):
         calibrator_distance_modulus: np.ndarray = None,
         host_properties: np.ndarray = np.zeros((0, 0)),
         host_covariances: np.ndarray = np.zeros((0, 0)),
+        volumetric_rate_redshifts = np.zeros((0, 0)),
+        volumetric_rate_observations: np.ndarray = np.zeros((0, 0)),
+        volumetric_rate_errors: np.ndarray = np.zeros((0, 0)),
         logistic_linear_bounds: tuple = (0.15, 0.85),
         gamma_quantiles_cfg: dict = {
             "lower": 1.,
@@ -36,6 +39,9 @@ class Analysis(af.Analysis):
         self.calibrator_distance_modulus = calibrator_distance_modulus
         self.host_properties = host_properties
         self.host_covariances = host_covariances
+        self.volumetric_rate_redshifts = volumetric_rate_redshifts
+        self.volumetric_rate_observations = volumetric_rate_observations
+        self.volumetric_rate_errors = volumetric_rate_errors
         self.logistic_linear_bounds = logistic_linear_bounds
         self.kwargs = kwargs
 
@@ -60,70 +66,87 @@ class Analysis(af.Analysis):
 
         return quantiles
 
+    def sn_log_likelihood_function(self, instance) -> float:
+
+        log_likelihoods = instance.log_likelihood(
+            apparent_B_mag=self.apparent_B_mag,
+            stretch=self.stretch,
+            color=self.color,
+            redshift=self.redshift,
+            observed_covariance=self.observed_covariance,
+            calibrator_indeces=self.calibrator_indeces,
+            calibrator_distance_modulus=self.calibrator_distance_modulus,
+            upper_bound_E_BV=self.gamma_quantiles,
+            **self.kwargs
+        )
+
+        return log_likelihoods
+    
+    def host_log_likelihood_function(
+        self, instances: list, sn_weights: np.ndarray
+    ) -> float:
+        
+        host_log_likelihoods = 0.
+        for i, host_model in enumerate(instances):
+            
+            idx_obs = self.host_covariances[:,i] < 1e150
+            observations = self.host_properties[idx_obs,i]
+            variance = self.host_covariances[idx_obs,i]
+            weights = sn_weights[idx_obs]
+
+            if isinstance(host_model, TwoPopulationMixture):
+                
+                if isinstance(host_model.weighting_model, LogisticLinearWeighting):
+                
+                    host_weights = host_model.weighting_model.calculate_weight(weights=weights)
+                    prior_assertion = np.all(
+                        (host_weights > self.logistic_linear_bounds[0]) &
+                        (host_weights < self.logistic_linear_bounds[1])
+                    )
+
+                    if not prior_assertion:
+                        host_log_likelihoods += -np.inf
+                        break
+
+            host_log_likelihoods += host_model.log_likelihood(
+                observations=observations,
+                variance=variance,
+                weights=weights
+            )
+        
+        return host_log_likelihoods
+
     def log_likelihood_function(self, instance) -> float:
 
         instance_vars = vars(instance)
         host_model_in_instance = "host_models" in instance_vars
+        progenitor_model_in_instance = "progenitor_model" in instance_vars
+        is_only_sn = not host_model_in_instance and not progenitor_model_in_instance
 
-        if not host_model_in_instance:
-            log_likelihoods = instance.log_likelihood(
-                apparent_B_mag=self.apparent_B_mag,
-                stretch=self.stretch,
-                color=self.color,
-                redshift=self.redshift,
-                observed_covariance=self.observed_covariance,
-                calibrator_indeces=self.calibrator_indeces,
-                calibrator_distance_modulus=self.calibrator_distance_modulus,
-                upper_bound_E_BV=self.gamma_quantiles,
-                **self.kwargs
-            )
+        if is_only_sn:
+            log_likelihood = self.sn_log_likelihood_function(instance)
         else:
-            sn_log_likelihoods = instance.sn.log_likelihood(
-                apparent_B_mag=self.apparent_B_mag,
-                stretch=self.stretch,
-                color=self.color,
-                redshift=self.redshift,
-                observed_covariance=self.observed_covariance,
-                calibrator_indeces=self.calibrator_indeces,
-                calibrator_distance_modulus=self.calibrator_distance_modulus,
-                upper_bound_E_BV=self.gamma_quantiles,
-                **self.kwargs
-            )
-            
+            log_likelihood = self.sn_log_likelihood_function(instance.sn)
+        
+        log_likelihood = np.sum(log_likelihood)
+
+        if host_model_in_instance:
             sn_weights = instance.sn.weighting_model.calculate_weight(redshift=self.redshift)
 
-            host_log_likelihoods = np.zeros_like(sn_log_likelihoods)
-            for i, host_model in enumerate(instance.host_models):
-                
-                idx_obs = self.host_covariances[:,i] < 1e150
-                observations = self.host_properties[idx_obs,i]
-                variance = self.host_covariances[idx_obs,i]
-                weights = sn_weights[idx_obs]
-
-                if isinstance(host_model, TwoPopulationMixture):
-                    
-                    if isinstance(host_model.weighting_model, LogisticLinearWeighting):
-                    
-                        host_weights = host_model.weighting_model.calculate_weight(weights=weights)
-                        prior_assertion = np.all(
-                            (host_weights > self.logistic_linear_bounds[0]) &
-                            (host_weights < self.logistic_linear_bounds[1])
-                        )
-
-                        if not prior_assertion:
-                            return -1e99
-
-                host_log_likelihoods += host_model.log_likelihood(
-                    observations=observations,
-                    variance=variance,
-                    weights=weights
-                )
+            host_log_likelihoods = self.host_log_likelihood_function(
+                instances=instance.host_models, sn_weights=sn_weights
+            )
             
-            log_likelihoods = sn_log_likelihoods + host_log_likelihoods
+            log_likelihood += np.sum(host_log_likelihoods)
+        
+        if progenitor_model_in_instance:
+            log_likelihood += instance.progenitor_model.log_likelihood(
+                volumetric_rate_redshifts=self.volumetric_rate_redshifts,
+                volumetric_rate_observations=self.volumetric_rate_observations,
+                volumetric_rate_errors=self.volumetric_rate_errors
+            )
 
-        if np.any(np.isfinite(log_likelihoods) == False):
+        if not np.isfinite(log_likelihood):
             log_likelihood = -1e99
-        else:
-            log_likelihood = np.sum(log_likelihoods)
 
         return log_likelihood
