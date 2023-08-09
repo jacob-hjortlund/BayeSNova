@@ -5,7 +5,7 @@ FlatLambdaCDM:
     upper_limit: 90.
   Om0:
     type: Uniform
-    lower_limit: 0.01
+    lower_limit: 0.05
     upper_limit: 0.99
   Tcmb0:
     type: Uniform
@@ -39,12 +39,37 @@ FlatwCDM:
     upper_limit: 90.
   Om0:
     type: Uniform
-    lower_limit: 0.01
+    lower_limit: 0.05
     upper_limit: 0.99
+  Tcmb0:
+    type: Uniform
+    lower_limit: 2.7
+    upper_limit: 3.5
+  Neff:
+    type: Uniform
+    lower_limit: 0.05
+    upper_limit: 10.
+  m_nu_1:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 10.
+  m_nu_2:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 10.
+  m_nu_3:
+    type: Uniform
+    lower_limit: 0.
+    upper_limit: 10.
+  Ob0:
+    type: Uniform
+    lower_limit: 0.001
+    upper_limit: 0.1
   w0:
     type: Uniform
     lower_limit: -5.
     upper_limit: 5.
+  
   
 Flatw0waCDM:
   H0:
@@ -53,7 +78,7 @@ Flatw0waCDM:
     upper_limit: 90.
   Om0:
     type: Uniform
-    lower_limit: 0.01
+    lower_limit: 0.05
     upper_limit: 0.99
   w0:
     type: Uniform

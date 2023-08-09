@@ -149,22 +149,27 @@ def _volumetric_rates(
         z0_valid = z0 != np.nan
         z1_valid = z1 != np.nan
 
-        if z0_valid:
+        try:
+            if z1_valid:
 
-            prompt_rate, prompt_err, prompt_success, prompt_ierr = dqags(
-                prompt_rate_integral_ptr, 
-                z0, z1,
-                args,
-            )
-        
-        if z1_valid:
+                delayed_rate, delayed_err, delayed_succes, delayed_ierr = dqags(
+                    delayed_rate_integral_ptr, 
+                    z1, z_inf,
+                    args,
+                )
+            else:
+                z1 = z_inf
 
-            delayed_rate, delayed_err, delayed_succes, delayed_ierr = dqags(
-                delayed_rate_integral_ptr, 
-                z1, z_inf,
-                args,
-            )
-        
+            if z0_valid:
+
+                prompt_rate, prompt_err, prompt_success, prompt_ierr = dqags(
+                    prompt_rate_integral_ptr, 
+                    z0, z1,
+                    args,
+                )
+        except:
+            rates[:, :] = -np.inf
+
         rates[i, 0] = prompt_rate + delayed_rate
         rates[i, 1] = prompt_rate
         rates[i, 2] = delayed_rate

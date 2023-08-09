@@ -69,10 +69,15 @@ class RedshiftDependentWeighting(Weighting):
         **kwargs
     ):
         rates = self.progenitor_model.volumetric_rates(redshift)
-        total_rate = rates[:,0]
-        delayed_rate = rates[:,2]
-        weight = delayed_rate / total_rate
-        
+        rates_are_finite = np.all(np.isfinite(rates))
+
+        if rates_are_finite:
+            total_rate = rates[:,0]
+            delayed_rate = rates[:,2]
+            weight = delayed_rate / total_rate
+        else:
+            weight = np.ones_like(redshift) * -np.inf
+
         return weight
 
 class TwoPopulationMixture(Mixture):
@@ -108,10 +113,16 @@ class TwoPopulationMixture(Mixture):
         )
         population_2_weight = 1.0 - population_1_weight
 
-        log_likelihoods = np.logaddexp(
-            np.log(population_1_weight) + log_likelihoods[0],
-            np.log(population_2_weight) + log_likelihoods[1],
-        )
-        log_likelihood = np.sum(log_likelihoods)
+        weight_is_finite = np.all(np.isfinite(population_1_weight))
+
+        if weight_is_finite:
+            log_likelihoods = np.logaddexp(
+                np.log(population_1_weight) + log_likelihoods[0],
+                np.log(population_2_weight) + log_likelihoods[1],
+            )
+            log_likelihood = np.sum(log_likelihoods)
+
+        else:
+            log_likelihood = -np.inf
 
         return log_likelihood
