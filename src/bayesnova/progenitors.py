@@ -242,6 +242,31 @@ class SNeProgenitors(Model):
         )
 
         return volumetric_rates
+    
+    def log_likelihood(
+        self,
+        volumetric_rate_redshifts: np.ndarray,
+        volumetric_rate_observations: np.ndarray,
+        volumetric_rate_errors: np.ndarray,
+        **kwargs
+    ):
+        
+        volumetric_rates = self.volumetric_rates(
+            z=volumetric_rate_redshifts,
+            **kwargs
+        )
+
+        norm = -0.5 * np.sum(
+            np.log(2. * np.pi * volumetric_rate_errors**2)
+        )
+        chi2 = -0.5 * np.sum(
+            (volumetric_rate_observations - volumetric_rates[:, 0])**2 / volumetric_rate_errors**2
+        )
+
+        llh = norm + chi2
+
+        return llh
+        
 
 
         
