@@ -66,15 +66,15 @@ def E(
 
     zp1 = 1 + z
 
-    Or = Ogamma0 + (
-                Ogamma0 * nu_relative_density(
-                z, massive_nu, N_eff,
-                nu_y, n_massless_nu,
-                N_eff_per_nu
-            )
-        )
+    # Or = Ogamma0 + (
+    #             Ogamma0 * nu_relative_density(
+    #             z, massive_nu, N_eff,
+    #             nu_y, n_massless_nu,
+    #             N_eff_per_nu
+    #         )
+    #     )
     
-    radiation_term = Or * zp1**4.
+    radiation_term = 0. #Or * zp1**4.
     mass_term = Om0 * zp1**3.
     de_term = Ode0 * de_density_scale(z, w0, wa)
     Ez = np.sqrt( radiation_term + mass_term + de_term)
@@ -300,6 +300,9 @@ class Cosmology(Model):
         z0 = self.initial_redshift_value(
             evaluation_times[0],
         )
+
+        if np.isnan(z0):
+            return np.full_like(evaluation_times, np.nan), False
 
         usol, success = redshift_at_times(
             evaluation_times, z0, 

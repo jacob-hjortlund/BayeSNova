@@ -122,7 +122,7 @@ def _delayed_rate_integral(
     return integral_value
 delayed_rate_integral_ptr = _delayed_rate_integral.address
 
-#@nb.njit
+@nb.njit(parallel=True, fastmath=True)
 def _volumetric_rates(
     z: np.ndarray, integral_limits: np.ndarray, 
     eta: float, f_prompt: float,
@@ -132,47 +132,53 @@ def _volumetric_rates(
     
     n_redshifts = len(z)
     rates = np.zeros((n_redshifts, 3))
-    for i in range(n_redshifts):
+    for i in nb.prange(n_redshifts):
 
         zi = z[i]
         z0 = integral_limits[i, 0]
         z1 = integral_limits[i, 1]
-        args = np.concatenate(
-            [
-                [zi, eta, f_prompt, tau_0, tau_1, tau_max],
-                cosmology_args
-            ], dtype=np.float64
-        )
+        args = [zi, eta, f_prompt, tau_0, tau_1, tau_max] + [
+            arg for arg in cosmology_args
+        ]
+        args = np.array(args, dtype=np.float64)
+        # np.concatenate(
+        #     [
+        #         [zi, eta, f_prompt, tau_0, tau_1, tau_max],
+        #         cosmology_args
+        #     ], dtype=np.float64
+        # )
 
         prompt_rate = delayed_rate = 0.
 
         z0_valid = z0 != np.nan
         z1_valid = z1 != np.nan
 
-        try:
-            if z1_valid:
+        if z1_valid:
 
-                delayed_rate, delayed_err, delayed_succes, delayed_ierr = dqags(
-                    delayed_rate_integral_ptr, 
-                    z1, z_inf,
-                    args,
-                )
-            else:
-                z1 = z_inf
+            delayed_rate, delayed_err, delayed_succes, delayed_ierr = dqags(
+                delayed_rate_integral_ptr, 
+                z1, z_inf,
+                args,
+            )
+        else:
+            z1 = z_inf
+            delayed_succes = True
 
-            if z0_valid:
+        if z0_valid:
 
-                prompt_rate, prompt_err, prompt_success, prompt_ierr = dqags(
-                    prompt_rate_integral_ptr, 
-                    z0, z1,
-                    args,
-                )
-        except:
+            prompt_rate, prompt_err, prompt_success, prompt_ierr = dqags(
+                prompt_rate_integral_ptr, 
+                z0, z1,
+                args,
+            )
+
+        if delayed_succes and prompt_success:
+            rates[i, 0] = prompt_rate + delayed_rate
+            rates[i, 1] = prompt_rate
+            rates[i, 2] = delayed_rate
+        else:
             rates[:, :] = -np.inf
-
-        rates[i, 0] = prompt_rate + delayed_rate
-        rates[i, 1] = prompt_rate
-        rates[i, 2] = delayed_rate
+            break
 
     return rates
 
@@ -225,9 +231,7 @@ class SNeProgenitors(Model):
         )
 
         if not ode_status:
-            raise ValueError(
-                "ODE solver failed to converge for some redshifts."
-            )
+            return np.ones(len(z)) * -np.inf
         
         convolution_redshift_limits = np.ones(2*len(z)) * np.nan
         convolution_redshift_limits[idx_valid] = redshifts_at_convolution_time_limits 
