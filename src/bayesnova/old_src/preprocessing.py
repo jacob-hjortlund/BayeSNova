@@ -256,11 +256,16 @@ def init_global_data(
             (idx_unique_calibrator_sn, idx_duplicate_calibrator_sn)
         )
 
+    unique_cids, duplicate_cids = reorder_duplicates(
+        sn_cids, idx_unique_sn,
+        idx_duplicate_sn
+    )
+
+    if len(duplicate_cids.shape) > 1:
+        duplicate_cids = duplicate_cids[:, 0]
+
     sn_cids = np.concatenate(
-        reorder_duplicates(
-            sn_cids, idx_unique_sn,
-            idx_duplicate_sn
-        )
+        (unique_cids, duplicate_cids)
     )
 
     data.drop(duplicate_uid_key, axis=1, inplace=True, errors='ignore')
