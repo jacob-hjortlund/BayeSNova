@@ -815,9 +815,13 @@ def corner(
         hist2d_kwargs["color"] = hist2d_kwargs.get("color", color)
         for j, y in enumerate(xs):
 
-            skip_param = j in params_to_skip
-            if skip_param:
-                continue
+            # if skip_param:
+            #     inverted_params_to_skip = set(range(len(xs))) - set(params_to_skip)
+            #     if j in inverted_params_to_skip:
+            #         continue
+            if i in params_to_skip:
+                if j in params_to_skip:
+                    continue
             if np.shape(xs)[0] == 1:
                 ax = axes
             else:
