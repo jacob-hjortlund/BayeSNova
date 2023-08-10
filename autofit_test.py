@@ -11,39 +11,48 @@ import bayesnova.old_src.preprocessing as prep
 from pyprojroot import here
 from bayesnova.analysis import Analysis
 from bayesnova.base import UnivariateGaussian
-from bayesnova.cosmo import FlatLambdaCDM
+from bayesnova.cosmo import FlatLambdaCDM, FlatwCDM
 from bayesnova.calibration import Tripp, TrippDust, OldTripp
-from bayesnova.mixture import ConstantWeighting, LogisticLinearWeighting, TwoPopulationMixture
+from bayesnova.progenitors import SNeProgenitors
+from bayesnova.mixture import ConstantWeighting, LogisticLinearWeighting, RedshiftDependentWeighting, TwoPopulationMixture
 
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
-os.environ["NUMEXPR_NUM_THREADS"] = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+os.environ["NUMEXPR_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "2"
 
 workspace_path = str(here())
 os.chdir(workspace_path)
 
 def main():
 
-    name = "test_rwalk_50_run_2_sn_host_long"
+    dataset ='pantheon_full_fiducial_volume_limited' #'pantheon_hubble_flow'#
+    name = "baseline_duplicats_log_integral_v3"
+
     try:
-        shutil.rmtree("/groups/dark/osman/BayeSNova/output/" + name)
+        shutil.rmtree("/groups/dark/osman/BayeSNova/output/" + dataset + "/" + name)
     except:
         pass
 
-    with open("/groups/dark/osman/BayeSNova/examples/configs/config.yaml") as f:
+    with open("/home/jacob/Uni/Msc/Thesis/BayeSNova/examples/configs/config.yaml") as f:
         old_config = yaml.safe_load(f)
 
     # Load data
     #data_path = "/groups/dark/osman/Thesis_old/data/processed_data/supercal"
-    data_path = "/groups/dark/osman/Msc_Thesis/src/data/supercal_hubble_flow/supercal_hubble_flow.dat"
+    data_path = f"/home/jacob/Uni/Msc/Thesis/Msc_Thesis/src/data/{dataset}/{dataset}.dat"
     data = pd.read_csv(data_path, sep=" ")
 
+    volumetric_rates_path = "/home/jacob/Uni/Msc/Thesis/Msc_Thesis/src/data/volumetric_rates.dat"
+    volumetric_rates_df = pd.read_csv(
+        volumetric_rates_path, sep=" "
+    )
+
+    old_config['model_cfg']['use_volumetric_rates'] = True
     old_config['model_cfg']['host_galaxy_cfg']['use_properties'] = True
     old_config['model_cfg']['host_galaxy_cfg']['independent_property_names'] = ['global_mass','t',]
 
-    prep.init_global_data(data, None, old_config['model_cfg'])
+    prep.init_global_data(data, volumetric_rates_df, old_config['model_cfg'])
     
     print(f"N SNe: {len(prep.sn_observables)}")
     not_calibrator_indeces = ~prep.idx_calibrator_sn
@@ -52,6 +61,10 @@ def main():
     sn_redshifts = prep.sn_redshifts[not_calibrator_indeces]
     sn_covariances = prep.sn_covariances[not_calibrator_indeces]
     print(f"N SNe after removing calibrators: {len(sn_observables)}")
+
+    volumetric_rate_redshifts = prep.observed_volumetric_rate_redshifts
+    volumetric_rate_observations = prep.observed_volumetric_rates
+    volumetric_rate_errors = prep.observed_volumetric_rate_errors
 
     apparent_B_mag = sn_observables[:,0]
     stretch = sn_observables[:,1]
@@ -64,9 +77,9 @@ def main():
     # SNe Ia model
 
     cosmology = af.Model(
-        FlatLambdaCDM,
+        FlatwCDM,
         H0=73.0,
-        Om0=0.3,
+        #Om0=0.3,
         Tcmb0=2.725,
         Neff=3.046,
         m_nu_1=0.0,
@@ -80,17 +93,7 @@ def main():
         cosmology=cosmology,
         peculiar_velocity_dispersion=200.0,
         sigma_M_int=0.,
-        # alpha=-0.206,
-        # beta=2.936,
-        # R_B=3.661,
-        # sigma_R_B=0.685,
-        # gamma_E_BV=4.385,
-        # M_int=-19.462,
-        # color_int=-0.064,
-        # sigma_color_int=0.086,
-        # stretch_int=-1.491,
-        # sigma_stretch_int=0.646,
-        # tau_E_BV=0.022,
+        R_B_min=1.5,
     )
 
     sn_pop_2 = af.Model(
@@ -98,22 +101,23 @@ def main():
         cosmology=cosmology,
         peculiar_velocity_dispersion=200.0,
         sigma_M_int=0.,
-        # alpha=-0.206,
-        # beta=2.936,
-        # R_B=3.661,
-        # sigma_R_B=0.685,
-        # gamma_E_BV=4.385,
-        # M_int=-19.317,
-        # color_int=-0.151,
-        # sigma_color_int=0.031,
-        # stretch_int=0.326,
-        # sigma_stretch_int=0.647,
-        # tau_E_BV=0.033,
+        R_B_min=1.5,
     )
 
-    sn_weighting_class = ConstantWeighting
+    progenitor_model = af.Model(
+        SNeProgenitors,
+        cosmology=cosmology,
+        eta=1.02e-4
+    )
+
+    sn_pop_2.cosmology.Om0 = sn_pop_1.cosmology.Om0
+    sn_pop_2.cosmology.w0 = sn_pop_1.cosmology.w0
+    progenitor_model.cosmology.Om0 = sn_pop_1.cosmology.Om0
+    progenitor_model.cosmology.w0 = sn_pop_1.cosmology.w0
+
     sn_weighting_model = af.Model(
-        sn_weighting_class
+        RedshiftDependentWeighting,
+        progenitor_model=progenitor_model,
     )
 
     sn_model = af.Model(
@@ -150,64 +154,65 @@ def main():
 
     # Host mass model
 
-    host_mass_pop_1 = af.Model(
-        UnivariateGaussian,
-    )
+    # host_mass_pop_1 = af.Model(
+    #     UnivariateGaussian,
+    # )
 
-    host_mass_pop_2 = af.Model(
-        UnivariateGaussian,
-    )
+    # host_mass_pop_2 = af.Model(
+    #     UnivariateGaussian,
+    # )
 
-    host_mass_weighting_model = af.Model(
-        LogisticLinearWeighting,
-        offset=0.
-    )
+    # host_mass_weighting_model = af.Model(
+    #     LogisticLinearWeighting,
+    #     scale=0.
+    #     #offset=0.
+    # )
 
-    host_mass_model = af.Model(
-        TwoPopulationMixture,
-        population_models=[host_mass_pop_1, host_mass_pop_2],
-        weighting_model=host_mass_weighting_model
-    )
+    # host_mass_model = af.Model(
+    #     TwoPopulationMixture,
+    #     population_models=[host_mass_pop_1, host_mass_pop_2],
+    #     weighting_model=host_mass_weighting_model
+    # )
 
-    host_mass_model.population_models[0].mu = af.UniformPrior(lower_limit=6.0, upper_limit=16.0)
-    host_mass_model.population_models[1].mu = af.UniformPrior(lower_limit=6.0, upper_limit=16.0)
+    # host_mass_model.population_models[0].mu = af.UniformPrior(lower_limit=6.0, upper_limit=16.0)
+    # host_mass_model.population_models[1].mu = af.UniformPrior(lower_limit=6.0, upper_limit=16.0)
 
-    host_mass_model.add_assertion(
-        host_mass_model.population_models[0].mu < host_mass_model.population_models[1].mu
-    )
+    # host_mass_model.add_assertion(
+    #     host_mass_model.population_models[0].mu < host_mass_model.population_models[1].mu
+    # )
 
-    host_morphology_pop_1 = af.Model(
-        UnivariateGaussian,
-    )
+    # host_morphology_pop_1 = af.Model(
+    #     UnivariateGaussian,
+    # )
 
-    host_morphology_pop_2 = af.Model(
-        UnivariateGaussian,
-    )
+    # host_morphology_pop_2 = af.Model(
+    #     UnivariateGaussian,
+    # )
 
-    host_morphology_weighting_model = af.Model(
-        LogisticLinearWeighting,
-        offset=0.
-    )
+    # host_morphology_weighting_model = af.Model(
+    #     LogisticLinearWeighting,
+    #     offset=0.
+    # )
 
-    host_morphology_model = af.Model(
-        TwoPopulationMixture,
-        population_models=[host_morphology_pop_1, host_morphology_pop_2],
-        weighting_model=host_morphology_weighting_model
-    )
+    # host_morphology_model = af.Model(
+    #     TwoPopulationMixture,
+    #     population_models=[host_morphology_pop_1, host_morphology_pop_2],
+    #     weighting_model=host_morphology_weighting_model
+    # )
 
-    host_morphology_model.population_models[0].mu = af.UniformPrior(lower_limit=-10., upper_limit=10.)
-    host_morphology_model.population_models[1].mu = af.UniformPrior(lower_limit=-10., upper_limit=10.)
+    # host_morphology_model.population_models[0].mu = af.UniformPrior(lower_limit=-10., upper_limit=10.)
+    # host_morphology_model.population_models[1].mu = af.UniformPrior(lower_limit=-10., upper_limit=10.)
 
-    host_morphology_model.add_assertion(
-        host_morphology_model.population_models[0].mu < host_morphology_model.population_models[1].mu
-    )
+    # host_morphology_model.add_assertion(
+    #     host_morphology_model.population_models[0].mu < host_morphology_model.population_models[1].mu
+    # )
 
-    sn_and_host_model = af.Collection(
-        sn=sn_model,
-        host_models=[host_mass_model, host_morphology_model]
-    )
+    # sn_and_host_model = af.Collection(
+    #     sn=sn_model,
+    #     host_models=[host_mass_model],# host_morphology_model]
+    # )
 
-    model = sn_model
+    model = sn_model #sn_and_host_model
 
     analysis = Analysis(
         apparent_B_mag=apparent_B_mag,
@@ -217,35 +222,45 @@ def main():
         observed_covariance=observed_covariance,
         host_properties=host_properties,
         host_covariances=host_covariances,
+        volumetric_rate_redshifts=volumetric_rate_redshifts,
+        volumetric_rate_observations=volumetric_rate_observations,
+        volumetric_rate_errors=volumetric_rate_errors,
         use_log_marginalization=True,
+        use_truncated_R_B_prior=True,
+        gamma_quantiles_cfg={
+            "lower": 1.,
+            "upper": 20.,
+            "resolution": 0.001,
+            "cdf_limit": 0.995
+        },
     )
 
-    instance_created = False
-    while not instance_created:
-        try:
-            instance = model.random_instance_from_priors_within_limits()
-            llh_value = analysis.log_likelihood_function(instance)
-            if llh_value == -1e99:
-                pass
-            else:
-                instance_created = True
-        except:
-            pass
+    # instance_created = False
+    # while not instance_created:
+    #     try:
+    #         instance = model.random_instance_from_priors_within_limits()
+    #         llh_value = analysis.log_likelihood_function(instance)
+    #         if llh_value == -1e99:
+    #             pass
+    #         else:
+    #             instance_created = True
+    #     except:
+    #         pass
     
-    analysis.log_likelihood_function(instance)
+    # analysis.log_likelihood_function(instance)
     print("\nModel Info:")
     print(model.info)
     print("\n")
 
     search = af.DynestyStatic(
+        path_prefix=dataset,
         name=name,
-        nlive=1000,
+        nlive=16,#5000,
         sample='rwalk',
-        number_of_cores=257,
-        iterations_per_update=int(5e6),
-        walks=50,
-        slices=50
-        #dlogz=500.
+        number_of_cores=2,#257,
+        iterations_per_update=int(1e10),
+        walks=5,
+        slices=50,
     )
 
     result = search.fit(model=model, analysis=analysis)
@@ -278,9 +293,7 @@ def main():
 
     print("\nBayesian Stats:")
     for i in range(len(stat_names)):
-        print(f"{stat_names[i]}: {percs[:,i]:.3f} +/- {0.5*(percs[2,i]-percs[0,i]):.3f}")
+        print(f"{stat_names[i]}: {percs[1,i]:.3f} +/- {0.5*(percs[2,i]-percs[0,i]):.3f}")
 
-
-    
 if __name__ == "__main__":
     main()
