@@ -7,7 +7,7 @@ src/bayesnova/base.py
 src/bayesnova/calibration.py
 src/bayesnova/cosmo.py
 src/bayesnova/mixture.py
-src/bayesnova/volumetric_rate.py
+src/bayesnova/progenitors.py
 src/bayesnova.egg-info/PKG-INFO
 src/bayesnova.egg-info/SOURCES.txt
 src/bayesnova.egg-info/dependency_links.txt
@@ -26,6 +26,7 @@ src/bayesnova/config/priors/base.yaml
 src/bayesnova/config/priors/calibration.yaml
 src/bayesnova/config/priors/cosmo.yaml
 src/bayesnova/config/priors/mixture.yaml
+src/bayesnova/config/priors/progenitors.yaml
 src/bayesnova/old_src/__init__.py
 src/bayesnova/old_src/cosmology_utils.py
 src/bayesnova/old_src/generative_models.py

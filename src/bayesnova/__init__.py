@@ -10,6 +10,7 @@ import bayesnova.cosmo as cosmo
 import bayesnova.progenitors as progenitors
 import bayesnova.mixture as mixture
 import bayesnova.base as base
+import bayesnova.plot as plot
 
 import autoconf.conf as conf
 conf.instance.register(__file__)

@@ -16,11 +16,11 @@ from bayesnova.progenitors import SNeProgenitors
 from bayesnova.calibration import Tripp, TrippDust, OldTripp
 from bayesnova.mixture import ConstantWeighting, LogisticLinearWeighting, RedshiftDependentWeighting, TwoPopulationMixture
 
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
-os.environ["NUMEXPR_NUM_THREADS"] = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+os.environ["NUMEXPR_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "2"
 
 workspace_path = str(here())
 os.chdir(workspace_path)
@@ -35,7 +35,7 @@ def main():
     except:
         pass
 
-    with open("/groups/dark/osman/BayeSNova/examples/configs/config.yaml") as f:
+    with open("/home/jacob/Uni/Msc/Thesis/BayeSNova/examples/configs/config.yaml") as f:
         old_config = yaml.safe_load(f)
 
     # Load data
@@ -79,7 +79,7 @@ def main():
     cosmology = af.Model(
         FlatwCDM,
         H0=73.0,
-        Om0=0.3,
+        #Om0=0.3,
         Tcmb0=2.725,
         Neff=3.046,
         m_nu_1=0.0,
@@ -255,17 +255,17 @@ def main():
         },
     )
 
-    # instance_created = False
-    # while not instance_created:
-    #     try:
-    #         instance = model.random_instance_from_priors_within_limits()
-    #         llh_value = analysis.log_likelihood_function(instance)
-    #         if llh_value == -1e99:
-    #             pass
-    #         else:
-    #             instance_created = True
-    #     except:
-    #         pass
+    instance_created = False
+    while not instance_created:
+        try:
+            instance = model.random_instance_from_priors_within_limits()
+            llh_value = analysis.log_likelihood_function(instance)
+            if llh_value == -1e99:
+                pass
+            else:
+                instance_created = True
+        except:
+            pass
     
     # analysis.log_likelihood_function(instance)
     print("\nModel Info:")
