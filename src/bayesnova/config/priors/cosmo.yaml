@@ -67,10 +67,9 @@ FlatwCDM:
     upper_limit: 0.1
   w0:
     type: Uniform
-    lower_limit: -1.5
-    upper_limit: -0.5
-  
-  
+    lower_limit: -4.
+    upper_limit: 2.
+   
 Flatw0waCDM:
   H0:
     type: Uniform
