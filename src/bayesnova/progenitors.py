@@ -242,13 +242,16 @@ class SNeProgenitors(Model):
         )
 
         tau_max = self.cosmo.cosmo.age(0).value - self.cosmo.cosmo.age(z_inf).value
-
-        volumetric_rates = _volumetric_rates(
-            z=z, integral_limits=convolution_redshift_limits,
-            eta=self.eta, f_prompt=self.f_prompt,
-            tau_0=tau_0, tau_1=tau_1, tau_max=tau_max,
-            z_inf=z_inf, cosmology_args=self.cosmo.cosmo_args
-        )
+        
+        try:
+            volumetric_rates = _volumetric_rates(
+                z=z, integral_limits=convolution_redshift_limits,
+                eta=self.eta, f_prompt=self.f_prompt,
+                tau_0=tau_0, tau_1=tau_1, tau_max=tau_max,
+                z_inf=z_inf, cosmology_args=self.cosmo.cosmo_args
+            )
+        except:
+            volumetric_rates = np.ones((len(z), 3)) * -np.inf
 
         return volumetric_rates
     
