@@ -7,7 +7,7 @@ from typing import Tuple
 from astropy.coordinates import SkyCoord
 
 NULL_VALUE = -9999.
-MAX_VALUE = np.finfo(np.float64).max
+MAX_VALUE = np.finfo(np.float64).max / 100
 
 sn_cids = np.array([])
 sn_covariances = np.array([])

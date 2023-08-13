@@ -712,6 +712,10 @@ class TrippDust(Tripp):
         self.R_B_min = R_B_min
         self.gamma_E_BV = gamma_E_BV
         self.tau_E_BV = tau_E_BV
+        self.host_models = kwargs.get(
+            'host_models',
+            None
+        )
 
     def get_upper_bound_E_BV(
         self,
@@ -753,6 +757,8 @@ class TrippDust(Tripp):
         upper_bound_E_BV: Union[float, np.ndarray] = 10.0,
         use_log_marginalization: bool = False,
         use_truncated_R_B_prior: bool = False,
+        host_property_observables: np.ndarray = [],
+        host_property_covariance: np.ndarray = [],
         **kwargs,
     ) -> np.ndarray:
         """
@@ -830,5 +836,19 @@ class TrippDust(Tripp):
             log_likehood = np.log(E_BV_marginalization)
         
         log_likehood -= E_BV_norm
+
+        if self.host_models is not None:
+            return log_likehood
+
+        for i, host_model in enumerate(self.host_models.models):
+            host_model_observable = host_property_observables[i]
+            host_model_observable_covariance = host_property_covariance[i]
+
+            host_model_log_likehood = host_model.log_likelihood(
+                observable=host_model_observable,
+                covariance=host_model_observable_covariance,
+            )
+
+            log_likehood += host_model_log_likehood
 
         return log_likehood

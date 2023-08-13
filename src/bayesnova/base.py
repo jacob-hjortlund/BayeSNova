@@ -41,12 +41,15 @@ class UnivariateGaussian(Gaussian):
         **kwargs
     ) -> np.ndarray:
         
-        var = self.sigma**2 + variance
-        norm = -0.5 * np.log(2 * np.pi * var)
-        idx_inf = np.isinf(norm)
-        norm[idx_inf] = -1e99
+        idx_observed = variance < 1e150
+        output = np.ones(len(observations)) * -354.891356446692 # log of largest float
 
-        return norm - 0.5 * (observations - self.mu)**2 / var
+        var = self.sigma**2 + variance[idx_observed]
+        norm = -0.5 * np.log(2 * np.pi * var)
+        chisq = (observations[idx_observed] - self.mu)**2 / var
+        output[idx_observed] = norm - 0.5 * chisq
+        
+        return output
     
 class Weighting(Model):
 
