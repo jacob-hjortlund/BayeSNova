@@ -93,6 +93,7 @@ class Analysis(af.Analysis):
             observations = self.host_properties[idx_obs,i]
             variance = self.host_covariances[idx_obs,i]
             weights = sn_weights[idx_obs]
+            redshifts = self.redshift[idx_obs]
 
             if isinstance(host_model, TwoPopulationMixture):
                 
@@ -111,7 +112,8 @@ class Analysis(af.Analysis):
             host_log_likelihoods += host_model.log_likelihood(
                 observations=observations,
                 variance=variance,
-                weights=weights
+                weights=weights,
+                redshift=redshifts
             )
         
         return host_log_likelihoods

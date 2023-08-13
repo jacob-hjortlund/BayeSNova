@@ -13,8 +13,8 @@ LogisticLinearWeighting:
     # mean: 1.0
     # sigma: 0.5
     type: Uniform
-    lower_limit: -10.0
-    upper_limit: 10.0
+    lower_limit: -3.0
+    upper_limit: 3.0
   offset:
     # type: Gaussian
     # mean: 0.0
