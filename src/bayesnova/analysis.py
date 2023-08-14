@@ -78,7 +78,7 @@ class Analysis(af.Analysis):
             calibrator_distance_modulus=self.calibrator_distance_modulus,
             upper_bound_E_BV=self.gamma_quantiles,
             host_property_observables=self.host_properties,
-            host_property_covariances=self.host_covariances,
+            host_property_covariance=self.host_covariances,
             **self.kwargs
         )
 

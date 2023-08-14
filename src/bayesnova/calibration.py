@@ -841,12 +841,10 @@ class TrippDust(Tripp):
             return log_likehood
 
         for i, host_model in enumerate(self.host_models.models):
-            host_model_observable = host_property_observables[i]
-            host_model_observable_covariance = host_property_covariance[i]
 
             host_model_log_likehood = host_model.log_likelihood(
-                observable=host_model_observable,
-                covariance=host_model_observable_covariance,
+                observations=host_property_observables[:,i],
+                variance=host_property_covariance[:,i],
             )
 
             log_likehood += host_model_log_likehood
