@@ -837,7 +837,7 @@ class TrippDust(Tripp):
         
         log_likehood -= E_BV_norm
 
-        if self.host_models is not None:
+        if type(self.host_models) == type(None):
             return log_likehood
 
         for i, host_model in enumerate(self.host_models.models):
