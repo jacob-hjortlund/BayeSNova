@@ -84,48 +84,28 @@ class Analysis(af.Analysis):
 
         return log_likelihoods
     
-    # def host_log_likelihood_function(
-    #     self, instances: list, sn_weights: np.ndarray
-    # ) -> float:
+    def host_log_likelihood_function(
+        self, instances: list
+    ) -> float:
         
-    #     host_log_likelihoods = 0.
-    #     for i, host_model in enumerate(instances):
-            
-    #         idx_obs = self.host_covariances[:,i] < 1e150
-    #         observations = self.host_properties[idx_obs,i]
-    #         variance = self.host_covariances[idx_obs,i]
-    #         weights = sn_weights[idx_obs]
-    #         redshifts = self.redshift[idx_obs]
+        host_log_likelihoods = 0.
+        for i, host_model in enumerate(instances):
 
-    #         if isinstance(host_model, TwoPopulationMixture):
-                
-    #             if isinstance(host_model.weighting_model, LogisticLinearWeighting):
-                
-    #                 host_weights = host_model.weighting_model.calculate_weight(weights=weights)
-    #                 prior_assertion = np.all(
-    #                     (host_weights > self.logistic_linear_bounds[0]) &
-    #                     (host_weights < self.logistic_linear_bounds[1])
-    #                 )
-
-    #                 if not prior_assertion:
-    #                     host_log_likelihoods += -np.inf
-    #                     break
-
-    #         host_log_likelihoods += host_model.log_likelihood(
-    #             observations=observations,
-    #             variance=variance,
-    #             weights=weights,
-    #             redshift=redshifts
-    #         )
+            host_log_likelihoods += host_model.log_likelihood(
+                observations=self.host_properties[:,i],
+                variance=self.host_covariances[:,i],
+            )
         
-    #     return host_log_likelihoods
+        return host_log_likelihoods
 
     def log_likelihood_function(self, instance) -> float:
 
         instance_vars = vars(instance)
-        #host_model_in_instance = "host_models" in instance_vars
+        host_model_in_instance = "host_models" in instance_vars
+        if host_model_in_instance:
+            host_model_in_instance = instance_vars['host_models'] != None
         progenitor_model_in_instance = "progenitor_model" in instance_vars
-        is_only_sn = not progenitor_model_in_instance #not host_model_in_instance
+        is_only_sn = not progenitor_model_in_instance and not host_model_in_instance
 
         if is_only_sn:
             log_likelihood = self.sn_log_likelihood_function(instance)
@@ -134,14 +114,13 @@ class Analysis(af.Analysis):
         
         log_likelihood = np.sum(log_likelihood)
 
-        # if host_model_in_instance:
-        #     sn_weights = instance.sn.weighting_model.calculate_weight(redshift=self.redshift)
+        if host_model_in_instance:
 
-        #     host_log_likelihoods = self.host_log_likelihood_function(
-        #         instances=instance.host_models, sn_weights=sn_weights
-        #     )
+            host_log_likelihoods = self.host_log_likelihood_function(
+                instances=instance.host_models
+            )
             
-        #     log_likelihood += np.sum(host_log_likelihoods)
+            log_likelihood += np.sum(host_log_likelihoods)
         
         if progenitor_model_in_instance:
             log_likelihood += instance.progenitor_model.log_likelihood(
