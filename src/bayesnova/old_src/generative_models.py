@@ -57,6 +57,13 @@ class SNGenerator:
         samples = gamma.rvs(size=n_sn, random_state=seed)
         return samples
 
+    def sample_extinction_coeff(
+        self, n_sn: int, R_B: float, sig_R_B: float, R_B_min: float = 1.5
+    ):
+        R_B = stats.truncnorm((R_B_min - R_B) / sig_R_B, np.inf, loc=R_B, scale=sig_R_B)
+        samples = R_B.rvs(size=n_sn)
+        return samples
+
     def population_covariances(
         self,
         z: np.ndarray,
@@ -71,10 +78,10 @@ class SNGenerator:
         sig_s_2: float,
         sig_c_1: float,
         sig_c_2: float,
-        sig_Rb_1: float,
-        sig_Rb_2: float,
-        Ebv_1: float,
-        Ebv_2: float,
+        # sig_Rb_1: float,
+        # sig_Rb_2: float,
+        # Ebv_1: float,
+        # Ebv_2: float,
     ) -> np.ndarray:
         n_sn = len(z)
         if obs_covariance.shape[0] != n_sn:
@@ -89,11 +96,13 @@ class SNGenerator:
                 sig_int_1**2
                 + alpha_1**2 * sig_s_1**2
                 + beta_1**2 * sig_c_1**2
-                + sig_Rb_1**2 * Ebv_1**2,
+                + np.zeros_like(z),
+                # + sig_Rb_1**2 * Ebv_1**2,
                 sig_int_2**2
                 + alpha_2**2 * sig_s_2**2
                 + beta_2**2 * sig_c_2**2
-                + sig_Rb_2**2 * Ebv_2**2,
+                + np.zeros_like(z),
+                # + sig_Rb_2**2 * Ebv_2**2,
             ]
         )
         cov[:, :, 0, 0] += np.tile(
@@ -194,6 +203,18 @@ class SNGenerator:
             tau_Ebv=self.cfg["pars"]["pop_2"]["tau_Ebv"],
         )
 
+        R_B_1 = self.sample_extinction_coeff(
+            n_sn=n_sn,
+            R_B=self.cfg["pars"]["pop_1"]["Rb"],
+            sig_R_B=self.cfg["pars"]["pop_1"]["sig_Rb"],
+        )
+
+        R_B_2 = self.sample_extinction_coeff(
+            n_sn=n_sn,
+            R_B=self.cfg["pars"]["pop_2"]["Rb"],
+            sig_R_B=self.cfg["pars"]["pop_2"]["sig_Rb"],
+        )
+
         pop_1_means = self.population_mean(
             z=z,
             Mb=self.cfg["pars"]["pop_1"]["Mb"],
@@ -201,7 +222,7 @@ class SNGenerator:
             c_int=self.cfg["pars"]["pop_1"]["c"],
             alpha=self.cfg["pars"]["pop_1"]["alpha"],
             beta=self.cfg["pars"]["pop_1"]["beta"],
-            Rb=self.cfg["pars"]["pop_1"]["Rb"],
+            Rb=R_B_1,
             Ebv=Ebv_1,
         )
 
@@ -212,7 +233,7 @@ class SNGenerator:
             c_int=self.cfg["pars"]["pop_2"]["c"],
             alpha=self.cfg["pars"]["pop_2"]["alpha"],
             beta=self.cfg["pars"]["pop_2"]["beta"],
-            Rb=self.cfg["pars"]["pop_2"]["Rb"],
+            Rb=R_B_2,
             Ebv=Ebv_2,
         )
 
@@ -233,10 +254,10 @@ class SNGenerator:
             sig_s_2=self.cfg["pars"]["pop_2"]["sig_s"],
             sig_c_1=self.cfg["pars"]["pop_1"]["sig_c"],
             sig_c_2=self.cfg["pars"]["pop_2"]["sig_c"],
-            sig_Rb_1=self.cfg["pars"]["pop_1"]["sig_Rb"],
-            sig_Rb_2=self.cfg["pars"]["pop_2"]["sig_Rb"],
-            Ebv_1=Ebv_1,
-            Ebv_2=Ebv_2,
+            # sig_Rb_1=self.cfg["pars"]["pop_1"]["sig_Rb"],
+            # sig_Rb_2=self.cfg["pars"]["pop_2"]["sig_Rb"],
+            # Ebv_1=Ebv_1,
+            # Ebv_2=Ebv_2,
         )
 
         if self.cfg["use_physical_ratio"]:
