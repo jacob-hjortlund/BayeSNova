@@ -19,3 +19,4 @@ src/__pycache__/
 src/bayesnova/bayesnova.egg-info/
 build/
 dist/
+scratch_and_dent/
