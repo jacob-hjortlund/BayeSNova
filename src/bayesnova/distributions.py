@@ -76,6 +76,27 @@ class Normal(Distribution):
         return dist.Normal(mean, std)
 
 
+class MultivariateNormal(Distribution):
+    mean: Union[Array, zdx.Base]
+    cov: Union[Array, zdx.Base]
+
+    def __init__(
+        self,
+        mean: Union[Array, zdx.Base] = jnp.array(0.0, dtype=jnp.float64),
+        cov: Union[Array, zdx.Base] = jnp.array(1.0, dtype=jnp.float64),
+        name: str = "multivariate_normal",
+        **kwargs,
+    ):
+        super().__init__(name, **kwargs)
+        self.mean = self._rename_submodel(self._constant_to_lambda(mean, name="mean"))
+        self.cov = self._rename_submodel(self._constant_to_lambda(cov, name="cov"))
+
+    def dist(self, *args, **kwargs):
+        mean = self.mean(*args, **kwargs)
+        cov = self.cov(*args, **kwargs)
+        return dist.MultivariateNormal(mean, cov)
+
+
 class Gamma(Base):
     concentration: Union[Array, zdx.Base]
     rate: Union[Array, zdx.Base]
