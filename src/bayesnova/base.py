@@ -52,7 +52,9 @@ class Base(zdx.Base):
     constraints: list
     constraint_factor: float
 
-    def __init__(self, name: str = "base", constraint_factor: float = -500.0):
+    def __init__(
+        self, name: str = "base", constraint_factor: float = -500.0, *args, **kwargs
+    ):
         self.name = name
         self.constraints = []
         self.constraint_factor = constraint_factor

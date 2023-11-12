@@ -13,7 +13,28 @@ from typing import Union, Any, Callable
 from bayesnova.base import Base
 
 
-class Uniform(Base):
+class Distribution(Base):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def dist(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def sample(self, *args, **kwargs):
+        obs_key = self.name + "_obs"
+        value = npy.sample(
+            self.name,
+            self.dist(*args, **kwargs),
+            obs=kwargs.get(obs_key),
+        )
+        return value
+
+    def __call__(self, *args, **kwargs):
+        sample = self.apply_constraints(self.sample, *args, **kwargs)
+        return sample
+
+
+class Uniform(Distribution):
     low: Union[Array, zdx.Base]
     high: Union[Array, zdx.Base]
 
@@ -28,19 +49,13 @@ class Uniform(Base):
         self.low = self._rename_submodel(self._constant_to_lambda(low, name="low"))
         self.high = self._rename_submodel(self._constant_to_lambda(high, name="high"))
 
-    def model(self, *args, **kwargs):
+    def dist(self, *args, **kwargs):
         low = self.low(*args, **kwargs)
         high = self.high(*args, **kwargs)
-        obs_key = self.name + "_obs"
-        value = npy.sample(self.name, dist.Uniform(low, high), obs=kwargs.get(obs_key))
-        return value
-
-    def __call__(self, *args, **kwargs):
-        sample = self.apply_constraints(self.model, *args, **kwargs)
-        return sample
+        return dist.Uniform(low, high)
 
 
-class Normal(Base):
+class Normal(Distribution):
     mean: Union[Array, zdx.Base]
     std: Union[Array, zdx.Base]
 
@@ -59,17 +74,6 @@ class Normal(Base):
         mean = self.mean(*args, **kwargs)
         std = self.std(*args, **kwargs)
         return dist.Normal(mean, std)
-
-    def sample(self, *args, **kwargs):
-        obs_key = self.name + "_obs"
-        value = npy.sample(
-            self.name, self.dist(*args, **kwargs), obs=kwargs.get(obs_key)
-        )
-        return value
-
-    def __call__(self, *args, **kwargs):
-        sample = self.apply_constraints(self.sample, *args, **kwargs)
-        return sample
 
 
 class Gamma(Base):
@@ -93,17 +97,6 @@ class Gamma(Base):
         concentration = self.concentration(*args, **kwargs)
         rate = self.rate(*args, **kwargs)
         return dist.Gamma(concentration, rate)
-
-    def sample(self, *args, **kwargs):
-        obs_key = self.name + "_obs"
-        value = npy.sample(
-            self.name, self.dist(*args, **kwargs), obs=kwargs.get(obs_key)
-        )
-        return value
-
-    def __call__(self, *args, **kwargs):
-        sample = self.apply_constraints(self.sample, *args, **kwargs)
-        return sample
 
 
 class TwoComponentMixture(Base):
@@ -133,24 +126,13 @@ class TwoComponentMixture(Base):
         else:
             raise AttributeError(f"{key} not in {self.models.keys()}")
 
-    def model(self, *args, **kwargs):
+    def dist(self, *args, **kwargs):
         mixture_weight = self.mixture_weight(*args, **kwargs)
         mixture_weights = jnp.array([mixture_weight, 1.0 - mixture_weight])
 
-        obs_key = self.name + "_obs"
-        value = npy.sample(
-            self.name,
-            dist.MixtureGeneral(
-                dist.Categorical(probs=mixture_weights),
-                [
-                    model.dist(*args, **kwargs)
-                    for model_name, model in self.models.items()
-                ],
-            ),
-            obs=kwargs.get(obs_key),
+        model = dist.MixtureGeneral(
+            dist.Categorical(probs=mixture_weights),
+            [model.dist(*args, **kwargs) for model_name, model in self.models.items()],
         )
-        return value
 
-    def __call__(self, *args, **kwargs):
-        sample = self.apply_constraints(self.model, *args, **kwargs)
-        return sample
+        return model
