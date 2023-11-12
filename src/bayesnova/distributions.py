@@ -72,6 +72,40 @@ class Normal(Base):
         return sample
 
 
+class Gamma(Base):
+    concentration: Union[Array, zdx.Base]
+    rate: Union[Array, zdx.Base]
+
+    def __init__(
+        self,
+        concentration: Union[Array, zdx.Base] = jnp.array(1.0, dtype=jnp.float64),
+        rate: Union[Array, zdx.Base] = jnp.array(1.0, dtype=jnp.float64),
+        name: str = "gamma",
+        **kwargs,
+    ):
+        super().__init__(name, **kwargs)
+        self.concentration = self._rename_submodel(
+            self._constant_to_lambda(concentration, name="concentration")
+        )
+        self.rate = self._rename_submodel(self._constant_to_lambda(rate, name="rate"))
+
+    def dist(self, *args, **kwargs):
+        concentration = self.concentration(*args, **kwargs)
+        rate = self.rate(*args, **kwargs)
+        return dist.Gamma(concentration, rate)
+
+    def sample(self, *args, **kwargs):
+        obs_key = self.name + "_obs"
+        value = npy.sample(
+            self.name, self.dist(*args, **kwargs), obs=kwargs.get(obs_key)
+        )
+        return value
+
+    def __call__(self, *args, **kwargs):
+        sample = self.apply_constraints(self.sample, *args, **kwargs)
+        return sample
+
+
 class TwoComponentMixture(Base):
     models: dict
     mixture_weight: Union[Array, zdx.Base]
