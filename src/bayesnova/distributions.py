@@ -133,7 +133,7 @@ class TwoComponentMixture(Distribution):
     ):
         super().__init__(name, **kwargs)
         self.models = {
-            f"{self.name}_{i}": self._rename_submodel(model)
+            f"component_{i}": self._rename_submodel(model, modifiers=f"{i}")
             for i, model in enumerate(models)
         }
         self.mixture_weight = self._rename_submodel(
