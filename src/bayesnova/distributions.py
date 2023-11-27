@@ -11,20 +11,23 @@ from jax import Array
 from jax.lax import cond
 from typing import Union, Any, Callable
 from bayesnova.base import Base
+from numpyro.handlers import scope
 
 
 class Distribution(Base):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, name, *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
 
     def dist(self, *args, **kwargs):
         raise NotImplementedError
 
     def sample(self, *args, **kwargs):
+        dist = self.dist(*args, **kwargs)
+
         obs_key = self.name + "_obs"
         value = npy.sample(
-            self.name,
-            self.dist(*args, **kwargs),
+            self.param_name,
+            dist,
             obs=kwargs.get(obs_key),
         )
         return value
@@ -46,8 +49,14 @@ class Uniform(Distribution):
         **kwargs,
     ):
         super().__init__(name, **kwargs)
-        self.low = self._rename_submodel(self._constant_to_lambda(low, name="low"))
-        self.high = self._rename_submodel(self._constant_to_lambda(high, name="high"))
+        # self.low = self._constant_to_lambda(low, name="low")
+        # self.high = self._constant_to_lambda(high, name="high")
+        self.low = self._rename_submodel_sample_sites(
+            self._constant_to_lambda(low, name="low")
+        )
+        self.high = self._rename_submodel_sample_sites(
+            self._constant_to_lambda(high, name="high")
+        )
 
     def dist(self, *args, **kwargs):
         low = self.low(*args, **kwargs)
@@ -67,8 +76,14 @@ class Normal(Distribution):
         **kwargs,
     ):
         super().__init__(name, **kwargs)
-        self.mean = self._rename_submodel(self._constant_to_lambda(mean, name="mean"))
-        self.std = self._rename_submodel(self._constant_to_lambda(std, name="std"))
+        # self.mean = self._constant_to_lambda(mean, name="mean")
+        # self.std = self._constant_to_lambda(std, name="std")
+        self.mean = self._rename_submodel_sample_sites(
+            self._constant_to_lambda(mean, name="mean")
+        )
+        self.std = self._rename_submodel_sample_sites(
+            self._constant_to_lambda(std, name="std")
+        )
 
     def dist(self, *args, **kwargs):
         mean = self.mean(*args, **kwargs)
@@ -88,8 +103,12 @@ class MultivariateNormal(Distribution):
         **kwargs,
     ):
         super().__init__(name, **kwargs)
-        self.mean = self._rename_submodel(self._constant_to_lambda(mean, name="mean"))
-        self.cov = self._rename_submodel(self._constant_to_lambda(cov, name="cov"))
+        self.mean = self._rename_submodel_sample_sites(
+            self._constant_to_lambda(mean, name="mean")
+        )
+        self.cov = self._rename_submodel_sample_sites(
+            self._constant_to_lambda(cov, name="cov")
+        )
 
     def dist(self, *args, **kwargs):
         mean = self.mean(*args, **kwargs)
@@ -109,10 +128,12 @@ class Gamma(Distribution):
         **kwargs,
     ):
         super().__init__(name, **kwargs)
-        self.concentration = self._rename_submodel(
+        self.concentration = self._rename_submodel_sample_sites(
             self._constant_to_lambda(concentration, name="concentration")
         )
-        self.rate = self._rename_submodel(self._constant_to_lambda(rate, name="rate"))
+        self.rate = self._rename_submodel_sample_sites(
+            self._constant_to_lambda(rate, name="rate")
+        )
 
     def dist(self, *args, **kwargs):
         concentration = self.concentration(*args, **kwargs)
@@ -132,11 +153,17 @@ class TwoComponentMixture(Distribution):
         **kwargs,
     ):
         super().__init__(name, **kwargs)
+        # self.models = {f"component_{i}": model for i, model in enumerate(models)}
+        # self.mixture_weight = self._constant_to_lambda(
+        #     mixture_weight, name="mixture_weight"
+        # )
         self.models = {
-            f"component_{i}": self._rename_submodel(model, modifiers=f"{i}")
+            f"component_{i}": self._rename_submodel_sample_sites(
+                self._rename_submodels(model, f"{i}")  # , modifiers=f"{i}"
+            )
             for i, model in enumerate(models)
         }
-        self.mixture_weight = self._rename_submodel(
+        self.mixture_weight = self._rename_submodel_sample_sites(
             self._constant_to_lambda(mixture_weight, name="mixture_weight")
         )
 

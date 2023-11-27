@@ -10,6 +10,7 @@ import numpyro.distributions as dist
 from jax import Array
 from jax.lax import cond
 from typing import Union, Any, Callable
+from numpyro.handlers import trace
 
 
 def get_model_paths(model):
@@ -49,6 +50,7 @@ class Constant(zdx.Base):
 
 class Base(zdx.Base):
     name: str
+    param_name: str
     constraints: list
     constraint_factor: float
 
@@ -56,6 +58,7 @@ class Base(zdx.Base):
         self, name: str = "base", constraint_factor: float = -500.0, *args, **kwargs
     ):
         self.name = name
+        self.param_name = name
         self.constraints = []
         self.constraint_factor = constraint_factor
 
@@ -73,10 +76,10 @@ class Base(zdx.Base):
             )
         )
 
-        replace_fn = lambda leaf: Constant(leaf, name=name)
+        replace_fn = lambda leaf: Constant(leaf, name=f"{self.name}/{name}")
         return zdx.eqx.tree_at(nodes, arg, replace_fn=replace_fn)[0]
 
-    def _rename_submodel(self, submodel, modifiers: Union[str, list[str]] = []):
+    def _rename_submodels(self, submodel, modifiers: Union[str, list[str]] = []):
         if isinstance(modifiers, str):
             modifiers = [modifiers]
 
@@ -84,9 +87,25 @@ class Base(zdx.Base):
         for path in model_paths:
             if "name" in path:
                 old_name = submodel.get(path)
+                path_list = [old_name] + modifiers
+                new_name = "_".join(path_list)
+                submodel = submodel.set(path, new_name)
+
+        return submodel
+
+    def _rename_submodel_sample_sites(
+        self, submodel, modifiers: Union[str, list[str]] = []
+    ):
+        if isinstance(modifiers, str):
+            modifiers = [modifiers]
+
+        model_paths = get_model_paths(submodel)
+        for path in model_paths:
+            if "param_name" in path:
+                old_name = submodel.get(path)
                 split_path = path.split(".")
                 path_list = [self.name] + modifiers + split_path[:-1] + [old_name]
-                new_name = "_".join(path_list)
+                new_name = "/".join(path_list)
                 submodel = submodel.set(path, new_name)
 
         return submodel
@@ -116,21 +135,24 @@ class Base(zdx.Base):
             *args: Arguments to pass to the stochastic function.
             **kwargs: Keyword arguments to pass to the stochastic function.
         """
-        trace = npy.handlers.trace(stochastic_fn).get_trace(*args, **kwargs)
+        model_trace = trace(stochastic_fn).get_trace(*args, **kwargs)
         constraints = jnp.asarray(
             [
                 constraint_fn(
-                    *[trace[parameter.name]["value"] for parameter in parameters]
+                    *[
+                        model_trace[parameter.param_name]["value"]
+                        for parameter in parameters
+                    ]
                 )
                 for parameters, constraint_fn in self.constraints
             ]
         )
         constraint = jnp.all(constraints)
         npy.factor(
-            self.name + "_constraints",
+            self.param_name + "_constraints",
             jnp.where(constraint, 0.0, self.constraint_factor),
         )
-        sample = trace[self.name]["value"]
+        sample = model_trace[self.param_name]["value"]
         return sample
 
 
@@ -192,10 +214,12 @@ class LinearModel(Base):
         **kwargs,
     ):
         super().__init__(name, **kwargs)
-        self.slope = self._rename_submodel(
+        # self.slope = self._constant_to_lambda(slope, name="slope")
+        # self.intercept = self._constant_to_lambda(intercept, name="intercept")
+        self.slope = self._rename_submodel_sample_sites(
             self._constant_to_lambda(slope, name="slope")
         )
-        self.intercept = self._rename_submodel(
+        self.intercept = self._rename_submodel_sample_sites(
             self._constant_to_lambda(intercept, name="intercept")
         )
 
@@ -204,7 +228,7 @@ class LinearModel(Base):
         intercept = self.intercept(*args, **kwargs)
         input_key = self.name + "_input"
         value = npy.deterministic(
-            self.name,
+            self.param_name,
             slope * kwargs.get(input_key) + intercept,
         )
 

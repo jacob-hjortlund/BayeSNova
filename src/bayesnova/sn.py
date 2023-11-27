@@ -11,9 +11,10 @@ from jax import Array
 from jax.lax import cond
 from typing import Union, Any, Callable
 from bayesnova.base import Base
+from bayesnova.distributions import Distribution
 
 
-class SaltSNStandardization(Base):
+class SaltSNStandardization(Distribution):
     M: Union[Array, zdx.Base]
     alpha: Union[Array, zdx.Base]
     beta: Union[Array, zdx.Base]
@@ -96,7 +97,7 @@ class SaltSNStandardization(Base):
         design_matrix = self.design_matrix(*args, **kwargs)
         coefficients = self.coefficients(*args, **kwargs)
         model = design_matrix @ coefficients
-        return model
+        return npy.deterministic(model)
 
     def __call__(self, *args, **kwargs):
         value = self.apply_constraints(self.model, *args, **kwargs)
