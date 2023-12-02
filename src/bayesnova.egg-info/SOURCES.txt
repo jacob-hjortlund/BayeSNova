@@ -8,6 +8,7 @@ src/bayesnova/calibration.py
 src/bayesnova/cosmo.py
 src/bayesnova/ladder.py
 src/bayesnova/mixture.py
+src/bayesnova/numpyro_models.py
 src/bayesnova/plot.py
 src/bayesnova/progenitors.py
 src/bayesnova.egg-info/PKG-INFO
