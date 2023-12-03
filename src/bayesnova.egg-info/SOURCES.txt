@@ -6,7 +6,6 @@ src/bayesnova/analysis.py
 src/bayesnova/base.py
 src/bayesnova/calibration.py
 src/bayesnova/cosmo.py
-src/bayesnova/ladder.py
 src/bayesnova/mixture.py
 src/bayesnova/numpyro_models.py
 src/bayesnova/plot.py
@@ -28,7 +27,6 @@ src/bayesnova/config/priors/__init__.py
 src/bayesnova/config/priors/base.yaml
 src/bayesnova/config/priors/calibration.yaml
 src/bayesnova/config/priors/cosmo.yaml
-src/bayesnova/config/priors/ladder.yaml
 src/bayesnova/config/priors/mixture.yaml
 src/bayesnova/config/priors/progenitors.yaml
 src/bayesnova/old_src/__init__.py

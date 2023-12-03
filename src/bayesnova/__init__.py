@@ -11,7 +11,7 @@ import bayesnova.progenitors as progenitors
 import bayesnova.mixture as mixture
 import bayesnova.base as base
 import bayesnova.plot as plot
-import bayesnova.ladder as ladder
+#import bayesnova.ladder as ladder
 
 import autoconf.conf as conf
 
