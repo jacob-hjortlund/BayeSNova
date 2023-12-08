@@ -9,17 +9,9 @@ h5py
 numba
 astropy
 numbalsoda
-NumbaQuadPack@ git+https://github.com/jacob-hjortlund/NumbaLogQuadpack.git
-autofit@ git+https://github.com/rhayes777/PyAutoFit@feature/refactor_sneaky_pool
 hydra-core
-jax
-jaxlib
-jaxtyping
-diffrax
-equinox
 tqdm
 schwimmbad
-deepdiff
 numba-stats
 
 [scripts]

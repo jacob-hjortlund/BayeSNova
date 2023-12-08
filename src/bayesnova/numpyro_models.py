@@ -41,6 +41,15 @@ def distance_moduli(cosmology, redshifts):
 def delta_mass_step(mass, mass_step, mass_cutoff=10.0):
     return mass_step * (1.0 / (1.0 + jnp.exp((mass - mass_cutoff) / 0.01)) - 0.5)
 
+def tripp_mag(
+    z, x1, c, cosmology,
+    alpha=0.128, beta=3.00,
+    M=-19.338,
+):
+
+    mu = distance_moduli(cosmology, z)
+
+    return M + mu - alpha * x1 + beta * c
 
 def SNTripp(
     sn_observables=None,
@@ -195,7 +204,7 @@ def SN(
     X_int = npy.sample(
         "X_int",
         dist.TransformedDistribution(
-            dist.Normal(jnp.array([0.0, 0.0]), jnp.array([3.0, 3.0])),
+            dist.Normal(jnp.array([0.0, 0.0]), jnp.array([5.0, 5.0])),
             OrderedTransform(),
         ),
     )
@@ -205,12 +214,12 @@ def SN(
 
     with npy.plate("sn_populations", size=2):
         M_int = npy.sample(
-            "M_int", dist.TruncatedNormal(-19.5, 0.1, high=-15.0, low=-25.0)
+            "M_int", dist.TruncatedNormal(-19.5, 1., high=-15.0, low=-25.0)
         )
-        X_int_scatter = npy.sample("X_int_scatter", dist.HalfNormal(1.0))
-        C_int = npy.sample("C_int", dist.Normal(0.0, 0.3))
-        C_int_scatter = npy.sample("C_int_scatter", dist.HalfNormal(1.0))
-        tau_EBV = npy.sample("tau_EBV", dist.HalfNormal(1.0))
+        X_int_scatter = npy.sample("X_int_scatter", dist.HalfNormal(5.0))
+        C_int = npy.sample("C_int", dist.Normal(0.0, 5.))
+        C_int_scatter = npy.sample("C_int_scatter", dist.HalfNormal(5.0))
+        tau_EBV = npy.sample("tau_EBV", dist.HalfNormal(5.0))
 
     if verbose:
         print(f"M_int.shape: {M_int.shape}")
@@ -221,11 +230,11 @@ def SN(
 
     # Define priors on shared population parameters
 
-    alpha = npy.sample("alpha", dist.Normal(0, 0.1))
-    beta = npy.sample("beta", dist.Normal(0, 1))
-    R_B = npy.sample("R_B", dist.Normal(3.1, 0.1))
-    R_B_scatter = npy.sample("R_B_scatter", dist.HalfNormal(1.0))
-    unshifted_gamma_EBV = npy.sample("unshifted_gamma_EBV", dist.LogNormal(0.0, 1.0))
+    alpha = npy.sample("alpha", dist.Normal(0, 5.))
+    beta = npy.sample("beta", dist.Normal(0, 5.))
+    R_B = npy.sample("R_B", dist.HalfNormal(5.))
+    R_B_scatter = npy.sample("R_B_scatter", dist.HalfNormal(5.0))
+    unshifted_gamma_EBV = npy.sample("unshifted_gamma_EBV", dist.HalfNormal(5.0))
     gamma_EBV = npy.deterministic("gamma_EBV", unshifted_gamma_EBV + 1)
 
     if verbose:
@@ -237,7 +246,7 @@ def SN(
         print(f"gamma_EBV.shape: {gamma_EBV.shape}")
 
     # Population fractions
-    f_sn_1 = npy.sample("f_sn_1", dist.Uniform(0, 1))
+    f_sn_1 = npy.sample("f_sn_1", dist.Uniform(0.15, 0.85))
     f_sn = jnp.array([f_sn_1, 1 - f_sn_1])
 
     if verbose:
@@ -350,15 +359,13 @@ def SN(
         app_color_1 = C_int_latent_SN_pop_1 + EBV_latent_SN_pop_1
         mean_1 = jnp.stack([app_mag_1, app_stretch_1, app_color_1], axis=-1)
         sn_dist_1 = dist.MultivariateNormal(mean_1, sn_covariances)
-        sn_log_prob_1 = sn_dist_1.log_prob(sn_observables) + jnp.log(f_sn_1)
 
         if verbose:
             print(f"app_mag_1.shape: {app_mag_1.shape}")
             print(f"app_stretch_1.shape: {app_stretch_1.shape}")
             print(f"app_color_1.shape: {app_color_1.shape}")
             print(f"mean_1.shape: {mean_1.shape}")
-            print(f"sn_dist_1.shape: {sn_dist_1.shape()}")
-            print(f"sn_log_prob_1.shape: {sn_log_prob_1.shape}\n")
+            print(f"sn_dist_1.shape: {sn_dist_1.shape()}\n")
 
         app_mag_2 = (
             Vindex(M_int)[..., 1]
@@ -371,24 +378,25 @@ def SN(
         app_color_2 = C_int_latent_SN_pop_2 + EBV_latent_SN_pop_2
         mean_2 = jnp.stack([app_mag_2, app_stretch_2, app_color_2], axis=-1)
         sn_dist_2 = dist.MultivariateNormal(mean_2, sn_covariances)
-        sn_log_prob_2 = sn_dist_2.log_prob(sn_observables) + jnp.log(1 - f_sn_1)
 
         if verbose:
             print(f"app_mag_2.shape: {app_mag_2.shape}")
             print(f"app_stretch_2.shape: {app_stretch_2.shape}")
             print(f"app_color_2.shape: {app_color_2.shape}")
             print(f"mean_2.shape: {mean_2.shape}")
-            print(f"sn_dist_2.shape: {sn_dist_2.shape()}")
-            print(f"sn_log_prob_2.shape: {sn_log_prob_2.shape}\n")
+            print(f"sn_dist_2.shape: {sn_dist_2.shape()}\n")
 
         apparent_magnitude_values = jnp.stack([app_mag_1, app_mag_2], axis=-1).squeeze()
 
         if verbose:
             print(f"apparent_magnitude_values.shape: {apparent_magnitude_values.shape}")
 
-        npy.deterministic(
-            "sn_log_membership_ratio", (sn_log_prob_1 - sn_log_prob_2) / jnp.log(10)
-        )
+        if sn_observables is not None:
+            sn_log_prob_1 = sn_dist_1.log_prob(sn_observables) + jnp.log(f_sn_1)
+            sn_log_prob_2 = sn_dist_2.log_prob(sn_observables) + jnp.log(1 - f_sn_1)
+            npy.deterministic(
+                "sn_log_membership_ratio", (sn_log_prob_1 - sn_log_prob_2) / jnp.log(10)
+            )
 
         apparent_magnitude = npy.deterministic(
             "apparent_magnitude",
@@ -454,7 +462,7 @@ def SNMass(
     X_int = npy.sample(
         "X_int",
         dist.TransformedDistribution(
-            dist.Normal(jnp.array([0.0, 0.0]), jnp.array([3.0, 3.0])),
+            dist.Normal(jnp.array([0.0, 0.0]), jnp.array([5.0, 5.0])),
             OrderedTransform(),
         ),
     )
@@ -464,12 +472,12 @@ def SNMass(
 
     with npy.plate("sn_populations", size=2):
         M_int = npy.sample(
-            "M_int", dist.TruncatedNormal(-19.5, 0.1, high=-15.0, low=-25.0)
+            "M_int", dist.TruncatedNormal(-19.5, 1, high=-15.0, low=-25.0)
         )
-        X_int_scatter = npy.sample("X_int_scatter", dist.HalfNormal(1.0))
-        C_int = npy.sample("C_int", dist.Normal(0.0, 0.3))
-        C_int_scatter = npy.sample("C_int_scatter", dist.HalfNormal(1.0))
-        tau_EBV = npy.sample("tau_EBV", dist.HalfNormal(1.0))
+        X_int_scatter = npy.sample("X_int_scatter", dist.HalfNormal(5.0))
+        C_int = npy.sample("C_int", dist.Normal(0.0, 5.))
+        C_int_scatter = npy.sample("C_int_scatter", dist.HalfNormal(5.0))
+        tau_EBV = npy.sample("tau_EBV", dist.HalfNormal(5.0))
 
     if verbose:
         print(f"M_int.shape: {M_int.shape}")
@@ -480,11 +488,11 @@ def SNMass(
 
     # Define priors on shared population parameters
 
-    alpha = npy.sample("alpha", dist.Normal(0, 0.1))
-    beta = npy.sample("beta", dist.Normal(0, 1))
-    R_B = npy.sample("R_B", dist.Normal(3.1, 0.1))
-    R_B_scatter = npy.sample("R_B_scatter", dist.HalfNormal(1.0))
-    unshifted_gamma_EBV = npy.sample("unshifted_gamma_EBV", dist.LogNormal(0.0, 1.0))
+    alpha = npy.sample("alpha", dist.Normal(0, 5.))
+    beta = npy.sample("beta", dist.Normal(0, 5.))
+    R_B = npy.sample("R_B", dist.HalfNormal(5.))
+    R_B_scatter = npy.sample("R_B_scatter", dist.HalfNormal(5.0))
+    unshifted_gamma_EBV = npy.sample("unshifted_gamma_EBV", dist.LogNormal(0.0, 5.0))
     gamma_EBV = npy.deterministic("gamma_EBV", unshifted_gamma_EBV + 1)
 
     if verbose:
@@ -496,18 +504,18 @@ def SNMass(
         print(f"gamma_EBV.shape: {gamma_EBV.shape}")
 
     # Priors on Host Mass
-    M_host = npy.sample("M_host", dist.Normal(10.5, 1.0))
-    M_host_scatter = npy.sample("M_host_scatter", dist.HalfNormal(1.0))
+    M_host = npy.sample("M_host", dist.Normal(10.5, 5.0))
+    M_host_scatter = npy.sample("M_host_scatter", dist.HalfNormal(5.0))
 
     if verbose:
         print(f"M_host.shape: {M_host.shape}")
         print(f"M_host_scatter.shape: {M_host_scatter.shape}")
 
     # Priors on Host Mass - based SN Population Fraction
-    scaling = npy.sample("scaling", dist.Normal(0.0, 1.0))
-    offset = npy.sample("offset", dist.Normal(0.0, 1.0))
-    f_1_max = npy.sample("f_1_max", dist.Uniform(0.0, 0.8))
-    f_offset = 0.1
+    scaling = npy.sample("scaling", dist.Normal(0.0, 5.0))
+    offset = npy.sample("offset", dist.Normal(0.0, 5.0))
+    f_1_max = npy.sample("f_1_max", dist.Uniform(0.0, 0.85))
+    f_offset = 0.15
 
     if verbose:
         print(f"scaling.shape: {scaling.shape}")

@@ -21,17 +21,9 @@ Requires-Dist: h5py
 Requires-Dist: numba
 Requires-Dist: astropy
 Requires-Dist: numbalsoda
-Requires-Dist: NumbaQuadPack@ git+https://github.com/jacob-hjortlund/NumbaLogQuadpack.git
-Requires-Dist: autofit@ git+https://github.com/rhayes777/PyAutoFit@feature/refactor_sneaky_pool
 Requires-Dist: hydra-core
-Requires-Dist: jax
-Requires-Dist: jaxlib
-Requires-Dist: jaxtyping
-Requires-Dist: diffrax
-Requires-Dist: equinox
 Requires-Dist: tqdm
 Requires-Dist: schwimmbad
-Requires-Dist: deepdiff
 Requires-Dist: numba-stats
 Provides-Extra: test
 Provides-Extra: scripts

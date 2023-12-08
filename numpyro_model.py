@@ -4,6 +4,7 @@ import numpyro as npy
 npy.util.enable_x64()
 npy.util.set_platform("cpu")
 
+import re
 import jax
 import dill
 import yaml
@@ -22,7 +23,7 @@ import bayesnova.old_src.preprocessing as prep
 from jax import random
 from pathlib import Path
 from numpyro.infer import MCMC, NUTS, Predictive
-from bayesnova.numpyro_models import SN, SNMass, SN2PopMass, run_mcmc
+from bayesnova.numpyro_models import SN, SNMass, SN2PopMass, run_mcmc, sigmoid, distance_moduli
 
 default_colors = sns.color_palette("colorblind")
 
@@ -61,17 +62,6 @@ def map_to_latex(label: str):
 
     return map_dict[label]
 
-def sigmoid(x, scale):
-    return scale / (1 + jnp.exp(-x))
-
-def distance_moduli(cosmology, redshifts):
-    scale_factors = jc.utils.z2a(redshifts)
-    dA = jc.background.angular_diameter_distance(cosmology, scale_factors) / cosmology.h
-    dL = (1.0 + redshifts) ** 2 * dA
-    mu = 5.0 * jnp.log10(jnp.abs(dL)) + 25.0
-
-    return mu
-
 def tripp_mag(
     z,
     x1,
@@ -87,12 +77,16 @@ def tripp_mag(
 
 # -------------------------- SETTINGS --------------------------------- #
 
-NUM_WARMUP = 10000#10000
-NUM_SAMPLES = 1000#75000
+NUM_WARMUP = 10000
+NUM_SAMPLES = 75000
 NUM_CHAINS = 1
+OFFSET = 0.15
+VERBOSE = True
+CONTINUE = True
 
-RUN_NAME = "Supercal_Hubble_Flow"
-MODEL_NAME = "SN"
+DATASET_NAME = "pantheon_hubble_flow"
+RUN_NAME = "Pantheon_Hubble_Flow"
+MODEL_NAME = "SNMass"
 MODEL = globals()[MODEL_NAME]
 
 print("\nModel: ", MODEL_NAME)
@@ -111,6 +105,24 @@ fig_path.mkdir(parents=True, exist_ok=True)
 posterior_path = output_path / "posteriors"
 posterior_path.mkdir(parents=True, exist_ok=True)
 
+previous_runs = [previous_run.name for previous_run in posterior_path.glob("*[0-9].pkl")]
+previous_run_numbers = [
+    int(digit) for previous_run in previous_runs for digit in re.findall(r'\d+(?=.pkl)', previous_run)
+]
+
+if CONTINUE and len(previous_run_numbers) > 0:
+    last_run_number = max(previous_run_numbers)
+    print(f"Continuing from run {last_run_number}...\n")
+    PREVIOUS_RUN = "_" + str(last_run_number)
+    RUN_MODIFIER = "_" + str(last_run_number + 1)
+else:
+    if len(previous_runs) == 0:
+        print("Set to continue but no previous runs found, check your settings. Starting from scratch...\n")
+    else:
+        print("Starting from scratch...\n")
+    CONTINUE = False
+    RUN_MODIFIER = "_0"
+
 cfg_path = data_path / "config.yaml"
 with open(cfg_path, "r") as f:
     cfg = yaml.safe_load(f)
@@ -122,7 +134,7 @@ cfg['model_cfg']['host_galaxy_cfg']['independent_property_names'] = ['global_mas
 
 print("\nLoading data...\n")
 
-data = pd.read_csv(data_path / "supercal_hubble_flow.dat", sep=" ")
+data = pd.read_csv(data_path / (DATASET_NAME + ".dat"), sep=" ")
 
 prep.init_global_data(data, None, cfg['model_cfg'])
 
@@ -166,36 +178,58 @@ model_inputs = {
     "host_mass": host_observables,
     "host_mass_err": host_uncertainty,
     "cosmology": cosmology,
-    "verbose": False,
+    "verbose": VERBOSE,
 }
 
 rng_key = random.PRNGKey(42)
 rng_key, subkey = random.split(rng_key)
 rng_key, subkey = random.split(subkey)
 
-mcmc = run_mcmc(
-    model=MODEL,
-    rng_key=rng_key,
-    num_warmup=NUM_WARMUP,
-    num_samples=NUM_SAMPLES,
-    num_chains=NUM_CHAINS,
-    model_kwargs=model_inputs,
-)
-
-
+if CONTINUE:
+    print("Continuing from previous run...\n")
+    with open(posterior_path / ("mcmc" + PREVIOUS_RUN + ".pkl"), "rb") as file:
+        mcmc = dill.load(file)
+    mcmc.post_warmup_state = mcmc.last_state
+    mcmc.run(mcmc.post_warmup_state.rng_key, **model_inputs)
+else:
+    mcmc = run_mcmc(
+        model=MODEL,
+        rng_key=rng_key,
+        num_warmup=NUM_WARMUP,
+        num_samples=NUM_SAMPLES,
+        num_chains=NUM_CHAINS,
+        model_kwargs=model_inputs,
+    )
+    
 posterior_samples = mcmc.get_samples()
 
 # Pickle the posterior_samples object
-with open(posterior_path / "posterior_samples.pkl", "wb") as file:
+with open(posterior_path / ("posterior_samples" + RUN_MODIFIER + ".pkl" ), "wb") as file:
    dill.dump(posterior_samples, file)
 
-with open(posterior_path / "mcmc.pkl", "wb") as file:
+if not CONTINUE:
+    with open(posterior_path / "combined_posterior_samples.pkl", "wb") as file:
+        dill.dump(posterior_samples, file)
+
+with open(posterior_path / ("mcmc" + RUN_MODIFIER + ".pkl"), "wb") as file:
     dill.dump(mcmc, file)
 
-with open(posterior_path / "mcmc.pkl", "rb") as file:
-    mcmc = dill.load(file)
-
 mcmc.print_summary()
+
+if CONTINUE:
+    print("Combining posterior samples...\n")
+    with open(posterior_path / "combined_posterior_samples.pkl", "rb") as file:
+        combined_posterior_samples = dill.load(file)
+    for key in combined_posterior_samples.keys():
+        combined_posterior_samples[key] = jnp.concatenate(
+            (combined_posterior_samples[key], posterior_samples[key]),
+            axis=0
+        )
+
+    with open(posterior_path / "combined_posterior_samples.pkl", "wb") as file:
+        dill.dump(combined_posterior_samples, file)
+    
+    posterior_samples = combined_posterior_samples
 
 # -------------------------- PLOT TRIANGLE --------------------------------- #
 
@@ -203,8 +237,12 @@ print("\nPlotting triangle...\n")
 
 shared_params = [
     'alpha', 'beta', 'R_B', 'R_B_scatter', 'gamma_EBV',
-    'M_host', 'M_host_scatter', 'scaling', 'offset', 'f_1_max' 
+    'M_host', 'M_host_scatter', 'scaling', 'offset', 'f_1_max'
 ]
+
+if MODEL_NAME != "SNMass":
+    shared_params += ["f_sn_1"]
+
 independent_params = [
     'M_int', 'X_int', 'X_int_scatter', 'C_int', 'C_int_scatter', 'tau_EBV'
 ]
@@ -260,7 +298,7 @@ GTC = pygtc.plotGTC(
     chains=[pop_2_samples, pop_1_samples],
     paramNames=param_labels,
     chainLabels=chain_labels,
-    nContourLevels=3,
+    nContourLevels=2,
     legendMarker='All',
     customLabelFont={'family':'Arial', 'size':15},
     customTickFont={'family':'Arial', 'size':6},
@@ -271,7 +309,7 @@ for axes in GTC.axes:
         axes.spines[spine].set_color("white")
     axes.tick_params(axis='both', colors='white')
 
-GTC.savefig(fig_path / "gtc.png", transparent=True, dpi=300)
+GTC.savefig(fig_path / ("gtc" + RUN_MODIFIER + ".png"), transparent=True, dpi=300)
 
 # -------------------------- PLOT POP FRACTION --------------------------------- #
 
@@ -288,7 +326,7 @@ if MODEL_NAME == "SNMass":
     f_1_samples = np.zeros((NUM_SAMPLES, 100))
     for i in range(NUM_SAMPLES):
         linear_function = scaling[i] * (mass - mean_mass[i]) + offset[i]
-        f_1 = sigmoid(linear_function, f_1_max[i])
+        f_1 = sigmoid(x=linear_function, scale=f_1_max[i], offset=OFFSET)
         f_1_samples[i] = f_1
 
     f_1_percentiles = np.percentile(f_1_samples, [16, 50, 84], axis=0)
@@ -304,4 +342,4 @@ if MODEL_NAME == "SNMass":
     ax.set_xlabel(r"$\log_{10}(M_{\mathrm{host}})$", fontsize=25)
     ax.set_ylabel(r"$f^{\mathrm{SN}}_1$", fontsize=25)
     fig.tight_layout()
-    fig.savefig(fig_path / "sigmoid.png", dpi=300, transparent=True, bbox_inches="tight")
+    fig.savefig(fig_path / ("sn_fraction" + RUN_MODIFIER + ".png"), dpi=300, transparent=True, bbox_inches="tight")
