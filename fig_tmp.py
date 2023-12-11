@@ -80,8 +80,8 @@ mpl.rcParams["axes.edgecolor"] = COLOR
 mpl.rcParams["xtick.color"] = COLOR
 mpl.rcParams["ytick.color"] = COLOR
 
-NUM_WARMUP = 10000
-NUM_SAMPLES = 75000
+NUM_WARMUP = 500#10000
+NUM_SAMPLES = 1000#75000
 NUM_CHAINS = 1
 OFFSET = 0.15
 VERBOSE = True
@@ -94,9 +94,10 @@ MODEL_NAME = "SNMass"
 MODEL = globals()[MODEL_NAME]
 COSMOLOGY = jc.Planck15()
 
-base_path = Path(
-    "/home/jacob/Uni/Msc/Thesis/BayeSNova"
-)  # Path("/groups/dark/osman/BayeSNova/")
+base_path = Path("/groups/dark/osman/BayeSNova/")
+# Path(
+#     "/home/jacob/Uni/Msc/Thesis/BayeSNova"
+# ) 
 data_path = base_path / "data"
 
 output_path = base_path / "output" / MODEL_NAME / RUN_NAME
@@ -477,13 +478,13 @@ print("\n")
 
 SNTrippMass_observed_samples = SNTrippMass_observed_mcmc.get_samples()
 
-posterior_samples = []
+SNTrippMass_observed_posterior_samples = []
 for key in SNTrippMass_observed_samples.keys():
-    posterior_samples.append(SNTrippMass_observed_samples[key])
-samples = np.array(posterior_samples).T
+    SNTrippMass_observed_posterior_samples.append(SNTrippMass_observed_samples[key])
+SNTrippMass_observed_samples = np.array(SNTrippMass_observed_posterior_samples).T
 
 GTC = pygtc.plotGTC(
-    chains=[samples],
+    chains=[SNTrippMass_observed_samples],
     paramNames=labels,
     # nContourLevels=3,
 )
@@ -504,12 +505,19 @@ GTC.savefig(
 # -------------------------- FIT MASS STEP TO SIMULATED DATA --------------------------------- #
 
 if MODEL_NAME == "SNMass":
+
+    N_SUBSAMPLE = 10000
+    RNG_KEY, SUBKEY = random.split(SUBKEY)
+    idx_subsample = random.choice(
+        RNG_KEY, np.arange(simulated_sn_observables.shape[0]), shape=(N_SUBSAMPLE,), replace=False
+    )
+
     model_inputs = {
-        "sn_observables": simulated_sn_observables,
-        "sn_covariances": sim_sn_covs,
-        "sn_redshifts": sim_redshifts,
-        "host_mass": host_observables,
-        "host_mass_err": host_uncertainty,
+        "sn_observables": simulated_sn_observables[idx_subsample],
+        "sn_covariances": sim_sn_covs[idx_subsample],
+        "sn_redshifts": sim_redshifts[idx_subsample],
+        "host_mass": simulated_host_masses[idx_subsample],
+        "host_mass_err": sim_host_errs[idx_subsample],
         "cosmology": cosmo,
         "verbose": False,
         "mass_cutoff": 10.0,
@@ -531,15 +539,17 @@ if MODEL_NAME == "SNMass":
 
     SNTrippMass_simulated_samples = SNTrippMass_simulated_mcmc.get_samples()
 
-    posterior_samples = []
+    SNTrippMass_simulated_posterior_samples = []
     for key in SNTrippMass_simulated_samples.keys():
-        posterior_samples.append(SNTrippMass_simulated_samples[key])
-    samples = np.array(posterior_samples).T
+        SNTrippMass_simulated_posterior_samples.append(SNTrippMass_simulated_samples[key])
+    SNTrippMass_simulated_samples = np.array(SNTrippMass_simulated_posterior_samples).T
 
     GTC = pygtc.plotGTC(
-        chains=[samples],
+        chains=[SNTrippMass_observed_samples, SNTrippMass_simulated_samples],
         paramNames=labels,
-        # nContourLevels=3,
+        chainLabels=["Observed", "Simulated"],
+        legendMarker="All",
+        nContourLevels=2,
     )
 
     for axes in GTC.axes:
@@ -746,7 +756,7 @@ if MODEL_NAME == "SNMass":
         mass_pdf,
         levels=np.flip(mass_levels[:4]),
         linewidths=2,
-        color="white",
+        colors="white",
     )
     CS = ax[2].contour(
         mass_residual_x_grid,
