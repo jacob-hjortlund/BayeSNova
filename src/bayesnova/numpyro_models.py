@@ -25,8 +25,13 @@ from numpyro.distributions.transforms import OrderedTransform
 from numpyro.ops.indexing import Vindex
 
 
-def sigmoid(x, scale, offset=0):
-    return scale / (1 + jnp.exp(-x)) + offset
+def sigmoid(x, slope=1, midpoint=0.0, f_mid=0.5, f_min=0.0):
+    numerator = 2 * f_mid - f_min
+    denominator = 1 + jnp.exp(-slope * (x - midpoint))
+
+    output = numerator / denominator + f_min
+
+    return output
 
 
 def distance_moduli(cosmology, redshifts):
@@ -41,15 +46,20 @@ def distance_moduli(cosmology, redshifts):
 def delta_mass_step(mass, mass_step, mass_cutoff=10.0):
     return mass_step * (1.0 / (1.0 + jnp.exp((mass - mass_cutoff) / 0.01)) - 0.5)
 
+
 def tripp_mag(
-    z, x1, c, cosmology,
-    alpha=0.128, beta=3.00,
+    z,
+    x1,
+    c,
+    cosmology,
+    alpha=0.128,
+    beta=3.00,
     M=-19.338,
 ):
-
     mu = distance_moduli(cosmology, z)
 
     return M + mu - alpha * x1 + beta * c
+
 
 def SNTripp(
     sn_observables=None,
@@ -214,10 +224,10 @@ def SN(
 
     with npy.plate("sn_populations", size=2):
         M_int = npy.sample(
-            "M_int", dist.TruncatedNormal(-19.5, 1., high=-15.0, low=-25.0)
+            "M_int", dist.TruncatedNormal(-19.5, 1.0, high=-15.0, low=-25.0)
         )
         X_int_scatter = npy.sample("X_int_scatter", dist.HalfNormal(5.0))
-        C_int = npy.sample("C_int", dist.Normal(0.0, 5.))
+        C_int = npy.sample("C_int", dist.Normal(0.0, 5.0))
         C_int_scatter = npy.sample("C_int_scatter", dist.HalfNormal(5.0))
         tau_EBV = npy.sample("tau_EBV", dist.HalfNormal(5.0))
 
@@ -230,9 +240,9 @@ def SN(
 
     # Define priors on shared population parameters
 
-    alpha = npy.sample("alpha", dist.Normal(0, 5.))
-    beta = npy.sample("beta", dist.Normal(0, 5.))
-    R_B = npy.sample("R_B", dist.HalfNormal(5.))
+    alpha = npy.sample("alpha", dist.Normal(0, 5.0))
+    beta = npy.sample("beta", dist.Normal(0, 5.0))
+    R_B = npy.sample("R_B", dist.HalfNormal(5.0))
     R_B_scatter = npy.sample("R_B_scatter", dist.HalfNormal(5.0))
     unshifted_gamma_EBV = npy.sample("unshifted_gamma_EBV", dist.HalfNormal(5.0))
     gamma_EBV = npy.deterministic("gamma_EBV", unshifted_gamma_EBV + 1)
@@ -443,6 +453,9 @@ def SNMass(
     cosmology=None,
     constraint_factor=-500,
     verbose=False,
+    host_mean=0.0,
+    host_std=1.0,
+    f_SN_1_min=0.15,
     *args,
     **kwargs,
 ):
@@ -475,7 +488,7 @@ def SNMass(
             "M_int", dist.TruncatedNormal(-19.5, 1, high=-15.0, low=-25.0)
         )
         X_int_scatter = npy.sample("X_int_scatter", dist.HalfNormal(5.0))
-        C_int = npy.sample("C_int", dist.Normal(0.0, 5.))
+        C_int = npy.sample("C_int", dist.Normal(0.0, 5.0))
         C_int_scatter = npy.sample("C_int_scatter", dist.HalfNormal(5.0))
         tau_EBV = npy.sample("tau_EBV", dist.HalfNormal(5.0))
 
@@ -488,9 +501,9 @@ def SNMass(
 
     # Define priors on shared population parameters
 
-    alpha = npy.sample("alpha", dist.Normal(0, 5.))
-    beta = npy.sample("beta", dist.Normal(0, 5.))
-    R_B = npy.sample("R_B", dist.HalfNormal(5.))
+    alpha = npy.sample("alpha", dist.Normal(0, 5.0))
+    beta = npy.sample("beta", dist.Normal(0, 5.0))
+    R_B = npy.sample("R_B", dist.HalfNormal(5.0))
     R_B_scatter = npy.sample("R_B_scatter", dist.HalfNormal(5.0))
     unshifted_gamma_EBV = npy.sample("unshifted_gamma_EBV", dist.LogNormal(0.0, 5.0))
     gamma_EBV = npy.deterministic("gamma_EBV", unshifted_gamma_EBV + 1)
@@ -504,7 +517,8 @@ def SNMass(
         print(f"gamma_EBV.shape: {gamma_EBV.shape}")
 
     # Priors on Host Mass
-    M_host = npy.sample("M_host", dist.Normal(10.5, 5.0))
+    M_host_mean = 10.5 - host_mean
+    M_host = npy.sample("M_host", dist.Normal(M_host_mean, 5.0))
     M_host_scatter = npy.sample("M_host_scatter", dist.HalfNormal(5.0))
 
     if verbose:
@@ -513,21 +527,33 @@ def SNMass(
 
     # Priors on Host Mass - based SN Population Fraction
     scaling = npy.sample("scaling", dist.Normal(0.0, 5.0))
-    offset = npy.sample("offset", dist.Normal(0.0, 5.0))
-    f_1_max = npy.sample("f_1_max", dist.Uniform(0.0, 0.85))
-    f_offset = 0.15
+    offset = 0.0  # npy.sample("offset", dist.Normal(0.0, 5.0))
+    f_SN_1_mid = npy.sample(
+        "f_SN_1_mid", dist.Uniform(f_SN_1_min, 0.5)  # - f_SN_1_min / 2)
+    )
+    f_SN_1_max = npy.deterministic("f_SN_1_max", 2 * f_SN_1_mid)
 
     if verbose:
         print(f"scaling.shape: {scaling.shape}")
-        print(f"offset.shape: {offset.shape}")
-        print(f"f_1_max.shape: {f_1_max.shape}\n")
+        # print(f"offset.shape: {offset.shape}")
+        print(f"f_SN_1_mid.shape: {f_SN_1_mid.shape}\n")
 
     with npy.plate("sn", size=len(sn_redshifts)):
         # Latent Host Mass
         M_host_latent = npy.sample("M_host_latent", dist.Normal(M_host, M_host_scatter))
 
+        if host_mass is not None:
+            if verbose:
+                print(
+                    f"Standardizing Host Mass using mean: {host_mean} and std: {host_std}"
+                )
+            obs_host_mass = (host_mass - host_mean) / host_std
+            obs_host_mass_err = host_mass_err / host_std
+
         sampled_host_observables = npy.sample(
-            "host_observables", dist.Normal(M_host_latent, host_mass_err), obs=host_mass
+            "host_observables",
+            dist.Normal(M_host_latent, obs_host_mass_err),
+            obs=obs_host_mass,
         )
 
         if verbose:
@@ -535,11 +561,12 @@ def SNMass(
             print(f"sampled_host_observables.shape: {sampled_host_observables.shape}\n")
 
         # Mass - based SN Population Fraction
+        rescaled_M_host = (M_host_latent - M_host) / M_host_scatter
         linear_function = npy.deterministic(
-            "linear_function", scaling * (M_host_latent - M_host) + offset
+            "linear_function", scaling * rescaled_M_host + offset
         )
         f_sn_1 = npy.deterministic(
-            "f_sn_1", sigmoid(linear_function, f_1_max, f_offset)
+            "f_sn_1", sigmoid(linear_function, f_mid=f_SN_1_mid, f_min=f_SN_1_min)
         )
         f_sn_2 = npy.deterministic("f_sn_2", 1 - f_sn_1)
         f_sn = jnp.stack([f_sn_1, f_sn_2], axis=-1)
