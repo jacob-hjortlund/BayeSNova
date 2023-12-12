@@ -91,7 +91,7 @@ USE_RANGES = False
 RNG_KEY, SUBKEY = random.split(random.PRNGKey(42))
 
 DATA_NAME = "supercal_hubble_flow"
-RUN_NAME = "Supercal_Hubble_Flow_No_Rescale"
+RUN_NAME = "Supercal_Hubble_Flow_Truncated"
 MODEL_NAME = "SN2PopMass"
 MODEL = globals()[MODEL_NAME]
 COSMOLOGY = jc.Planck15()

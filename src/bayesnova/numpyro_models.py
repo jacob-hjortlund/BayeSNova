@@ -756,8 +756,8 @@ def SNMass(
 SN2PopMass_reparam_cfg = {
     "X_int_latent": LocScaleReparam(0.0),
     "C_int_latent": LocScaleReparam(0.0),
-    "R_B_latent": LocScaleReparam(0.0),
-    "M_host_latent": LocScaleReparam(0.0),
+    # "R_B_latent": LocScaleReparam(0.0),
+    # "M_host_latent": LocScaleReparam(0.0),
 }
 
 
@@ -775,6 +775,10 @@ def SN2PopMass(
     host_mean=0.0,
     host_std=1.0,
     f_SN_1_min=0.15,
+    lower_host_mass_bound=None,
+    upper_host_mass_bound=None,
+    lower_R_B_bound=None,
+    upper_R_B_bound=None,
     *args,
     **kwargs,
 ):
@@ -822,7 +826,16 @@ def SN2PopMass(
 
     alpha = npy.sample("alpha", dist.Normal(0, 5.0))
     beta = npy.sample("beta", dist.Normal(0, 5.0))
-    R_B = npy.sample("R_B", dist.HalfNormal(5.0))
+    # R_B = npy.sample("R_B", dist.HalfNormal(5.0))
+    R_B = npy.sample(
+        "R_B",
+        dist.TruncatedNormal(
+            4.1,
+            3.0,
+            low=lower_R_B_bound,
+            high=upper_R_B_bound,
+        ),
+    )
     R_B_scatter = npy.sample("R_B_scatter", dist.HalfNormal(5.0))
     unshifted_gamma_EBV = npy.sample("unshifted_gamma_EBV", dist.LogNormal(0.0, 5.0))
     gamma_EBV = npy.deterministic("gamma_EBV", unshifted_gamma_EBV + 1)
@@ -837,13 +850,6 @@ def SN2PopMass(
 
     # Priors on Host Mass
     M_host_mean = 10.5 - host_mean
-    # M_host = npy.sample(
-    #     "M_host",
-    #     dist.TransformedDistribution(
-    #         dist.Normal(jnp.array([M_host_mean, M_host_mean]), jnp.array([5.0, 5.0])),
-    #         OrderedTransform(),
-    #     ),
-    # )
     with npy.plate("host_populations", size=2):
         M_host = npy.sample("M_host", dist.Normal(M_host_mean, 5.0))
         M_host_scatter = npy.sample("M_host_scatter", dist.HalfNormal(5.0))
@@ -896,16 +902,20 @@ def SN2PopMass(
         )
         M_host_latent_pop_1 = npy.sample(
             "M_host_latent_pop_1",
-            dist.Normal(
+            dist.TruncatedNormal(
                 Vindex(M_host)[..., 0],
                 Vindex(M_host_scatter)[..., 0],
+                low=lower_host_mass_bound,
+                high=upper_host_mass_bound,
             ),
         )
         M_host_latent_pop_2 = npy.sample(
             "M_host_latent_pop_2",
-            dist.Normal(
+            dist.TruncatedNormal(
                 Vindex(M_host)[..., 1],
                 Vindex(M_host_scatter)[..., 1],
+                low=lower_host_mass_bound,
+                high=upper_host_mass_bound,
             ),
         )
         M_host_latent_values = jnp.stack(
@@ -928,7 +938,12 @@ def SN2PopMass(
 
         sampled_host_observables = npy.sample(
             "host_observables",
-            dist.Normal(M_host_latent, obs_host_mass_err),
+            dist.TruncatedNormal(
+                M_host_latent,
+                obs_host_mass_err,
+                low=lower_host_mass_bound,
+                high=upper_host_mass_bound,
+            ),
             obs=obs_host_mass,
         )
 
@@ -1039,10 +1054,7 @@ def SN2PopMass(
 
         R_B_latent = npy.sample(
             "R_B_latent",
-            dist.Normal(
-                loc=R_B,
-                scale=R_B_scatter,  # low=1,
-            ),
+            dist.TruncatedNormal(loc=R_B, scale=R_B_scatter, low=lower_R_B_bound),
         )
 
         if verbose:

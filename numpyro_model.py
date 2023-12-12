@@ -94,9 +94,13 @@ NUM_CHAINS = 1
 F_SN_1_MIN = 0.15
 VERBOSE = True
 CONTINUE = False
+LOWER_HOST_MASS_BOUND = 6.0
+UPPER_HOST_MASS_BOUND = 12.0
+LOWER_R_B_bound = 1.5
+UPPER_R_B_bound = 6.5
 
 DATASET_NAME = "supercal_hubble_flow"
-RUN_NAME = "Supercal_Hubble_Flow_No_Rescale"
+RUN_NAME = "Supercal_Hubble_Flow_Truncated"
 MODEL_NAME = "SN2PopMass"
 MODEL = globals()[MODEL_NAME]
 
@@ -203,6 +207,10 @@ model_inputs = {
     "host_std": host_std,
     "cosmology": cosmology,
     "verbose": VERBOSE,
+    "lower_host_mass_bound": LOWER_HOST_MASS_BOUND,
+    "upper_host_mass_bound": UPPER_HOST_MASS_BOUND,
+    "lower_R_B_bound": LOWER_R_B_bound,
+    "upper_R_B_bound": UPPER_R_B_bound,
 }
 
 rng_key = random.PRNGKey(42)
