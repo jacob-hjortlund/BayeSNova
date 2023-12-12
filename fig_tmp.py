@@ -22,6 +22,7 @@ from bayesnova.numpyro_models import (
     sigmoid,
     SN,
     SNMass,
+    SN2PopMass,
     tripp_mag,
     run_mcmc,
     SNTripp,
@@ -48,8 +49,9 @@ def get_levels(Z, levels=[0.2, 0.4, 0.6, 0.8, 0.95, 0.99]):
 def map_to_latex(label: str):
     map_dict = {
         "H0": r"$H_0$",
+        "f_host_1": r"$f_1^{\mathrm{host}}$",
         "f_sn_1": r"$f_1^{\mathrm{SN}}$",
-        "f_1_max": r"$f_{1,\mathrm{max}}^{\mathrm{SN}}$",
+        "f_SN_1_max": r"$f_{1,\mathrm{max}}^{\mathrm{SN}}$",
         "M_int": r"$M_{\mathrm{int}}$",
         "M_int_scatter": r"$\sigma_{M_{\mathrm{int}}}$",
         "alpha": r"$\hat{\alpha}$",
@@ -80,24 +82,23 @@ mpl.rcParams["axes.edgecolor"] = COLOR
 mpl.rcParams["xtick.color"] = COLOR
 mpl.rcParams["ytick.color"] = COLOR
 
-NUM_WARMUP = 500#10000
-NUM_SAMPLES = 1000#75000
+NUM_WARMUP = 500  # 10000
+NUM_SAMPLES = 1000  # 75000
 NUM_CHAINS = 1
-OFFSET = 0.15
+F_SN_1_MIN = 0.15
 VERBOSE = True
 USE_RANGES = False
 RNG_KEY, SUBKEY = random.split(random.PRNGKey(42))
 
 DATA_NAME = "supercal_hubble_flow"
-RUN_NAME = "Supercal_Hubble_Flow"
-MODEL_NAME = "SNMass"
+RUN_NAME = "Supercal_Hubble_Flow_No_Rescale"
+MODEL_NAME = "SN2PopMass"
 MODEL = globals()[MODEL_NAME]
 COSMOLOGY = jc.Planck15()
 
-base_path = Path("/groups/dark/osman/BayeSNova/")
-# Path(
-#     "/home/jacob/Uni/Msc/Thesis/BayeSNova"
-# ) 
+path = "/home/jacob/Uni/Msc/Thesis/BayeSNova"
+# path = "/groups/dark/osman/BayeSNova"
+base_path = Path(path)
 data_path = base_path / "data"
 
 output_path = base_path / "output" / MODEL_NAME / RUN_NAME
@@ -128,7 +129,7 @@ idx_valid_mass = host_observables != -9999.0
 idx_not_calibrator = ~prep.idx_calibrator_sn
 idx_valid = idx_not_calibrator
 
-if MODEL_NAME == "SNMass":
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
     idx_valid = idx_valid & idx_valid_mass
 
 sn_observables_np = prep.sn_observables[idx_valid]
@@ -149,6 +150,9 @@ host_observables = jnp.array(host_observables_np)
 host_uncertainty = jnp.array(host_uncertainty_np)
 host_covariances = jnp.array(host_covariances_np)
 
+host_mean = 0.0  # jnp.mean(host_observables, axis=0)
+host_std = 1.0  # jnp.std(host_observables, axis=0)
+
 with open(posterior_path / "combined_posterior_samples.pkl", "rb") as file:
     posterior_samples = dill.load(file)
 
@@ -162,14 +166,13 @@ shared_params = [
     "R_B",
     "R_B_scatter",
     "gamma_EBV",
-    "M_host",
-    "M_host_scatter",
     "scaling",
     "offset",
-    "f_1_max",
+    "f_SN_1_max",
+    "f_host_1",
 ]
 
-if MODEL_NAME != "SNMass":
+if MODEL_NAME == "SN":
     shared_params += ["f_sn_1"]
 
 independent_params = [
@@ -180,6 +183,11 @@ independent_params = [
     "C_int_scatter",
     "tau_EBV",
 ]
+
+if MODEL_NAME == "SNMass":
+    shared_params += ["M_host", "M_host_scatter"]
+elif MODEL_NAME == "SN2PopMass":
+    independent_params += ["M_host", "M_host_scatter"]
 
 cosmo_params = []
 
@@ -366,6 +374,18 @@ if MODEL_NAME == "SNMass":
         "f_sn_2",
     ]
 
+if MODEL_NAME == "SN2PopMass":
+    return_sites += [
+        "M_host_latent_pop_1",
+        "M_host_latent_pop_2",
+        "M_host_latent",
+        "host_observables",
+        "M_host_latent_decentered",
+        "linear_function",
+        "f_sn_1",
+        "f_sn_2",
+    ]
+
 sim_posterior_samples = posterior_samples.copy()
 for site in return_sites:
     if site in sim_posterior_samples.keys():
@@ -393,8 +413,10 @@ simulated_apparent_magnitudes = simulated_sn_observables[:, 0]
 simulated_apparent_stretch = simulated_sn_observables[:, 1]
 simulated_apparent_color = simulated_sn_observables[:, 2]
 
-if MODEL_NAME == "SNMass":
-    simulated_host_masses = simulated_supernovae["host_observables"][0]
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
+    simulated_host_masses = (
+        simulated_supernovae["host_observables"][0] * host_std + host_mean
+    )
 
 simulated_tripp_apparent_magnitude = tripp_mag(
     z=sim_redshifts,
@@ -431,10 +453,10 @@ observed_hubble_residuals = (
 )
 observed_hubble_residual_errs = observed_apparent_magnitude_errs
 
-color_array = jnp.linspace(-0.3, 0.3, 1500)
-stretch_array = jnp.linspace(-4, 4, 1500)
-mass_array = jnp.linspace(6, 14, 1500)
-residual_array = jnp.linspace(-0.5, 0.5, 1500)
+color_array = jnp.linspace(-0.3, 0.3, 1000)
+stretch_array = jnp.linspace(-4, 4, 1000)
+mass_array = jnp.linspace(6, 14, 1000)
+residual_array = jnp.linspace(-0.5, 0.5, 1000)
 
 color_residual_x_grid, color_residual_y_grid = jnp.meshgrid(color_array, residual_array)
 stretch_residual_x_grid, stretch_residual_y_grid = jnp.meshgrid(
@@ -504,12 +526,14 @@ GTC.savefig(
 
 # -------------------------- FIT MASS STEP TO SIMULATED DATA --------------------------------- #
 
-if MODEL_NAME == "SNMass":
-
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
     N_SUBSAMPLE = 10000
     RNG_KEY, SUBKEY = random.split(SUBKEY)
     idx_subsample = random.choice(
-        RNG_KEY, np.arange(simulated_sn_observables.shape[0]), shape=(N_SUBSAMPLE,), replace=False
+        RNG_KEY,
+        np.arange(simulated_sn_observables.shape[0]),
+        shape=(N_SUBSAMPLE,),
+        replace=False,
     )
 
     model_inputs = {
@@ -541,7 +565,9 @@ if MODEL_NAME == "SNMass":
 
     SNTrippMass_simulated_posterior_samples = []
     for key in SNTrippMass_simulated_samples.keys():
-        SNTrippMass_simulated_posterior_samples.append(SNTrippMass_simulated_samples[key])
+        SNTrippMass_simulated_posterior_samples.append(
+            SNTrippMass_simulated_samples[key]
+        )
     SNTrippMass_simulated_samples = np.array(SNTrippMass_simulated_posterior_samples).T
 
     GTC = pygtc.plotGTC(
@@ -564,6 +590,93 @@ if MODEL_NAME == "SNMass":
         dpi=300,
         bbox_inches="tight",
     )
+
+# -------------------------- PLOT POSTERIOR PREDICTIVE --------------------------------- #
+
+print("\nPlotting posterior predictive...\n")
+ncols = 3
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
+    ncols = 4
+
+fig, ax = plt.subplots(ncols=ncols, figsize=(12, 6), sharey=True)
+
+ax[0].hist(
+    observed_apparent_magnitude,
+    density=True,
+    bins="doane",
+    color=default_colors[0],
+    alpha=0.3,
+    label="Observed",
+)
+ax[0].hist(
+    simulated_apparent_magnitudes,
+    density=True,
+    bins="doane",
+    color=default_colors[1],
+    alpha=0.3,
+    label="Simulated",
+)
+ax[0].set_xlabel(r"$m_{\mathrm{B,obs}}$", fontsize=25)
+ax[0].set_ylabel(r"$p(m_{\mathrm{B,obs}})$", fontsize=25)
+ax[0].legend(fontsize=15)
+
+ax[1].hist(
+    observed_apparent_stretch,
+    density=True,
+    bins="doane",
+    color=default_colors[0],
+    alpha=0.3,
+)
+ax[1].hist(
+    simulated_apparent_stretch,
+    density=True,
+    bins="doane",
+    color=default_colors[1],
+    alpha=0.3,
+)
+ax[1].set_xlabel(r"$x_{1,\mathrm{app}}$", fontsize=25)
+
+ax[2].hist(
+    observed_apparent_color,
+    density=True,
+    bins="doane",
+    color=default_colors[0],
+    alpha=0.3,
+)
+ax[2].hist(
+    simulated_apparent_color,
+    density=True,
+    bins="doane",
+    color=default_colors[1],
+    alpha=0.3,
+)
+ax[2].set_xlabel(r"$c_{\mathrm{app}}$", fontsize=25)
+
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
+    ax[3].hist(
+        host_observables,
+        density=True,
+        bins="doane",
+        color=default_colors[0],
+        alpha=0.3,
+    )
+    ax[3].hist(
+        simulated_host_masses,
+        density=True,
+        bins="doane",
+        color=default_colors[1],
+        alpha=0.3,
+    )
+    ax[3].set_xlabel(r"$M_{\mathrm{host}}$", fontsize=25)
+
+fig.tight_layout()
+fig.savefig(
+    fig_path / "posterior_predictive.png",
+    dpi=300,
+    transparent=True,
+    bbox_inches="tight",
+)
+
 
 # -------------------------- TRAIN NORMALIZING FLOWS --------------------------------- #
 
@@ -604,7 +717,7 @@ stretch_pdf = jnp.reshape(
 )
 stretch_levels = get_levels(stretch_pdf)
 
-if MODEL_NAME == "SNMass":
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
     FLOW_RNG_KEY, SUBKEY = random.split(SUBKEY)
     TRAIN_KEY, SUBKEY = random.split(SUBKEY)
     simulated_mass_residuals = jnp.column_stack(
@@ -629,7 +742,7 @@ if MODEL_NAME == "SNMass":
 print("\nPlotting Hubble residuals...\n")
 
 ncols = 2
-if MODEL_NAME == "SNMass":
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
     ncols = 3
     # mass_kde = stats.gaussian_kde(
     #     [simulated_host_masses, simulated_hubble_residuals],
@@ -739,7 +852,7 @@ for l, s in zip(CS.levels, strs):
 ax[1].clabel(CS, CS.levels[::2], inline=True, fmt=fmt, fontsize=12)
 ax[1].set_xlabel(r"$x_{1,\mathrm{app}}$", fontsize=25)
 
-if MODEL_NAME == "SNMass":
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
     # ax[2].contour(mass_x_grid, mass_y_grid, mass_kde_values, levels=10)
     ax[2].errorbar(
         host_observables_np,
@@ -795,17 +908,24 @@ fig.savefig(
 
 print("\nPlotting population fraction...\n")
 
-if MODEL_NAME == "SNMass":
-    f_1_max = posterior_samples["f_1_max"]
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
+    f_SN_1_mid = posterior_samples["f_SN_1_mid"]
     scaling = posterior_samples["scaling"]
-    offset = posterior_samples["offset"]
-    mean_mass = posterior_samples["M_host"]
+    # offset = posterior_samples["offset"]
+    if MODEL_NAME == "SNMass":
+        mean_mass = posterior_samples["M_host"]
+        mass_scatter = posterior_samples["M_host_scatter"]
+    elif MODEL_NAME == "SN2PopMass":
+        mean_mass = posterior_samples["M_host_mixture_mean"]
+        mass_scatter = posterior_samples["M_host_mixture_std"]
 
     mass = np.linspace(6, 13, 100)
     f_1_samples = np.zeros((NUM_SAMPLES, 100))
     for i in range(NUM_SAMPLES):
-        linear_function = scaling[i] * (mass - mean_mass[i]) + offset[i]
-        f_1 = sigmoid(x=linear_function, scale=f_1_max[i], offset=OFFSET)
+        obs_rescaled_mass = (mass - host_mean) / host_std
+        rescaled_mass = (obs_rescaled_mass - mean_mass[i]) / mass_scatter[i]
+        linear_function = scaling[i] * rescaled_mass  # + offset[i]
+        f_1 = sigmoid(x=linear_function, f_mid=f_SN_1_mid[i], f_min=F_SN_1_MIN)
         f_1_samples[i] = f_1
 
     f_1_percentiles = np.percentile(f_1_samples, [16, 50, 84], axis=0)
@@ -821,5 +941,8 @@ if MODEL_NAME == "SNMass":
     ax.set_ylabel(r"$f^{\mathrm{SN}}_1$", fontsize=25)
     fig.tight_layout()
     fig.savefig(
-        fig_path / "sn_fraction.png", dpi=300, transparent=True, bbox_inches="tight"
+        fig_path / ("sn_fraction.png"),
+        dpi=300,
+        transparent=True,
+        bbox_inches="tight",
     )

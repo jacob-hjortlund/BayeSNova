@@ -48,6 +48,7 @@ mpl.rcParams["ytick.color"] = COLOR
 def map_to_latex(label: str):
     map_dict = {
         "H0": r"$H_0$",
+        "f_host_1": r"$f_1^{\mathrm{host}}$",
         "f_sn_1": r"$f_1^{\mathrm{SN}}$",
         "f_SN_1_max": r"$f_{1,\mathrm{max}}^{\mathrm{SN}}$",
         "M_int": r"$M_{\mathrm{int}}$",
@@ -95,8 +96,8 @@ VERBOSE = True
 CONTINUE = False
 
 DATASET_NAME = "supercal_hubble_flow"
-RUN_NAME = "Supercal_Hubble_Flow"
-MODEL_NAME = "SNMass"
+RUN_NAME = "Supercal_Hubble_Flow_No_Rescale"
+MODEL_NAME = "SN2PopMass"
 MODEL = globals()[MODEL_NAME]
 
 print("\nModel: ", MODEL_NAME)
@@ -163,7 +164,7 @@ idx_valid_mass = host_observables != -9999.0
 idx_not_calibrator = ~prep.idx_calibrator_sn
 idx_valid = idx_not_calibrator
 
-if MODEL_NAME == "SNMass":
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
     idx_valid = idx_valid & idx_valid_mass
 
 sn_observables_np = prep.sn_observables[idx_valid]
@@ -183,8 +184,8 @@ sn_covariances = jnp.array(sn_covariances_np)
 host_observables = jnp.array(host_observables_np)
 host_uncertainty = jnp.array(host_uncertainty_np)
 
-host_mean = jnp.mean(host_observables, axis=0)
-host_std = jnp.std(host_observables, axis=0)
+host_mean = 0.0  # jnp.mean(host_observables, axis=0)
+host_std = 1.0  # jnp.std(host_observables, axis=0)
 
 # -------------------------- RUN MCMC --------------------------------- #
 
@@ -263,14 +264,13 @@ shared_params = [
     "R_B",
     "R_B_scatter",
     "gamma_EBV",
-    "M_host",
-    "M_host_scatter",
     "scaling",
     "offset",
     "f_SN_1_max",
+    "f_host_1",
 ]
 
-if MODEL_NAME != "SNMass":
+if MODEL_NAME == "SN":
     shared_params += ["f_sn_1"]
 
 independent_params = [
@@ -281,6 +281,11 @@ independent_params = [
     "C_int_scatter",
     "tau_EBV",
 ]
+
+if MODEL_NAME == "SNMass":
+    shared_params += ["M_host", "M_host_scatter"]
+elif MODEL_NAME == "SN2PopMass":
+    independent_params += ["M_host", "M_host_scatter"]
 
 cosmo_params = []
 
@@ -344,12 +349,16 @@ GTC.savefig(fig_path / ("gtc" + RUN_MODIFIER + ".png"), transparent=True, dpi=30
 
 print("\nPlotting population fraction...\n")
 
-if MODEL_NAME == "SNMass":
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
     f_SN_1_mid = posterior_samples["f_SN_1_mid"]
     scaling = posterior_samples["scaling"]
     # offset = posterior_samples["offset"]
-    mean_mass = posterior_samples["M_host"]
-    mass_scatter = posterior_samples["M_host_scatter"]
+    if MODEL_NAME == "SNMass":
+        mean_mass = posterior_samples["M_host"]
+        mass_scatter = posterior_samples["M_host_scatter"]
+    elif MODEL_NAME == "SN2PopMass":
+        mean_mass = posterior_samples["M_host_mixture_mean"]
+        mass_scatter = posterior_samples["M_host_mixture_std"]
 
     mass = np.linspace(6, 13, 100)
     f_1_samples = np.zeros((NUM_SAMPLES, 100))
