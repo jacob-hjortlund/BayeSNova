@@ -27,7 +27,9 @@ from numpyro.infer import MCMC, NUTS, Predictive
 from bayesnova.numpyro_models import (
     SN,
     SNMass,
+    SNMassGP,
     SN2PopMass,
+    SN2PopMassGP,
     run_mcmc,
     sigmoid,
     distance_moduli,
@@ -67,6 +69,9 @@ def map_to_latex(label: str):
         "M_host_scatter": r"$\sigma_{M_{\mathrm{host}}}$",
         "scaling": r"$a$",
         "offset": r"$b$",
+        "gp_sigma": r"$\sigma_{\mathrm{GP}}$",
+        "gp_length": r"$\lambda_{\mathrm{GP}}$",
+        "gp_noise": r"$\sigma_{\mathrm{noise}}^2$",
     }
 
     return map_dict[label]
@@ -100,8 +105,8 @@ LOWER_R_B_bound = 1.5
 UPPER_R_B_bound = 6.5
 
 DATASET_NAME = "supercal_hubble_flow"
-RUN_NAME = "Supercal_Hubble_Flow_Truncated"
-MODEL_NAME = "SN2PopMass"
+RUN_NAME = "Supercal_Hubble_Flow"
+MODEL_NAME = "SN2PopMassGP"
 MODEL = globals()[MODEL_NAME]
 
 print("\nModel: ", MODEL_NAME)
@@ -168,7 +173,12 @@ idx_valid_mass = host_observables != -9999.0
 idx_not_calibrator = ~prep.idx_calibrator_sn
 idx_valid = idx_not_calibrator
 
-if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
+if (
+    MODEL_NAME == "SNMass"
+    or MODEL_NAME == "SN2PopMass"
+    or MODEL_NAME == "SNMassGP"
+    or MODEL_NAME == "SN2PopMassGP"
+):
     idx_valid = idx_valid & idx_valid_mass
 
 sn_observables_np = prep.sn_observables[idx_valid]
@@ -292,7 +302,12 @@ independent_params = [
 
 if MODEL_NAME == "SNMass":
     shared_params += ["M_host", "M_host_scatter"]
+elif MODEL_NAME == "SNMassGP":
+    shared_params += ["M_host", "M_host_scatter", "gp_sigma", "gp_length", "gp_noise"]
 elif MODEL_NAME == "SN2PopMass":
+    independent_params += ["M_host", "M_host_scatter"]
+elif MODEL_NAME == "SN2PopMassGP":
+    shared_params += ["gp_sigma", "gp_length", "gp_noise"]
     independent_params += ["M_host", "M_host_scatter"]
 
 cosmo_params = []
