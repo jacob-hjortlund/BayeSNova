@@ -110,8 +110,8 @@ print("Num Warmup: ", NUM_WARMUP)
 print("Num Samples: ", NUM_SAMPLES)
 print("Num Chains: ", NUM_CHAINS, "\n")
 
-path = "/home/jacob/Uni/Msc/Thesis/BayeSNova"
-# path = "/groups/dark/osman/BayeSNova/"
+# path = "/home/jacob/Uni/Msc/Thesis/BayeSNova"
+path = "/groups/dark/osman/BayeSNova/"
 base_path = Path(path)
 data_path = base_path / "data"
 
