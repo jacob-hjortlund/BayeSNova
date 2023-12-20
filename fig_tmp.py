@@ -27,6 +27,7 @@ from bayesnova.numpyro_models import (
     run_mcmc,
     SNTripp,
     SNTrippMass,
+    distance_moduli,
 )
 
 
@@ -88,10 +89,14 @@ NUM_CHAINS = 1
 F_SN_1_MIN = 0.15
 VERBOSE = True
 USE_RANGES = False
+LOWER_HOST_MASS_BOUND = 6.0
+UPPER_HOST_MASS_BOUND = 12.0
+LOWER_R_B_bound = 1.5
+UPPER_R_B_bound = 6.5
 RNG_KEY, SUBKEY = random.split(random.PRNGKey(42))
 
 DATA_NAME = "supercal_hubble_flow"
-RUN_NAME = "Supercal_Hubble_Flow_Truncated"
+RUN_NAME = "Supercal_Hubble_Flow_Truncated_Positive_Scaling"
 MODEL_NAME = "SN2PopMass"
 MODEL = globals()[MODEL_NAME]
 COSMOLOGY = jc.Planck15()
@@ -396,16 +401,37 @@ for key in sim_posterior_samples.keys():
         [jnp.percentile(sim_posterior_samples[key], q=50.0, axis=0)]
     )
 
+predictive_inputs = {
+    "sn_covariances": sim_sn_covs,
+    "sn_redshifts": sim_redshifts,
+    "host_mass_err": sim_host_errs,
+    "host_mean": 0.0,
+    "host_std": 1.0,
+    "cosmology": COSMOLOGY,
+    "lower_host_mass_bound": LOWER_HOST_MASS_BOUND,
+    "upper_host_mass_bound": UPPER_HOST_MASS_BOUND,
+    "lower_R_B_bound": LOWER_R_B_bound,
+    "upper_R_B_bound": UPPER_R_B_bound,
+}
+
 RNG_KEY, SUBKEY = random.split(SUBKEY)
 predictive = Predictive(
     MODEL, infer_discrete=False, posterior_samples=sim_posterior_samples
 )  # , return_sites=return_sites)
 simulated_supernovae = predictive(
     RNG_KEY,
-    sn_covariances=sim_sn_covs,
-    sn_redshifts=sim_redshifts,
-    host_mass_err=sim_host_errs,
-    cosmology=COSMOLOGY,
+    **predictive_inputs,
+    # sn_covariances=sim_sn_covs,
+    # sn_redshifts=sim_redshifts,
+    # host_mass_err=sim_host_errs,
+    # cosmology=COSMOLOGY,
+    # host_mean=0.0,
+    # host_std=1.0,
+    # lower_host_mass_bound=LOWER_HOST_MASS_BOUND,
+    # upper_host_mass_bound=UPPER_HOST_MASS_BOUND,
+    # lower_R_B=LOWER_R_B_bound,
+    # upper_R_B=UPPER_R_B_bound,
+    # verbose=False,
 )
 
 simulated_sn_observables = simulated_supernovae["sn_observables"][0]
@@ -430,6 +456,9 @@ simulated_tripp_apparent_magnitude = tripp_mag(
 simulated_hubble_residuals = (
     simulated_apparent_magnitudes - simulated_tripp_apparent_magnitude
 )
+simulated_absolute_magnitudes = simulated_apparent_magnitudes - distance_moduli(
+    cosmology=COSMOLOGY, redshifts=sim_redshifts
+)
 
 observed_apparent_magnitude = sn_observables[:, 0]
 observed_apparent_stretch = sn_observables[:, 1]
@@ -452,11 +481,19 @@ observed_hubble_residuals = (
     observed_apparent_magnitude - observed_tripp_apparent_magnitude
 )
 observed_hubble_residual_errs = observed_apparent_magnitude_errs
+observed_absolute_magnitudes = observed_apparent_magnitude - distance_moduli(
+    cosmology=COSMOLOGY, redshifts=sn_redshifts
+)
 
 color_array = jnp.linspace(-0.3, 0.3, 1000)
 stretch_array = jnp.linspace(-4, 4, 1000)
 mass_array = jnp.linspace(6, 14, 1000)
 residual_array = jnp.linspace(-0.5, 0.5, 1000)
+magnitude_array = jnp.linspace(
+    -0.25 + jnp.min(simulated_absolute_magnitudes),
+    0.25 + jnp.max(simulated_absolute_magnitudes),
+    1000,
+)
 
 color_residual_x_grid, color_residual_y_grid = jnp.meshgrid(color_array, residual_array)
 stretch_residual_x_grid, stretch_residual_y_grid = jnp.meshgrid(
@@ -472,6 +509,24 @@ stretch_positions = jnp.column_stack(
 )
 mass_positions = jnp.column_stack(
     [mass_residual_x_grid.ravel(), mass_residual_y_grid.ravel()]
+)
+
+color_magnitude_x_grid, color_magnitude_y_grid = jnp.meshgrid(
+    color_array, magnitude_array
+)
+stretch_magnitude_x_grid, stretch_magnitude_y_grid = jnp.meshgrid(
+    stretch_array, magnitude_array
+)
+mass_magnitude_x_grid, mass_magnitude_y_grid = jnp.meshgrid(mass_array, magnitude_array)
+
+color_magnitude_positions = jnp.column_stack(
+    [color_magnitude_x_grid.ravel(), color_magnitude_y_grid.ravel()]
+)
+stretch_magnitude_positions = jnp.column_stack(
+    [stretch_magnitude_x_grid.ravel(), stretch_magnitude_y_grid.ravel()]
+)
+mass_magnitude_positions = jnp.column_stack(
+    [mass_magnitude_x_grid.ravel(), mass_magnitude_y_grid.ravel()]
 )
 
 # -------------------------- FIT MASS STEP TO OBSERVABLES --------------------------------- #
@@ -678,7 +733,7 @@ fig.savefig(
 )
 
 
-# -------------------------- TRAIN NORMALIZING FLOWS --------------------------------- #
+# -------------------------- TRAIN RESIDUAL NORMALIZING FLOWS --------------------------------- #
 
 FLOW_RNG_KEY, SUBKEY = random.split(SUBKEY)
 TRAIN_KEY, SUBKEY = random.split(SUBKEY)
@@ -736,6 +791,67 @@ if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
     )
     mass_levels = get_levels(mass_pdf)
 
+
+# -------------------------- TRAIN MAGNITUDE NORMALIZING FLOWS --------------------------------- #
+
+FLOW_RNG_KEY, SUBKEY = random.split(SUBKEY)
+TRAIN_KEY, SUBKEY = random.split(SUBKEY)
+simulated_color_magnitudes = jnp.column_stack(
+    [simulated_apparent_color, simulated_absolute_magnitudes]
+)
+base_dist = Normal(jnp.zeros(simulated_color_magnitudes.shape[1]))
+flow = block_neural_autoregressive_flow(FLOW_RNG_KEY, base_dist=base_dist)
+color_magnitude_flow, losses = fit_to_data(
+    key=TRAIN_KEY,
+    dist=flow,
+    x=simulated_color_magnitudes,
+    learning_rate=1e-2,
+)
+color_magnitude_pdf = jnp.reshape(
+    jnp.exp(color_magnitude_flow.log_prob(color_magnitude_positions)),
+    color_magnitude_x_grid.shape,
+)
+color_magnitude_levels = get_levels(color_magnitude_pdf)
+
+
+FLOW_RNG_KEY, SUBKEY = random.split(SUBKEY)
+TRAIN_KEY, SUBKEY = random.split(SUBKEY)
+simulated_stretch_magnitudes = jnp.column_stack(
+    [simulated_apparent_stretch, simulated_absolute_magnitudes]
+)
+base_dist = Normal(jnp.zeros(simulated_stretch_magnitudes.shape[1]))
+flow = block_neural_autoregressive_flow(FLOW_RNG_KEY, base_dist=base_dist)
+stretch_magnitude_flow, losses = fit_to_data(
+    key=TRAIN_KEY,
+    dist=flow,
+    x=simulated_stretch_magnitudes,
+    learning_rate=1e-2,
+)
+stretch_magnitude_pdf = jnp.reshape(
+    jnp.exp(stretch_magnitude_flow.log_prob(stretch_magnitude_positions)),
+    stretch_magnitude_x_grid.shape,
+)
+stretch_magnitude_levels = get_levels(stretch_magnitude_pdf)
+
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
+    FLOW_RNG_KEY, SUBKEY = random.split(SUBKEY)
+    TRAIN_KEY, SUBKEY = random.split(SUBKEY)
+    simulated_mass_magnitudes = jnp.column_stack(
+        [simulated_host_masses, simulated_absolute_magnitudes]
+    )
+    base_dist = Normal(jnp.zeros(simulated_mass_magnitudes.shape[1]))
+    flow = block_neural_autoregressive_flow(FLOW_RNG_KEY, base_dist=base_dist)
+    mass_magnitude_flow, losses = fit_to_data(
+        key=TRAIN_KEY,
+        dist=flow,
+        x=simulated_mass_magnitudes,
+        learning_rate=1e-2,
+    )
+    mass_magnitude_pdf = jnp.reshape(
+        jnp.exp(mass_magnitude_flow.log_prob(mass_magnitude_positions)),
+        mass_magnitude_x_grid.shape,
+    )
+    mass_magnitude_levels = get_levels(mass_magnitude_pdf)
 
 # -------------------------- PLOT HUBBLE RESIDUALS --------------------------------- #
 
@@ -902,6 +1018,165 @@ if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
 fig.tight_layout()
 fig.savefig(
     fig_path / "hubble_residuals.png", dpi=300, transparent=True, bbox_inches="tight"
+)
+
+
+# -------------------------- PLOT ABSOLUTE MAGNITUDE DIAGRAM --------------------------------- #
+
+print("\nPlotting absolute magnitude diagram...\n")
+
+ncols = 2
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
+    ncols = 3
+
+fig, ax = plt.subplots(ncols=ncols, figsize=(12, 6), sharey=True)
+
+# ax[0].contour(color_x_grid, color_y_grid, color_kde_values, levels=10)
+ax[0].errorbar(
+    observed_apparent_color,
+    observed_absolute_magnitudes,
+    xerr=observed_apparent_color_errs,
+    yerr=observed_apparent_magnitude_errs,
+    fmt="o",
+    color=default_colors[0],
+    alpha=0.3,
+)
+ax[0].contour(
+    color_magnitude_x_grid,
+    color_magnitude_y_grid,
+    color_magnitude_pdf,
+    levels=np.flip(color_magnitude_levels[:4]),
+    linewidths=2,
+    colors="white",
+)
+CS = ax[0].contour(
+    color_magnitude_x_grid,
+    color_magnitude_y_grid,
+    color_magnitude_pdf,
+    levels=[color_magnitude_levels[-1]],
+    linewidths=2,
+    colors="white",
+)
+strs = [r"$<0.99$"]
+fmt = {}
+for l, s in zip(CS.levels, strs):
+    fmt[l] = s
+ax[0].clabel(CS, CS.levels[::2], inline=True, fmt=fmt, fontsize=12)
+CS = ax[0].contour(
+    color_magnitude_x_grid,
+    color_magnitude_y_grid,
+    color_magnitude_pdf,
+    levels=[color_magnitude_levels[-2]],
+    linewidths=2,
+    colors="white",
+)
+strs = [r"$<0.95$"]
+fmt = {}
+for l, s in zip(CS.levels, strs):
+    fmt[l] = s
+ax[0].clabel(CS, CS.levels[::2], inline=True, fmt=fmt, fontsize=12)
+ax[0].set_xlabel(r"$c_{\mathrm{app}}$", fontsize=25)
+ax[0].set_ylabel(r"$M_{\mathrm{B}}$", fontsize=25)
+
+# ax[1].contour(stretch_x_grid, stretch_y_grid, stretch_kde_values, levels=10)
+ax[1].errorbar(
+    observed_apparent_stretch,
+    observed_absolute_magnitudes,
+    xerr=observed_apparent_stretch_errs,
+    yerr=observed_apparent_magnitude_errs,
+    fmt="o",
+    color=default_colors[0],
+    alpha=0.3,
+)
+ax[1].contour(
+    stretch_magnitude_x_grid,
+    stretch_magnitude_y_grid,
+    stretch_magnitude_pdf,
+    levels=np.flip(stretch_magnitude_levels[:4]),
+    linewidths=2,
+    colors="white",
+)
+CS = ax[1].contour(
+    stretch_magnitude_x_grid,
+    stretch_magnitude_y_grid,
+    stretch_magnitude_pdf,
+    levels=[stretch_magnitude_levels[-1]],
+    linewidths=2,
+    colors="white",
+)
+strs = [r"$<0.99$"]
+fmt = {}
+for l, s in zip(CS.levels, strs):
+    fmt[l] = s
+ax[1].clabel(CS, CS.levels[::2], inline=True, fmt=fmt, fontsize=12)
+CS = ax[1].contour(
+    stretch_magnitude_x_grid,
+    stretch_magnitude_y_grid,
+    stretch_magnitude_pdf,
+    levels=[stretch_magnitude_levels[-2]],
+    linewidths=2,
+    colors="white",
+)
+strs = [r"$<0.95$"]
+fmt = {}
+for l, s in zip(CS.levels, strs):
+    fmt[l] = s
+ax[1].clabel(CS, CS.levels[::2], inline=True, fmt=fmt, fontsize=12)
+ax[1].set_xlabel(r"$x_{1,\mathrm{app}}$", fontsize=25)
+
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
+    # ax[2].contour(mass_x_grid, mass_y_grid, mass_kde_values, levels=10)
+    ax[2].errorbar(
+        host_observables_np,
+        observed_absolute_magnitudes,
+        xerr=host_uncertainty_np,
+        yerr=observed_apparent_magnitude_errs,
+        fmt="o",
+        color=default_colors[0],
+        alpha=0.3,
+    )
+    ax[2].contour(
+        mass_magnitude_x_grid,
+        mass_magnitude_y_grid,
+        mass_magnitude_pdf,
+        levels=np.flip(mass_magnitude_levels[:4]),
+        linewidths=2,
+        colors="white",
+    )
+    CS = ax[2].contour(
+        mass_magnitude_x_grid,
+        mass_magnitude_y_grid,
+        mass_magnitude_pdf,
+        levels=[mass_magnitude_levels[-1]],
+        linewidths=2,
+        colors="white",
+    )
+    strs = [r"$<0.99$"]
+    fmt = {}
+    for l, s in zip(CS.levels, strs):
+        fmt[l] = s
+    ax[2].clabel(CS, CS.levels[::2], inline=True, fmt=fmt, fontsize=12)
+    CS = ax[2].contour(
+        mass_magnitude_x_grid,
+        mass_magnitude_y_grid,
+        mass_magnitude_pdf,
+        levels=[mass_magnitude_levels[-2]],
+        linewidths=2,
+        colors="white",
+    )
+    strs = [r"$<0.95$"]
+    fmt = {}
+    for l, s in zip(CS.levels, strs):
+        fmt[l] = s
+    ax[2].clabel(CS, CS.levels[::2], inline=True, fmt=fmt, fontsize=12)
+    ax[2].set_xlabel(r"$M_{\mathrm{host}}$", fontsize=25)
+
+fig.tight_layout()
+fig.savefig(
+    fig_path / "absolute_magnitude_diagram.png",
+    dpi=300,
+    transparent=True,
+    bbox_inches="tight",
 )
 
 # -------------------------- PLOT POP FRACTION --------------------------------- #

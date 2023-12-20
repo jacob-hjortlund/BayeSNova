@@ -27,7 +27,9 @@ from numpyro.infer import MCMC, NUTS, Predictive
 from bayesnova.numpyro_models import (
     SN,
     SNMass,
+    SNMassGP,
     SN2PopMass,
+    SN2PopMassGP,
     run_mcmc,
     sigmoid,
     distance_moduli,
@@ -67,6 +69,9 @@ def map_to_latex(label: str):
         "M_host_scatter": r"$\sigma_{M_{\mathrm{host}}}$",
         "scaling": r"$a$",
         "offset": r"$b$",
+        "gp_sigma": r"$\sigma_{\mathrm{GP}}$",
+        "gp_length": r"$\lambda_{\mathrm{GP}}$",
+        "gp_noise": r"$\sigma_{\mathrm{noise}}^2$",
     }
 
     return map_dict[label]
@@ -88,8 +93,8 @@ def tripp_mag(
 
 # -------------------------- SETTINGS --------------------------------- #
 
-NUM_WARMUP = 2000  # 10000
-NUM_SAMPLES = 5000  # 75000
+NUM_WARMUP = 5000
+NUM_SAMPLES = 10000
 NUM_CHAINS = 1
 F_SN_1_MIN = 0.15
 VERBOSE = True
@@ -99,9 +104,9 @@ UPPER_HOST_MASS_BOUND = 12.0
 LOWER_R_B_bound = 1.5
 UPPER_R_B_bound = 6.5
 
-DATASET_NAME = "supercal_hubble_flow"
-RUN_NAME = "Supercal_Hubble_Flow_Truncated"
-MODEL_NAME = "SN2PopMass"
+DATASET_NAME = "pantheon_hubble_flow"
+RUN_NAME = "Pantheon_Hubble_Flow"
+MODEL_NAME = "SNMassGP"
 MODEL = globals()[MODEL_NAME]
 
 print("\nModel: ", MODEL_NAME)
@@ -168,7 +173,12 @@ idx_valid_mass = host_observables != -9999.0
 idx_not_calibrator = ~prep.idx_calibrator_sn
 idx_valid = idx_not_calibrator
 
-if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
+if (
+    MODEL_NAME == "SNMass"
+    or MODEL_NAME == "SN2PopMass"
+    or MODEL_NAME == "SNMassGP"
+    or MODEL_NAME == "SN2PopMassGP"
+):
     idx_valid = idx_valid & idx_valid_mass
 
 sn_observables_np = prep.sn_observables[idx_valid]
@@ -287,12 +297,20 @@ independent_params = [
     "X_int_scatter",
     "C_int",
     "C_int_scatter",
+    # "gamma_EBV",
     "tau_EBV",
+    # "R_B",
+    # "R_B_scatter",
 ]
 
 if MODEL_NAME == "SNMass":
     shared_params += ["M_host", "M_host_scatter"]
+elif MODEL_NAME == "SNMassGP":
+    shared_params += ["M_host", "M_host_scatter", "gp_sigma", "gp_length", "gp_noise"]
 elif MODEL_NAME == "SN2PopMass":
+    independent_params += ["M_host", "M_host_scatter"]
+elif MODEL_NAME == "SN2PopMassGP":
+    shared_params += ["gp_sigma", "gp_length", "gp_noise"]
     independent_params += ["M_host", "M_host_scatter"]
 
 cosmo_params = []
@@ -379,8 +397,6 @@ if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
 
     f_1_percentiles = np.percentile(f_1_samples, [16, 50, 84], axis=0)
 
-    default_colors = sns.color_palette("colorblind")
-
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
     ax.plot(mass, f_1_percentiles[1], color=default_colors[0], lw=3)
     ax.fill_between(
@@ -388,6 +404,43 @@ if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
     )
     ax.set_xlabel(r"$\log_{10}(M_{\mathrm{host}})$", fontsize=25)
     ax.set_ylabel(r"$f^{\mathrm{SN}}_1$", fontsize=25)
+    fig.tight_layout()
+    fig.savefig(
+        fig_path / ("sn_fraction" + RUN_MODIFIER + ".png"),
+        dpi=300,
+        transparent=True,
+        bbox_inches="tight",
+    )
+
+if MODEL_NAME == "SNMassGP":
+    mass = posterior_samples["eval_mass"][0]
+    gp_low, gp_median, gp_high = jnp.percentile(
+        posterior_samples["gp_eval"], jnp.array([16, 50, 84]), axis=0
+    )
+    f_sn_1_low, f_sn_1_median, f_sn_1_high = jnp.percentile(
+        posterior_samples["f_sn_1_eval"], jnp.array([16, 50, 84]), axis=0
+    )
+
+    fig, ax = plt.subplots(ncols=2, figsize=(16, 6))
+    ax[0].plot(mass, gp_median, color=default_colors[0], lw=3)
+    ax[0].fill_between(
+        mass, gp_low, gp_high, color=default_colors[0], alpha=0.3, label="GP"
+    )
+    ax[0].set_xlabel(r"$\log_{10}(M_{\mathrm{host}})$", fontsize=25)
+    ax[0].set_ylabel(r"$\mathrm{GP}(M_{\mathrm{host}})$", fontsize=25)
+
+    ax[1].plot(mass, f_sn_1_median, color=default_colors[0], lw=3)
+    ax[1].fill_between(
+        mass,
+        f_sn_1_low,
+        f_sn_1_high,
+        color=default_colors[0],
+        alpha=0.3,
+        label=r"$f^{\mathrm{SN}}_1$",
+    )
+    ax[1].set_xlabel(r"$\log_{10}(M_{\mathrm{host}})$", fontsize=25)
+    ax[1].set_ylabel(r"$f^{\mathrm{SN}}_1$", fontsize=25)
+
     fig.tight_layout()
     fig.savefig(
         fig_path / ("sn_fraction" + RUN_MODIFIER + ".png"),
