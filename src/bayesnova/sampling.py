@@ -239,20 +239,12 @@ def run_inference_algorithm(
 
     chain_keys = random.split(rng_key, num_chains)
 
-    if progress_bar:
-        print(f"\nBeginning sampling for {num_chains} chains and {num_steps} steps...")
-    t0 = time.time()
-
     final_state, state_history, info_history = jax.pmap(sample_chain, (0, 0))(
         chain_keys, initial_state
     )
     final_state = jax.block_until_ready(final_state)
     state_history = jax.block_until_ready(state_history)
     info_history = jax.block_until_ready(info_history)
-
-    t1 = time.time()
-    if progress_bar:
-        print(f"Sampling completed in {t1-t0:.2f} seconds.\n")
 
     return final_state, state_history, info_history
 
@@ -302,7 +294,7 @@ def run_mclcm_sampler(
     target_varE=1e-4,
     verbose=False,
 ):
-    init_key, tuning_key, sampling_key = random.split(rng_key, 3)
+    init_key, tuning_key, rng_key = random.split(rng_key, 3)
 
     if verbose:
         print("\nInitializing model...")
@@ -328,32 +320,59 @@ def run_mclcm_sampler(
         verbose=verbose,
     )
 
-    final_state, state_history, info_history = run_inference_algorithm(
-        rng_key=sampling_key,
-        initial_state=init_state,
-        inference_algorithm=tuned_mlmc,
-        num_steps=num_samples,
-        num_chains=num_chains,
-        progress_bar=verbose,
-    )
+    num_samples = jnp.atleast_1d(num_samples)
+    n_splits = len(num_samples)
+    total_samples = jnp.sum(num_samples)
 
     if verbose:
-        print("\nConstraining samples...")
+        print(f"\nBeginning sampling for {num_chains} chains, {total_samples} steps split across {n_splits} runs...")
     t0 = time.time()
 
-    transformed_positions = constrain_parameters(
-        state_history, constrain_fn, n_chains=num_chains
-    )
+    transformed_positions = None
+    info_history = None
+    state = init_state
+    for i in range(n_splits):
+        sampling_key, rng_key = random.split(rng_key)
+
+        n_steps = num_samples[i]
+        cumulative_n_steps = jnp.sum(num_samples[:i + 1])
+        print(f"\nSampling Steps: {cumulative_n_steps}/{total_samples}")
+
+        state, state_history, iter_info_history = run_inference_algorithm(
+            rng_key=sampling_key,
+            initial_state=state,
+            inference_algorithm=tuned_mlmc,
+            num_steps=n_steps,
+            num_chains=num_chains,
+            progress_bar=verbose,
+        )
+
+        if i==0:
+            transformed_positions = constrain_parameters(
+                state_history, constrain_fn, n_chains=num_chains
+            )
+            info_history = {'energy_change': iter_info_history['energy_change']}
+        else:
+            info_history['energy_change'] = jnp.concatenate(
+                (info_history['energy_change'], iter_info_history['energy_change']), axis=1
+            )
+            iter_transformed_positions = constrain_parameters(
+                state_history, constrain_fn, n_chains=num_chains
+            )
+            for key in transformed_positions.keys():
+                transformed_positions[key] = jnp.concatenate(
+                    (transformed_positions[key], iter_transformed_positions[key]), axis=1
+                )
 
     t1 = time.time()
     if verbose:
-        print(f"Constraining completed in {t1-t0:.2f} seconds.\n")
+        print(f"Sampling completed in {t1-t0:.2f} seconds.\n")
 
-    return final_state, state_history, info_history, transformed_positions
+    return state, state_history, info_history, transformed_positions
 
 
 def arviz_from_states(positions, stats, chains=1, divergence_threshold=1e3):
-    divergences = stats.energy_change > divergence_threshold
+    divergences = stats['energy_change'] > divergence_threshold
     posterior = az.from_dict(positions)
     sample_stats = az.convert_to_inference_data(
         {"diverging": divergences}, group="sample_stats"

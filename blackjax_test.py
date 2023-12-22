@@ -79,10 +79,10 @@ def tripp_mag(
 
 # -------------------------- SETTINGS --------------------------------- #
 
-NUM_ADAPTATION = int(1e4)
-MAX_SAMPLES = int(1e6)
-NUM_SAMPLES = int(1e5)  # 10000000
-TARGET_VARE = 5e-8  # 5e-4
+NUM_ADAPTATION = int(1e3)
+MAX_SAMPLES = int(1e3)
+NUM_SAMPLES = int(1e4)  # 10000000
+TARGET_VARE = 5e-4  # 5e-4
 SEED = 4928873
 RNG_KEY = random.PRNGKey(SEED)
 
@@ -464,7 +464,7 @@ SAMPLING_KEY, RNG_KEY = random.split(RNG_KEY)
     rng_key=RNG_KEY,
     model=MODEL,
     model_kwargs=model_inputs,
-    num_samples=NUM_SAMPLES,
+    num_samples=SAMPLE_STEPS,
     num_tuning_steps=NUM_ADAPTATION,
     num_chains=NUM_CHAINS,
     verbose=True,
