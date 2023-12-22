@@ -1,9 +1,11 @@
 # -------------------------- IMPORTS --------------------------------- #
 
 import os
+
 os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=4"
 
 import numpyro as npy
+
 npy.util.enable_x64()
 npy.util.set_platform("cpu")
 
@@ -74,11 +76,12 @@ def tripp_mag(
 
     return M + mu - alpha * x1 + beta * c
 
+
 # -------------------------- SETTINGS --------------------------------- #
 
-NUM_ADAPTATION = int(1e3)
+NUM_ADAPTATION = int(1e4)
 MAX_SAMPLES = int(1e6)
-NUM_SAMPLES = int(1e3) #10000000
+NUM_SAMPLES = int(1e5)  # 10000000
 TARGET_VARE = 5e-8  # 5e-4
 SEED = 4928873
 RNG_KEY = random.PRNGKey(SEED)
@@ -99,8 +102,8 @@ LOWER_R_B_bound = 1.5
 UPPER_R_B_bound = 6.5
 
 DATASET_NAME = "supercal_hubble_flow"
-RUN_NAME = "test" # "Supercal_MCLMC"
-MODEL_NAME = "SNMassDelta"
+RUN_NAME = "test"  # "Supercal_MCLMC"
+MODEL_NAME = "SNDelta"
 MODEL = globals()[MODEL_NAME]
 # MODEL = do(MODEL, {"f_SN_1": 0.35})
 
@@ -161,7 +164,6 @@ shared_params = [
     "R_B_scatter",
     "gamma_EBV",
     "scaling",
-    "offset",
     "M_host",
     "M_host_scatter",
     "f_SN_1_max",
@@ -267,9 +269,9 @@ prior_c_app_low, prior_c_app_median, prior_c_app_high = jnp.percentile(
     prior_c_app, jnp.array([16, 50, 84]), axis=0
 )
 
-ncols=3
+ncols = 3
 if "Mass" in MODEL_NAME:
-    ncols=4
+    ncols = 4
     prior_mass = prior_predictions["host_observables"]
     prior_mass_low, prior_mass_median, prior_mass_high = jnp.percentile(
         prior_mass, jnp.array([16, 50, 84]), axis=0
@@ -453,22 +455,86 @@ model_inputs = {
 
 SAMPLING_KEY, RNG_KEY = random.split(RNG_KEY)
 
-final_state, state_history, info_history, transformed_state = sampling.run_mclcm_sampler(
-    rng_key=RNG_KEY, model=MODEL, model_kwargs=model_inputs,
-    num_samples=NUM_SAMPLES, num_tuning_steps=NUM_ADAPTATION,
-    num_chains=NUM_CHAINS, verbose=True,
+(
+    final_state,
+    state_history,
+    info_history,
+    transformed_state,
+) = sampling.run_mclcm_sampler(
+    rng_key=RNG_KEY,
+    model=MODEL,
+    model_kwargs=model_inputs,
+    num_samples=NUM_SAMPLES,
+    num_tuning_steps=NUM_ADAPTATION,
+    num_chains=NUM_CHAINS,
+    verbose=True,
 )
 
 seeded_model = seed(MODEL, RNG_KEY)
 model_trace = trace(seeded_model).get_trace(**model_inputs)
-sample_keys = [key for key in model_trace.keys() if model_trace[key]['type'] == 'sample' and not model_trace[key]['is_observed']]
-samples = {sample_key: transformed_state[sample_key] for sample_key in sample_keys if sample_key in transformed_state.keys()}
+sample_keys = [
+    key
+    for key in model_trace.keys()
+    if model_trace[key]["type"] == "sample" and not model_trace[key]["is_observed"]
+]
+samples = {
+    sample_key: transformed_state[sample_key]
+    for sample_key in sample_keys
+    if sample_key in transformed_state.keys()
+}
+samples_array = []
+for key in samples.keys():
+    flattened_sample = samples[key]
+    shape = flattened_sample.shape
+    if len(shape) == 1:
+        samples_array.append(flattened_sample[:, None, None])
+    elif len(shape) == 2:
+        samples_array.append(flattened_sample[..., None])
+    else:
+        samples_array.append(flattened_sample.reshape(NUM_CHAINS, NUM_SAMPLES, -1))
+samples_array = np.concatenate(samples_array, axis=-1)
+
+autocorr_steps = np.exp(np.linspace(np.log(100), np.log(NUM_SAMPLES), 10)).astype(int)
+taus = np.array(
+    [sampling.autocorrelation_time(samples_array[:, :n, :]) for n in autocorr_steps]
+)
+
+fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+ax.loglog(autocorr_steps, taus, "o-", color=default_colors[0])
+ylim = ax.get_ylim()
+ax.plot(autocorr_steps, autocorr_steps / 50, "--", color="k")
+ax.set_ylim(ylim)
+ax.set_xlabel("Number of Steps", fontsize=25)
+ax.set_ylabel(r"$\tau$", fontsize=25)
+fig.tight_layout()
+fig.savefig(
+    fig_path / ("autocorrelation" + RUN_MODIFIER + ".png"),
+    dpi=300,
+    transparent=True,
+    bbox_inches="tight",
+)
 
 av_trace = sampling.arviz_from_states(samples, info_history)
-summary = az.summary(av_trace)
-print(summary)
 
-print("\nPlotting Posterior GTC...\n")
+with pd.option_context(
+    "display.max_rows",
+    None,
+    "display.max_columns",
+    None,
+    "display.width",
+    1000,
+):
+    summary = az.summary(av_trace)
+    print(summary)
+
+posterior_samples = {
+    key: sampling.flatten_parameter(transformed_state[key])
+    for key in shared_params + ["f_SN_1_mid"]
+    if key in transformed_state.keys()
+}
+
+
+print("\n\nPlotting Posterior GTC...\n")
 
 (
     filtered_samples,

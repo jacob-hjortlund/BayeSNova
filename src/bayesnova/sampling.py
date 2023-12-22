@@ -26,18 +26,22 @@ from blackjax.mcmc.integrators import IntegratorState
 from fastprogress.fastprogress import progress_bar
 from numpyro.contrib.control_flow import scan
 
-def initialize_model(rng_key, model, model_args=(), model_kwargs={}, num_chains=1):
 
+def initialize_model(rng_key, model, model_args=(), model_kwargs={}, num_chains=1):
     init_chain_keys = random.split(rng_key, num_chains)
 
     init_params, potential_fn, constrain_fn, _ = infer_util.initialize_model(
-        rng_key=init_chain_keys, model=model, init_strategy=init_to_sample,
-        model_args=model_args, model_kwargs=model_kwargs, dynamic_args=False
+        rng_key=init_chain_keys,
+        model=model,
+        init_strategy=init_to_sample,
+        model_args=model_args,
+        model_kwargs=model_kwargs,
+        dynamic_args=False,
     )
     init_positions = init_params.z
 
     logdensity_fn = lambda position: -potential_fn(position)
-    
+
     init_state = jax.vmap(blackjax.mcmc.mclmc.init, (0, None, 0))(
         init_positions, logdensity_fn, init_chain_keys
     )
@@ -46,17 +50,17 @@ def initialize_model(rng_key, model, model_args=(), model_kwargs={}, num_chains=
         position={k: init_state.position[k][0] for k in init_state.position},
         momentum={k: init_state.momentum[k][0] for k in init_state.momentum},
         logdensity=init_state.logdensity[0],
-        logdensity_grad={k: init_state.logdensity_grad[k][0] for k in init_state.logdensity_grad},
+        logdensity_grad={
+            k: init_state.logdensity_grad[k][0] for k in init_state.logdensity_grad
+        },
     )
 
     return logdensity_fn, constrain_fn, init_state, init_tuning_state
 
-def tune_mclmc(
-    rng_key, logdensity_fn, init_state,
-    num_steps=500, target_varE=1e-4,
-    verbose=False
-):
 
+def tune_mclmc(
+    rng_key, logdensity_fn, init_state, num_steps=500, target_varE=1e-4, verbose=False
+):
     try:
         from blackjax.mcmc.integrators import noneuclidean_mclachlan as integrator
     except:
@@ -91,6 +95,7 @@ def tune_mclmc(
     )
 
     return tuned_mlmc
+
 
 def progress_bar_scan(num_samples, print_rate=None):
     "Progress bar for a JAX scan"
@@ -174,6 +179,7 @@ def progress_bar_scan(num_samples, print_rate=None):
 
     return _progress_bar_scan
 
+
 def run_inference_algorithm(
     rng_key,
     initial_state,
@@ -214,7 +220,6 @@ def run_inference_algorithm(
         3. The trace of the info of the inference algorithm for diagnostics.
     """
 
-
     @jax.jit
     def _one_step(state, xs):
         _, rng_key = xs
@@ -229,9 +234,7 @@ def run_inference_algorithm(
     def sample_chain(rng_key, state):
         step_keys = random.split(rng_key, num_steps)
         xs = (jnp.arange(num_steps), step_keys)
-        final_state, (state_history, info_history) = jax.lax.scan(
-            one_step, state, xs
-        )
+        final_state, (state_history, info_history) = jax.lax.scan(one_step, state, xs)
         return final_state, state_history, info_history
 
     chain_keys = random.split(rng_key, num_chains)
@@ -240,9 +243,9 @@ def run_inference_algorithm(
         print(f"\nBeginning sampling for {num_chains} chains and {num_steps} steps...")
     t0 = time.time()
 
-    final_state, state_history, info_history = jax.pmap(
-        sample_chain, (0, 0)
-    )(chain_keys, initial_state)
+    final_state, state_history, info_history = jax.pmap(sample_chain, (0, 0))(
+        chain_keys, initial_state
+    )
     final_state = jax.block_until_ready(final_state)
     state_history = jax.block_until_ready(state_history)
     info_history = jax.block_until_ready(info_history)
@@ -253,13 +256,52 @@ def run_inference_algorithm(
 
     return final_state, state_history, info_history
 
+
+def flatten_parameter(parameter_arr):
+    dims = parameter_arr.shape
+    if len(dims) > 2:
+        new_shape = (-1, *dims[2:])
+    else:
+        new_shape = (-1,)
+    return jnp.reshape(parameter_arr, new_shape)
+
+
+def unflatten_parameter(parameter_arr, n_chains=1):
+    dims = parameter_arr.shape
+    if len(dims) > 1:
+        new_shape = (n_chains, -1, *dims[1:])
+    else:
+        new_shape = (
+            n_chains,
+            -1,
+        )
+    return jnp.reshape(parameter_arr, new_shape)
+
+
+def constrain_parameters(state_history, constrain_fn, n_chains=1):
+    if n_chains > 1:
+        flattened_positions = jax.tree_map(flatten_parameter, state_history.position)
+        constrained_positions = jax.vmap(constrain_fn)(flattened_positions)
+        constrained_positions = jax.tree_map(
+            lambda x: unflatten_parameter(x, n_chains), constrained_positions
+        )
+    else:
+        constrained_positions = jax.vmap(constrain_fn)(state_history.position)
+
+    return constrained_positions
+
+
 def run_mclcm_sampler(
-        rng_key, model, model_args=(), model_kwargs={},
-        num_samples=1000, num_tuning_steps=500, 
-        num_chains=1, target_varE=1e-4,
-        verbose=False
-    ):
-    
+    rng_key,
+    model,
+    model_args=(),
+    model_kwargs={},
+    num_samples=1000,
+    num_tuning_steps=500,
+    num_chains=1,
+    target_varE=1e-4,
+    verbose=False,
+):
     init_key, tuning_key, sampling_key = random.split(rng_key, 3)
 
     if verbose:
@@ -267,30 +309,41 @@ def run_mclcm_sampler(
 
     t0 = time.time()
     logdensity_fn, constrain_fn, init_state, init_tuning_state = initialize_model(
-        rng_key=init_key, model=model, model_args=model_args,
-        model_kwargs=model_kwargs, num_chains=num_chains
+        rng_key=init_key,
+        model=model,
+        model_args=model_args,
+        model_kwargs=model_kwargs,
+        num_chains=num_chains,
     )
     t1 = time.time()
     if verbose:
         print(f"Initialization completed in {t1-t0:.2f} seconds.\n")
 
     tuned_mlmc = tune_mclmc(
-        rng_key=tuning_key, logdensity_fn=logdensity_fn,
-        init_state=init_tuning_state, num_steps=num_tuning_steps,
-        target_varE=target_varE, verbose=verbose
+        rng_key=tuning_key,
+        logdensity_fn=logdensity_fn,
+        init_state=init_tuning_state,
+        num_steps=num_tuning_steps,
+        target_varE=target_varE,
+        verbose=verbose,
     )
 
     final_state, state_history, info_history = run_inference_algorithm(
-        rng_key=sampling_key, initial_state=init_state,
-        inference_algorithm=tuned_mlmc, num_steps=num_samples,
-        num_chains=num_chains, progress_bar=verbose
+        rng_key=sampling_key,
+        initial_state=init_state,
+        inference_algorithm=tuned_mlmc,
+        num_steps=num_samples,
+        num_chains=num_chains,
+        progress_bar=verbose,
     )
 
     if verbose:
         print("\nConstraining samples...")
     t0 = time.time()
 
-    transformed_positions = jax.vmap(constrain_fn)(state_history.position)
+    transformed_positions = constrain_parameters(
+        state_history, constrain_fn, n_chains=num_chains
+    )
 
     t1 = time.time()
     if verbose:
@@ -298,9 +351,8 @@ def run_mclcm_sampler(
 
     return final_state, state_history, info_history, transformed_positions
 
+
 def arviz_from_states(positions, stats, chains=1, divergence_threshold=1e3):
-
-
     divergences = stats.energy_change > divergence_threshold
     posterior = az.from_dict(positions)
     sample_stats = az.convert_to_inference_data(
@@ -309,3 +361,17 @@ def arviz_from_states(positions, stats, chains=1, divergence_threshold=1e3):
     trace = az.concat(posterior, sample_stats)
 
     return trace
+
+
+def autocorrelation_time(x, num_chains=1):
+    autocorr_at_lags = az.autocorr(x, axis=1)
+    taus = np.zeros((autocorr_at_lags.shape[-1]))
+    for i in range(num_chains):
+        for j in range(autocorr_at_lags.shape[-1]):
+            idx_neg = np.argmax(autocorr_at_lags[i, :, j] < 0)
+            taus[j] += 2 * np.sum(autocorr_at_lags[i, :idx_neg, j]) - 1
+
+    taus /= num_chains
+    max_tau = np.max(taus)
+
+    return max_tau
