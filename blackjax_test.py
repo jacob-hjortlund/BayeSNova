@@ -1,7 +1,9 @@
 # -------------------------- IMPORTS --------------------------------- #
 
-import numpyro as npy
+import os
+os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=4"
 
+import numpyro as npy
 npy.util.enable_x64()
 npy.util.set_platform("cpu")
 
@@ -20,10 +22,11 @@ import matplotlib as mpl
 import scipy.stats as stats
 import matplotlib.pyplot as plt
 import bayesnova.old_src.preprocessing as prep
+import bayesnova.sampling as sampling
 
 from jax import random
 from pathlib import Path
-from numpyro.handlers import do
+from numpyro.handlers import do, seed, trace
 from numpyro.infer.util import initialize_model
 from numpyro.infer.initialization import init_to_sample
 from numpyro.infer import MCMC, NUTS, Predictive
@@ -32,6 +35,7 @@ from bayesnova.numpyro_models import (
     SN,
     SNDelta,
     SNMass,
+    SNMassDelta,
     SNMassGP,
     SN2PopMass,
     SN2PopMassGP,
@@ -70,168 +74,23 @@ def tripp_mag(
 
     return M + mu - alpha * x1 + beta * c
 
-
-def progress_bar_scan(num_samples, print_rate=None):
-    "Progress bar for a JAX scan"
-    progress_bars = {}
-
-    if print_rate is None:
-        if num_samples > 20:
-            print_rate = int(num_samples / 20)
-        else:
-            print_rate = 1  # if you run the sampler for less than 20 iterations
-
-    def _define_bar(arg, transform, device):
-        progress_bars[0] = progress_bar(range(num_samples))
-        progress_bars[0].update(0)
-
-    def _update_bar(arg, transform, device):
-        progress_bars[0].update_bar(arg)
-
-    def _update_progress_bar(iter_num):
-        "Updates progress bar of a JAX scan or loop"
-        _ = cond(
-            iter_num == 0,
-            lambda _: host_callback.id_tap(
-                _define_bar, iter_num, result=iter_num, tap_with_device=True
-            ),
-            lambda _: iter_num,
-            operand=None,
-        )
-
-        _ = cond(
-            # update every multiple of `print_rate` except at the end
-            (iter_num % print_rate == 0),
-            lambda _: host_callback.id_tap(
-                _update_bar, iter_num, result=iter_num, tap_with_device=True
-            ),
-            lambda _: iter_num,
-            operand=None,
-        )
-
-        _ = cond(
-            # update by `remainder`
-            iter_num == num_samples - 1,
-            lambda _: host_callback.id_tap(
-                _update_bar, num_samples, result=iter_num, tap_with_device=True
-            ),
-            lambda _: iter_num,
-            operand=None,
-        )
-
-    def _close_bar(arg, transform, device):
-        progress_bars[0].on_iter_end()
-        print()
-
-    def close_bar(result, iter_num):
-        return cond(
-            iter_num == num_samples - 1,
-            lambda _: host_callback.id_tap(
-                _close_bar, None, result=result, tap_with_device=True
-            ),
-            lambda _: result,
-            operand=None,
-        )
-
-    def _progress_bar_scan(func):
-        """Decorator that adds a progress bar to `body_fun` used in `lax.scan`.
-        Note that `body_fun` must either be looping over `np.arange(num_samples)`,
-        or be looping over a tuple who's first element is `np.arange(num_samples)`
-        This means that `iter_num` is the current iteration number
-        """
-
-        def wrapper_progress_bar(carry, x):
-            if type(x) is tuple:
-                iter_num, *_ = x
-            else:
-                iter_num = x
-            _update_progress_bar(iter_num)
-            result = func(carry, x)
-            return close_bar(result, iter_num)
-
-        return wrapper_progress_bar
-
-    return _progress_bar_scan
-
-
-def run_inference_algorithm(
-    rng_key,
-    initial_state,
-    inference_algorithm,
-    num_steps,
-    progress_bar=False,
-    transform=lambda x: x,
-):
-    """Wrapper to run an inference algorithm.
-
-    Note that this utility function does not work for Stochastic Gradient MCMC samplers
-    like sghmc, as SG-MCMC samplers require additional control flow for batches of data
-    to be passed in during each sample.
-
-    Parameters
-    ----------
-    rng_key
-        The random state used by JAX's random numbers generator.
-    initial_state_or_position
-        The initial state OR the initial position of the inference algorithm. If an initial position
-        is passed in, the function will automatically convert it into an initial state.
-    inference_algorithm
-        One of blackjax's sampling algorithms or variational inference algorithms.
-    num_steps
-        Number of MCMC steps.
-    progress_bar
-        Whether to display a progress bar.
-    transform
-        A transformation of the trace of states to be returned. This is useful for
-        computing determinstic variables, or returning a subset of the states.
-        By default, the states are returned as is.
-
-    Returns
-    -------
-    Tuple[State, State, Info]
-        1. The final state of the inference algorithm.
-        2. The trace of states of the inference algorithm (contains the MCMC samples).
-        3. The trace of the info of the inference algorithm for diagnostics.
-    """
-
-    keys = random.split(rng_key, num_steps)
-
-    @jax.jit
-    def _one_step(state, xs):
-        _, rng_key = xs
-        state, info = inference_algorithm.step(rng_key, state)
-        return state, (transform(state), info)
-
-    if progress_bar:
-        one_step = progress_bar_scan(num_steps)(_one_step)
-    else:
-        one_step = _one_step
-
-    xs = (jnp.arange(num_steps), keys)
-    final_state, (state_history, info_history) = jax.lax.scan(
-        one_step, initial_state, xs
-    )
-    return final_state, state_history, info_history
-
-
 # -------------------------- SETTINGS --------------------------------- #
 
-MAX_ADAPTATION = 100000
-NUM_ADAPTATION = 100000
-MAX_SAMPLES = 10000
-NUM_SAMPLES = 1000000
+NUM_ADAPTATION = int(1e3)
+MAX_SAMPLES = int(1e6)
+NUM_SAMPLES = int(1e3) #10000000
 TARGET_VARE = 5e-8  # 5e-4
 SEED = 4928873
 RNG_KEY = random.PRNGKey(SEED)
 
-ADAPTATION_STEPS = np.full(NUM_ADAPTATION // MAX_ADAPTATION, MAX_ADAPTATION)
-ADAPTATION_STEPS[: NUM_ADAPTATION % MAX_ADAPTATION] += 1
+if NUM_SAMPLES > MAX_SAMPLES:
+    SAMPLE_STEPS = np.full(NUM_SAMPLES // MAX_SAMPLES, MAX_SAMPLES)
+    SAMPLE_STEPS[: NUM_SAMPLES % MAX_SAMPLES] += 1
+else:
+    SAMPLE_STEPS = np.array([NUM_SAMPLES])
 
-SAMPLE_STEPS = np.full(NUM_SAMPLES // MAX_SAMPLES, MAX_SAMPLES)
-SAMPLE_STEPS[: NUM_SAMPLES % MAX_SAMPLES] += 1
-
-NUM_CHAINS = 1
-F_SN_1_MIN = 0.25
+NUM_CHAINS = 4
+F_SN_1_MIN = 0.0
 VERBOSE = False
 CONTINUE = False
 LOWER_HOST_MASS_BOUND = 6.0
@@ -240,8 +99,8 @@ LOWER_R_B_bound = 1.5
 UPPER_R_B_bound = 6.5
 
 DATASET_NAME = "supercal_hubble_flow"
-RUN_NAME = "Supercal_MCLMC"
-MODEL_NAME = "SNDelta"
+RUN_NAME = "test" # "Supercal_MCLMC"
+MODEL_NAME = "SNMassDelta"
 MODEL = globals()[MODEL_NAME]
 # MODEL = do(MODEL, {"f_SN_1": 0.35})
 
@@ -252,8 +111,8 @@ print("Num Warmup: ", NUM_ADAPTATION)
 print("Num Samples: ", NUM_SAMPLES)
 print("Num Chains: ", NUM_CHAINS, "\n")
 
-path = "/home/jacob/Uni/Msc/Thesis/BayeSNova"
-# path = "/groups/dark/osman/BayeSNova/"
+# path = "/home/jacob/Uni/Msc/Thesis/BayeSNova"
+path = "/groups/dark/osman/BayeSNova/"
 base_path = Path(path)
 data_path = base_path / "data"
 
@@ -303,6 +162,8 @@ shared_params = [
     "gamma_EBV",
     "scaling",
     "offset",
+    "M_host",
+    "M_host_scatter",
     "f_SN_1_max",
     "f_host_1",
     "M_int",
@@ -324,31 +185,6 @@ if MODEL_NAME == "SN" or MODEL_NAME == "SNDelta":
 
 independent_params = []
 
-# independent_params = [
-#     "M_int",
-#     "delta_M_int",
-#     "X_int",
-#     "delta_X_int",
-#     "X_int_scatter",
-#     "delta_X_int_scatter",
-#     "C_int",
-#     "delta_C_int",
-#     "C_int_scatter",
-#     "delta_C_int_scatter",
-#     "tau_EBV",
-#     "delta_tau_EBV",
-# ]
-
-# if MODEL_NAME == "SNMass":
-#     shared_params += ["M_host", "M_host_scatter"]
-# elif MODEL_NAME == "SNMassGP":
-#     shared_params += ["M_host", "M_host_scatter", "gp_sigma", "gp_length", "gp_noise"]
-# elif MODEL_NAME == "SN2PopMass":
-#     independent_params += ["M_host", "M_host_scatter"]
-# elif MODEL_NAME == "SN2PopMassGP":
-#     shared_params += ["gp_sigma", "gp_length", "gp_noise"]
-#     independent_params += ["M_host", "M_host_scatter"]
-
 # -------------------------- LOAD DATA --------------------------------- #
 
 print("\nLoading data...\n")
@@ -366,6 +202,7 @@ idx_valid = idx_not_calibrator
 
 if (
     MODEL_NAME == "SNMass"
+    or MODEL_NAME == "SNMassDelta"
     or MODEL_NAME == "SN2PopMass"
     or MODEL_NAME == "SNMassGP"
     or MODEL_NAME == "SN2PopMassGP"
@@ -430,7 +267,15 @@ prior_c_app_low, prior_c_app_median, prior_c_app_high = jnp.percentile(
     prior_c_app, jnp.array([16, 50, 84]), axis=0
 )
 
-fig, ax = plt.subplots(ncols=3, figsize=(16, 6))
+ncols=3
+if "Mass" in MODEL_NAME:
+    ncols=4
+    prior_mass = prior_predictions["host_observables"]
+    prior_mass_low, prior_mass_median, prior_mass_high = jnp.percentile(
+        prior_mass, jnp.array([16, 50, 84]), axis=0
+    )
+
+fig, ax = plt.subplots(ncols=ncols, figsize=(16, 6))
 ax[0].errorbar(
     sn_observables[:, 0],
     prior_mb_median,
@@ -460,6 +305,17 @@ ax[2].errorbar(
 )
 ax[2].set_xlabel(r"$c_{\mathrm{obs}}$", fontsize=25)
 ax[2].set_ylabel(r"$c_{\mathrm{prior}}$", fontsize=25)
+
+if "Mass" in MODEL_NAME:
+    ax[3].errorbar(
+        host_observables,
+        prior_mass_median,
+        yerr=[prior_mass_median - prior_mass_low, prior_mass_high - prior_mass_median],
+        fmt=".",
+        color=default_colors[0],
+    )
+    ax[3].set_xlabel(r"$M_{\mathrm{host}}$", fontsize=25)
+    ax[3].set_ylabel(r"$M_{\mathrm{host,prior}}$", fontsize=25)
 
 fig.tight_layout()
 fig.savefig(
@@ -518,82 +374,99 @@ model_inputs = {
     "f_SN_1_min": F_SN_1_MIN,
 }
 
-MODEL_KEY, INIT_KEY, TUNE_KEY, RNG_KEY = random.split(RNG_KEY, 4)
+# MODEL_KEY, INIT_KEY, TUNE_KEY, RNG_KEY = random.split(RNG_KEY, 4)
 
-init_params, potential_fn_gen, transform_fn_gen, _ = initialize_model(
-    MODEL_KEY,
-    MODEL,
-    model_kwargs=model_inputs,
-    dynamic_args=True,
-    init_strategy=init_to_sample,
-    # forward_mode_differentiation=True,
+# init_params, potential_fn_gen, transform_fn_gen, _ = initialize_model(
+#     MODEL_KEY,
+#     MODEL,
+#     model_kwargs=model_inputs,
+#     dynamic_args=True,
+#     init_strategy=init_to_sample,
+#     # forward_mode_differentiation=True,
+# )
+
+# logdensity_fn = lambda position: -potential_fn_gen(**model_inputs)(position)
+# transform_fn = lambda position: transform_fn_gen(**model_inputs)(position)
+# initial_position = init_params.z
+
+# initial_state = blackjax.mcmc.mclmc.init(
+#     position=initial_position, logdensity_fn=logdensity_fn, rng_key=INIT_KEY
+# )
+
+# kernel = blackjax.mcmc.mclmc.build_kernel(
+#     logdensity_fn=logdensity_fn,
+#     integrator=blackjax.mcmc.integrators.noneuclidean_mclachlan,
+# )
+
+# (
+#     blackjax_state_after_tuning,
+#     blackjax_mclmc_sampler_params,
+# ) = blackjax.mclmc_find_L_and_step_size(
+#     mclmc_kernel=kernel,
+#     num_steps=NUM_ADAPTATION,
+#     state=initial_state,
+#     rng_key=TUNE_KEY,
+# )
+
+# print(f"\nTuning Steps: {NUM_ADAPTATION}")
+# print(f"Found L = {blackjax_mclmc_sampler_params.L}")
+# print(f"Found step size = {blackjax_mclmc_sampler_params.step_size}\n")
+
+# sampling_alg = blackjax.mclmc(
+#     logdensity_fn,
+#     L=blackjax_mclmc_sampler_params.L,
+#     step_size=blackjax_mclmc_sampler_params.step_size,
+# )
+
+
+# print("\nRunning MCMC...\n")
+
+# initial_state = blackjax_state_after_tuning
+# posterior_samples = {}
+
+# for i in range(len(SAMPLE_STEPS)):
+#     RUN_KEY, RNG_KEY = random.split(RNG_KEY)
+#     n_steps = SAMPLE_STEPS[i]
+#     cumulative_n_steps = jnp.sum(SAMPLE_STEPS[: i + 1])
+#     print(f"\nSampling Steps: {cumulative_n_steps}/{NUM_SAMPLES}")
+
+#     initial_state, state_history, info_history = run_inference_algorithm(
+#         rng_key=RUN_KEY,
+#         initial_state=initial_state,
+#         inference_algorithm=sampling_alg,
+#         num_steps=n_steps,
+#         progress_bar=True,
+#         # transform=transform_fn,
+#     )
+
+#     transformed_state = jax.vmap(transform_fn)(state_history.position)
+
+#     if i == 0:
+#         for key in shared_params + independent_params + ["f_SN_1_mid"]:
+#             if key in transformed_state.keys():
+#                 posterior_samples[key] = transformed_state[key]
+#     else:
+#         for key in posterior_samples.keys():
+#             posterior_samples[key] = jnp.concatenate(
+#                 (posterior_samples[key], transformed_state[key]), axis=0
+#             )
+
+SAMPLING_KEY, RNG_KEY = random.split(RNG_KEY)
+
+final_state, state_history, info_history, transformed_state = sampling.run_mclcm_sampler(
+    rng_key=RNG_KEY, model=MODEL, model_kwargs=model_inputs,
+    num_samples=NUM_SAMPLES, num_tuning_steps=NUM_ADAPTATION,
+    num_chains=NUM_CHAINS, verbose=True,
 )
 
-logdensity_fn = lambda position: -potential_fn_gen(**model_inputs)(position)
-transform_fn = lambda position: transform_fn_gen(**model_inputs)(position)
-initial_position = init_params.z
+seeded_model = seed(MODEL, RNG_KEY)
+model_trace = trace(seeded_model).get_trace(**model_inputs)
+sample_keys = [key for key in model_trace.keys() if model_trace[key]['type'] == 'sample' and not model_trace[key]['is_observed']]
+samples = {sample_key: transformed_state[sample_key] for sample_key in sample_keys if sample_key in transformed_state.keys()}
 
-initial_state = blackjax.mcmc.mclmc.init(
-    position=initial_position, logdensity_fn=logdensity_fn, rng_key=INIT_KEY
-)
-
-kernel = blackjax.mcmc.mclmc.build_kernel(
-    logdensity_fn=logdensity_fn,
-    integrator=blackjax.mcmc.integrators.noneuclidean_mclachlan,
-)
-
-(
-    blackjax_state_after_tuning,
-    blackjax_mclmc_sampler_params,
-) = blackjax.mclmc_find_L_and_step_size(
-    mclmc_kernel=kernel,
-    num_steps=NUM_ADAPTATION,
-    state=initial_state,
-    rng_key=TUNE_KEY,
-)
-
-print(f"\nTuning Steps: {NUM_ADAPTATION}")
-print(f"Found L = {blackjax_mclmc_sampler_params.L}")
-print(f"Found step size = {blackjax_mclmc_sampler_params.step_size}\n")
-
-sampling_alg = blackjax.mclmc(
-    logdensity_fn,
-    L=blackjax_mclmc_sampler_params.L,
-    step_size=blackjax_mclmc_sampler_params.step_size,
-)
-
-
-print("\nRunning MCMC...\n")
-
-initial_state = blackjax_state_after_tuning
-posterior_samples = {}
-
-for i in range(len(SAMPLE_STEPS)):
-    RUN_KEY, RNG_KEY = random.split(RNG_KEY)
-    n_steps = SAMPLE_STEPS[i]
-    cumulative_n_steps = jnp.sum(SAMPLE_STEPS[: i + 1])
-    print(f"\nSampling Steps: {cumulative_n_steps}/{NUM_SAMPLES}")
-
-    initial_state, state_history, _ = run_inference_algorithm(
-        rng_key=RUN_KEY,
-        initial_state=initial_state,
-        inference_algorithm=sampling_alg,
-        num_steps=n_steps,
-        progress_bar=True,
-        # transform=transform_fn,
-    )
-
-    transformed_state = jax.vmap(transform_fn)(state_history.position)
-
-    if i == 0:
-        for key in shared_params + independent_params + ["f_SN_1_mid"]:
-            if key in transformed_state.keys():
-                posterior_samples[key] = transformed_state[key]
-    else:
-        for key in posterior_samples.keys():
-            posterior_samples[key] = jnp.concatenate(
-                (posterior_samples[key], transformed_state[key]), axis=0
-            )
+av_trace = sampling.arviz_from_states(samples, info_history)
+summary = az.summary(av_trace)
+print(summary)
 
 print("\nPlotting Posterior GTC...\n")
 
@@ -625,14 +498,13 @@ corner(
 
 print("\nPlotting population fraction...\n")
 
-if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
+if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass" or MODEL_NAME == "SNMassDelta":
     idx = np.random.choice(
         len(posterior_samples["f_SN_1_mid"]), size=MAX_SAMPLES * 5, replace=False
     )
     f_SN_1_mid = posterior_samples["f_SN_1_mid"][idx]
     scaling = posterior_samples["scaling"][idx]
-    offset = posterior_samples["offset"][idx]
-    if MODEL_NAME == "SNMass":
+    if MODEL_NAME == "SNMass" or MODEL_NAME == "SNMassDelta":
         mean_mass = posterior_samples["M_host"][idx]
         mass_scatter = posterior_samples["M_host_scatter"][idx]
     elif MODEL_NAME == "SN2PopMass":
@@ -644,7 +516,7 @@ if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass":
     for i in range(MAX_SAMPLES):
         obs_rescaled_mass = (mass - host_mean) / host_std
         rescaled_mass = (obs_rescaled_mass - mean_mass[i]) / mass_scatter[i]
-        linear_function = scaling[i] * rescaled_mass  # + offset[i]
+        linear_function = scaling[i] * rescaled_mass
         f_1 = sigmoid(x=linear_function, f_mid=f_SN_1_mid[i], f_min=F_SN_1_MIN)
         f_1_samples[i] = f_1
 
