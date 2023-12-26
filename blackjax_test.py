@@ -93,6 +93,7 @@ if NUM_SAMPLES > MAX_SAMPLES:
 else:
     SAMPLE_STEPS = np.array([NUM_SAMPLES])
 
+NUM_SAMPLES = NUM_SAMPLES // THINNING
 NUM_CHAINS = 4
 F_SN_1_MIN = 0.0
 VERBOSE = False
@@ -113,6 +114,7 @@ print("\nModel: ", MODEL_NAME)
 print("Run Name: ", RUN_NAME)
 print("Num Warmup: ", NUM_ADAPTATION)
 print("Num Samples: ", NUM_SAMPLES)
+print("Num Thinning: ", THINNING)
 print("Num Chains: ", NUM_CHAINS, "\n")
 
 # path = "/home/jacob/Uni/Msc/Thesis/BayeSNova"
@@ -377,83 +379,6 @@ model_inputs = {
     "f_SN_1_min": F_SN_1_MIN,
 }
 
-# MODEL_KEY, INIT_KEY, TUNE_KEY, RNG_KEY = random.split(RNG_KEY, 4)
-
-# init_params, potential_fn_gen, transform_fn_gen, _ = initialize_model(
-#     MODEL_KEY,
-#     MODEL,
-#     model_kwargs=model_inputs,
-#     dynamic_args=True,
-#     init_strategy=init_to_sample,
-#     # forward_mode_differentiation=True,
-# )
-
-# logdensity_fn = lambda position: -potential_fn_gen(**model_inputs)(position)
-# transform_fn = lambda position: transform_fn_gen(**model_inputs)(position)
-# initial_position = init_params.z
-
-# initial_state = blackjax.mcmc.mclmc.init(
-#     position=initial_position, logdensity_fn=logdensity_fn, rng_key=INIT_KEY
-# )
-
-# kernel = blackjax.mcmc.mclmc.build_kernel(
-#     logdensity_fn=logdensity_fn,
-#     integrator=blackjax.mcmc.integrators.noneuclidean_mclachlan,
-# )
-
-# (
-#     blackjax_state_after_tuning,
-#     blackjax_mclmc_sampler_params,
-# ) = blackjax.mclmc_find_L_and_step_size(
-#     mclmc_kernel=kernel,
-#     num_steps=NUM_ADAPTATION,
-#     state=initial_state,
-#     rng_key=TUNE_KEY,
-# )
-
-# print(f"\nTuning Steps: {NUM_ADAPTATION}")
-# print(f"Found L = {blackjax_mclmc_sampler_params.L}")
-# print(f"Found step size = {blackjax_mclmc_sampler_params.step_size}\n")
-
-# sampling_alg = blackjax.mclmc(
-#     logdensity_fn,
-#     L=blackjax_mclmc_sampler_params.L,
-#     step_size=blackjax_mclmc_sampler_params.step_size,
-# )
-
-
-# print("\nRunning MCMC...\n")
-
-# initial_state = blackjax_state_after_tuning
-# posterior_samples = {}
-
-# for i in range(len(SAMPLE_STEPS)):
-#     RUN_KEY, RNG_KEY = random.split(RNG_KEY)
-#     n_steps = SAMPLE_STEPS[i]
-#     cumulative_n_steps = jnp.sum(SAMPLE_STEPS[: i + 1])
-#     print(f"\nSampling Steps: {cumulative_n_steps}/{NUM_SAMPLES}")
-
-#     initial_state, state_history, info_history = run_inference_algorithm(
-#         rng_key=RUN_KEY,
-#         initial_state=initial_state,
-#         inference_algorithm=sampling_alg,
-#         num_steps=n_steps,
-#         progress_bar=True,
-#         # transform=transform_fn,
-#     )
-
-#     transformed_state = jax.vmap(transform_fn)(state_history.position)
-
-#     if i == 0:
-#         for key in shared_params + independent_params + ["f_SN_1_mid"]:
-#             if key in transformed_state.keys():
-#                 posterior_samples[key] = transformed_state[key]
-#     else:
-#         for key in posterior_samples.keys():
-#             posterior_samples[key] = jnp.concatenate(
-#                 (posterior_samples[key], transformed_state[key]), axis=0
-#             )
-
 SAMPLING_KEY, RNG_KEY = random.split(RNG_KEY)
 
 (
@@ -468,6 +393,7 @@ SAMPLING_KEY, RNG_KEY = random.split(RNG_KEY)
     num_samples=SAMPLE_STEPS,
     num_tuning_steps=NUM_ADAPTATION,
     num_chains=NUM_CHAINS,
+    thinning=THINNING,
     verbose=True,
 )
 
@@ -499,8 +425,14 @@ print("\nCalculating Autocorrelation...\n")
 
 autocorr_steps = np.exp(np.linspace(np.log(100), np.log(NUM_SAMPLES), 10)).astype(int)
 taus = np.array(
-    [sampling.autocorrelation_time(samples_array[:, :n, :]) for n in autocorr_steps]
+    [
+        sampling.autocorrelation_time(
+            samples_array[:, :n, :], num_chains=NUM_CHAINS, thinning=THINNING
+        )
+        for n in autocorr_steps
+    ]
 )
+autocorr_steps = autocorr_steps * THINNING
 
 fig, ax = plt.subplots(1, 1, figsize=(8, 6))
 ax.loglog(autocorr_steps, taus, "o-", color=default_colors[0])

@@ -271,6 +271,22 @@ def unflatten_parameter(parameter_arr, n_chains=1):
     return jnp.reshape(parameter_arr, new_shape)
 
 
+def thin_samples(samples_arr, n_chains=1, thinning=1):
+    if n_chains > 1:
+        thinned_samples = samples_arr[:, ::thinning, ...]
+    else:
+        thinned_samples = samples_arr[::thinning, ...]
+
+    return thinned_samples
+
+
+def thin_chains(chains, n_chains, thinning):
+    thinning_fn = lambda x: thin_samples(x, n_chains=n_chains, thinning=thinning)
+    thinned_chains = jax.tree_map(thinning_fn, chains)
+
+    return thinned_chains
+
+
 def constrain_parameters(state_history, constrain_fn, n_chains=1):
     if n_chains > 1:
         flattened_positions = jax.tree_map(flatten_parameter, state_history.position)
@@ -293,6 +309,7 @@ def run_mclcm_sampler(
     num_tuning_steps=500,
     num_chains=1,
     target_varE=1e-4,
+    thinning=1,
     verbose=False,
 ):
     init_key, tuning_key, rng_key = random.split(rng_key, 3)
@@ -326,7 +343,9 @@ def run_mclcm_sampler(
     total_samples = jnp.sum(num_samples)
 
     if verbose:
-        print(f"\nBeginning sampling for {num_chains} chains, {total_samples} steps split across {n_splits} runs...")
+        print(
+            f"\nBeginning sampling for {num_chains} chains, {total_samples} steps split across {n_splits} runs..."
+        )
     t0 = time.time()
 
     transformed_positions = None
@@ -336,7 +355,7 @@ def run_mclcm_sampler(
         sampling_key, rng_key = random.split(rng_key)
 
         n_steps = num_samples[i]
-        cumulative_n_steps = jnp.sum(num_samples[:i + 1])
+        cumulative_n_steps = jnp.sum(num_samples[: i + 1])
         print(f"\nSampling Steps: {cumulative_n_steps}/{total_samples}")
 
         state, state_history, iter_info_history = run_inference_algorithm(
@@ -346,6 +365,17 @@ def run_mclcm_sampler(
             num_steps=n_steps,
             num_chains=num_chains,
             progress_bar=verbose,
+        )
+
+        state_history = state_history._replace(
+            position=thin_chains(
+                state_history.position, n_chains=num_chains, thinning=thinning
+            )
+        )
+        iter_info_history = iter_info_history._replace(
+            energy_change=thin_samples(
+                iter_info_history.energy_change, n_chains=num_chains, thinning=thinning
+            )
         )
 
         if i == 0:
@@ -362,7 +392,8 @@ def run_mclcm_sampler(
             )
             for key in transformed_positions.keys():
                 transformed_positions[key] = jnp.concatenate(
-                    (transformed_positions[key], iter_transformed_positions[key]), axis=1
+                    (transformed_positions[key], iter_transformed_positions[key]),
+                    axis=1,
                 )
 
     t1 = time.time()
@@ -373,7 +404,7 @@ def run_mclcm_sampler(
 
 
 def arviz_from_states(positions, stats, chains=1, divergence_threshold=1e3):
-    divergences = stats['energy_change'] > divergence_threshold
+    divergences = stats["energy_change"] > divergence_threshold
     posterior = az.from_dict(positions)
     sample_stats = az.convert_to_inference_data(
         {"diverging": divergences}, group="sample_stats"
@@ -381,6 +412,7 @@ def arviz_from_states(positions, stats, chains=1, divergence_threshold=1e3):
     trace = az.concat(posterior, sample_stats)
 
     return trace
+
 
 def autocorrelation_time(x, num_chains=1, thinning=1):
     autocorr_at_lags = autocorrelation(x, axis=1)
