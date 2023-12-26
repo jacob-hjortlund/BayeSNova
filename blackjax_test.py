@@ -79,9 +79,10 @@ def tripp_mag(
 
 # -------------------------- SETTINGS --------------------------------- #
 
-NUM_ADAPTATION = int(1e3)
-MAX_SAMPLES = int(1e3)
-NUM_SAMPLES = int(1e4)  # 10000000
+NUM_ADAPTATION = int(1e6)
+MAX_SAMPLES = int(1e5)
+NUM_SAMPLES = int(1e6)
+THINNING = int(1e3)
 TARGET_VARE = 5e-4  # 5e-4
 SEED = 4928873
 RNG_KEY = random.PRNGKey(SEED)
@@ -493,6 +494,8 @@ for key in samples.keys():
     else:
         samples_array.append(flattened_sample.reshape(NUM_CHAINS, NUM_SAMPLES, -1))
 samples_array = np.concatenate(samples_array, axis=-1)
+
+print("\nCalculating Autocorrelation...\n")
 
 autocorr_steps = np.exp(np.linspace(np.log(100), np.log(NUM_SAMPLES), 10)).astype(int)
 taus = np.array(

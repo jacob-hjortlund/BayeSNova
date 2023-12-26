@@ -18,6 +18,7 @@ import numpyro.infer.util as infer_util
 from jax.lax import cond
 from datetime import date
 from numpyro.handlers import seed, trace
+from numpyro.diagnostics import autocorrelation
 from jax.experimental import host_callback
 from numpyro.infer.util import initialize_model
 from numpyro.infer.initialization import init_to_sample
@@ -320,7 +321,7 @@ def run_mclcm_sampler(
         verbose=verbose,
     )
 
-    num_samples = jnp.atleast_1d(num_samples)
+    num_samples = np.atleast_1d(num_samples)
     n_splits = len(num_samples)
     total_samples = jnp.sum(num_samples)
 
@@ -347,14 +348,14 @@ def run_mclcm_sampler(
             progress_bar=verbose,
         )
 
-        if i==0:
+        if i == 0:
             transformed_positions = constrain_parameters(
                 state_history, constrain_fn, n_chains=num_chains
             )
-            info_history = {'energy_change': iter_info_history['energy_change']}
+            info_history = {"energy_change": iter_info_history.energy_change}
         else:
-            info_history['energy_change'] = jnp.concatenate(
-                (info_history['energy_change'], iter_info_history['energy_change']), axis=1
+            info_history["energy_change"] = jnp.concatenate(
+                (info_history["energy_change"], iter_info_history.energy_change), axis=1
             )
             iter_transformed_positions = constrain_parameters(
                 state_history, constrain_fn, n_chains=num_chains
@@ -381,16 +382,15 @@ def arviz_from_states(positions, stats, chains=1, divergence_threshold=1e3):
 
     return trace
 
-
-def autocorrelation_time(x, num_chains=1):
-    autocorr_at_lags = az.autocorr(x, axis=1)
-    taus = np.zeros((autocorr_at_lags.shape[-1]))
+def autocorrelation_time(x, num_chains=1, thinning=1):
+    autocorr_at_lags = autocorrelation(x, axis=1)
+    taus = jnp.zeros((autocorr_at_lags.shape[-1]))
     for i in range(num_chains):
         for j in range(autocorr_at_lags.shape[-1]):
-            idx_neg = np.argmax(autocorr_at_lags[i, :, j] < 0)
-            taus[j] += 2 * np.sum(autocorr_at_lags[i, :idx_neg, j]) - 1
+            idx_neg = jnp.argmax(autocorr_at_lags[i, :, j] < 0)
+            taus.at[j].add(2 * jnp.sum(autocorr_at_lags[i, :idx_neg, j]) - 1)
 
-    taus /= num_chains
-    max_tau = np.max(taus)
+    mean_taus = taus / num_chains
+    max_tau = jnp.max(mean_taus) * thinning
 
     return max_tau
