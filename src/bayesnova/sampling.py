@@ -376,8 +376,6 @@ def run_mclcm_sampler(
             progress_bar=verbose,
         )
 
-        print(f"State pos: {state_history.position['loc'].shape}")
-
         state_history = state_history._replace(
             position=thin_chains(
                 state_history.position, n_chains=num_chains, thinning=thinning
@@ -410,8 +408,6 @@ def run_mclcm_sampler(
                     (transformed_positions[key], iter_transformed_positions[key]),
                     axis=1,
                 )
-
-        print(f"Transformed pos: {transformed_positions['loc'].shape}")
 
         transformed_pos_array = []
         for key in sample_keys:
