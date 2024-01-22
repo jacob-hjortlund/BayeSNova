@@ -80,20 +80,15 @@ def tripp_mag(
 # -------------------------- SETTINGS --------------------------------- #
 
 NUM_ADAPTATION = int(1e6)
-MAX_SAMPLES = int(1e5)
-NUM_SAMPLES = int(1e6)
+MAX_STEPS = int(1e6)
+STEP_INTERVAL = int(1e3)
+AUTOCORR_TOL = 50.0
 THINNING = int(1e3)
+N_PLOT_SAMPLES = int(1e4)
 TARGET_VARE = 5e-4  # 5e-4
 SEED = 4928873
 RNG_KEY = random.PRNGKey(SEED)
 
-if NUM_SAMPLES > MAX_SAMPLES:
-    SAMPLE_STEPS = np.full(NUM_SAMPLES // MAX_SAMPLES, MAX_SAMPLES)
-    SAMPLE_STEPS[: NUM_SAMPLES % MAX_SAMPLES] += 1
-else:
-    SAMPLE_STEPS = np.array([NUM_SAMPLES])
-
-NUM_SAMPLES = NUM_SAMPLES // THINNING
 NUM_CHAINS = 4
 F_SN_1_MIN = 0.0
 VERBOSE = False
@@ -113,7 +108,9 @@ MODEL = globals()[MODEL_NAME]
 print("\nModel: ", MODEL_NAME)
 print("Run Name: ", RUN_NAME)
 print("Num Warmup: ", NUM_ADAPTATION)
-print("Num Samples: ", NUM_SAMPLES)
+print("Max Steps: ", MAX_STEPS)
+print("Step Interval: ", STEP_INTERVAL)
+print("Autocorrelation Tolerance: ", AUTOCORR_TOL)
 print("Num Thinning: ", THINNING)
 print("Num Chains: ", NUM_CHAINS, "\n")
 
@@ -386,13 +383,17 @@ SAMPLING_KEY, RNG_KEY = random.split(RNG_KEY)
     state_history,
     info_history,
     transformed_state,
+    autocorr,
+    autocorr_steps,
 ) = sampling.run_mclcm_sampler(
     rng_key=RNG_KEY,
     model=MODEL,
     model_kwargs=model_inputs,
-    num_samples=SAMPLE_STEPS,
     num_tuning_steps=NUM_ADAPTATION,
     num_chains=NUM_CHAINS,
+    max_steps=MAX_STEPS,
+    step_interval=STEP_INTERVAL,
+    autocorr_tolerance=AUTOCORR_TOL,
     thinning=THINNING,
     verbose=True,
 )
@@ -418,24 +419,13 @@ for key in samples.keys():
     elif len(shape) == 2:
         samples_array.append(flattened_sample[..., None])
     else:
-        samples_array.append(flattened_sample.reshape(NUM_CHAINS, NUM_SAMPLES, -1))
+        samples_array.append(flattened_sample)
 samples_array = np.concatenate(samples_array, axis=-1)
 
-print("\nCalculating Autocorrelation...\n")
-
-autocorr_steps = np.exp(np.linspace(np.log(100), np.log(NUM_SAMPLES), 10)).astype(int)
-taus = np.array(
-    [
-        sampling.autocorrelation_time(
-            samples_array[:, :n, :], num_chains=NUM_CHAINS, thinning=THINNING
-        )
-        for n in autocorr_steps
-    ]
-)
-autocorr_steps = autocorr_steps * THINNING
+print("\nVisualizing Autocorrelation...\n")
 
 fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-ax.loglog(autocorr_steps, taus, "o-", color=default_colors[0])
+ax.loglog(autocorr_steps, autocorr, "o-", color=default_colors[0])
 ylim = ax.get_ylim()
 ax.plot(autocorr_steps, autocorr_steps / 50, "--", color="k")
 ax.set_ylim(ylim)
@@ -500,8 +490,12 @@ corner(
 print("\nPlotting population fraction...\n")
 
 if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass" or MODEL_NAME == "SNMassDelta":
+    n_samples = len(posterior_samples["f_SN_1_mid"])
+    if N_PLOT_SAMPLES > n_samples:
+        N_PLOT_SAMPLES = n_samples
+
     idx = np.random.choice(
-        len(posterior_samples["f_SN_1_mid"]), size=MAX_SAMPLES * 5, replace=False
+        len(posterior_samples["f_SN_1_mid"]), size=N_PLOT_SAMPLES, replace=False
     )
     f_SN_1_mid = posterior_samples["f_SN_1_mid"][idx]
     scaling = posterior_samples["scaling"][idx]
@@ -513,8 +507,8 @@ if MODEL_NAME == "SNMass" or MODEL_NAME == "SN2PopMass" or MODEL_NAME == "SNMass
         mass_scatter = posterior_samples["M_host_mixture_std"]
 
     mass = np.linspace(6, 13, 100)
-    f_1_samples = np.zeros((MAX_SAMPLES, 100))
-    for i in range(MAX_SAMPLES):
+    f_1_samples = np.zeros((N_PLOT_SAMPLES, 100))
+    for i in range(N_PLOT_SAMPLES):
         obs_rescaled_mass = (mass - host_mean) / host_std
         rescaled_mass = (obs_rescaled_mass - mean_mass[i]) / mass_scatter[i]
         linear_function = scaling[i] * rescaled_mass
