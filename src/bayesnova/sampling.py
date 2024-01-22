@@ -338,7 +338,6 @@ def run_mclcm_sampler(
     )
     t1 = time.time()
     if verbose:
-        print(f"Init state: {init_state.position['loc'].shape}")
         print(f"Initialization completed in {t1-t0:.2f} seconds.\n")
 
     tuned_mlmc = tune_mclmc(
