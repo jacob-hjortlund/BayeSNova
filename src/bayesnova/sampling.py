@@ -432,7 +432,7 @@ def run_mclcm_sampler(
         )
         autocorrs.append(autocorr)
 
-        print(f"Autocorrelation: {autocorr:.2f} at {cumulative_n_steps} steps.")
+        print(f"Autocorrelation: {autocorr:.2f} / {cumulative_n_steps/autocorr_tolerance:.2f} at {cumulative_n_steps} steps with tolerance {autocorr_tolerance}.")
 
         if cumulative_n_steps >= max_steps:
             is_at_max_steps = True
