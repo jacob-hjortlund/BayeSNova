@@ -81,7 +81,7 @@ def tripp_mag(
 
 NUM_ADAPTATION = int(1e6)
 MAX_SAMPLES = int(1e5)
-NUM_SAMPLES = int(1e6)
+NUM_SAMPLES = int(1e7)
 THINNING = int(1e3)
 TARGET_VARE = 5e-4  # 5e-4
 SEED = 4928873
