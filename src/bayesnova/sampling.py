@@ -26,6 +26,7 @@ from blackjax.util import run_inference_algorithm
 from blackjax.mcmc.integrators import IntegratorState
 from fastprogress.fastprogress import progress_bar
 from numpyro.contrib.control_flow import scan
+from functools import partial
 
 
 def initialize_model(rng_key, model, model_args=(), model_kwargs={}, num_chains=1):
@@ -243,9 +244,9 @@ def run_inference_algorithm(
     final_state, state_history, info_history = jax.pmap(sample_chain, (0, 0))(
         chain_keys, initial_state
     )
-    final_state = jax.block_until_ready(final_state)
-    state_history = jax.block_until_ready(state_history)
-    info_history = jax.block_until_ready(info_history)
+    # final_state = jax.block_until_ready(final_state)
+    # state_history = jax.block_until_ready(state_history)
+    # info_history = jax.block_until_ready(info_history)
 
     return final_state, state_history, info_history
 
@@ -414,15 +415,57 @@ def arviz_from_states(positions, stats, chains=1, divergence_threshold=1e3):
     return trace
 
 
-def autocorrelation_time(x, num_chains=1, thinning=1):
-    autocorr_at_lags = autocorrelation(x, axis=1)
-    taus = jnp.zeros((autocorr_at_lags.shape[-1]))
-    for i in range(num_chains):
-        for j in range(autocorr_at_lags.shape[-1]):
-            idx_neg = jnp.argmax(autocorr_at_lags[i, :, j] < 0)
-            taus.at[j].add(2 * jnp.sum(autocorr_at_lags[i, :idx_neg, j]) - 1)
+class AutocorrError(Exception):
+    """Raised if the chain is too short to estimate an autocorrelation time.
 
-    mean_taus = taus / num_chains
-    max_tau = jnp.max(mean_taus) * thinning
+    The current estimate of the autocorrelation time can be accessed via the
+    ``tau`` attribute of this exception.
 
-    return max_tau
+    """
+
+    def __init__(self, tau, *args, **kwargs):
+        self.tau = tau
+        super(AutocorrError, self).__init__(*args, **kwargs)
+
+
+def function_1d(x, n_t, n):
+    f = jnp.fft.fft(x - jnp.mean(x), n)
+    acf = jnp.fft.ifft(f * jnp.conjugate(f))[:n_t].real
+    normed_acf = acf / acf[0]
+    return normed_acf
+
+
+def auto_window(taus, c):
+    m = jnp.arange(taus.shape[0]) < c * taus
+    any_m = jnp.any(m)
+    window_size = jax.lax.cond(
+        any_m,
+        lambda: jnp.argmin(m),
+        lambda: taus.shape[0] - 1,
+    )
+    return window_size
+
+
+def tau(x, c, n_t, n):
+    f = jnp.mean(jax.vmap(function_1d, in_axes=(0, None, None))(x, n_t, n), axis=0)
+    taus = 2.0 * jnp.cumsum(f) - 1.0
+    window = auto_window(taus, c)
+    tau_est = taus[window]
+    return tau_est
+
+
+@partial(jax.jit, static_argnums=(2, 3))
+def taus(x, c, n_t, n):
+    taus = jax.vmap(tau, in_axes=(-1, None, None, None))(x, c, n_t, n)
+    return taus
+
+
+def autocorrelation_time(
+    x: jnp.ndarray,
+    n_t: int,
+    c: float = 5.0,
+):
+    n = 2 ** np.ceil(np.log2(n_t)).astype(int)
+
+    est_taus = taus(x, c, n_t, n)
+    return est_taus
