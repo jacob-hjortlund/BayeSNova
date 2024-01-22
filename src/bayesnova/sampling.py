@@ -306,14 +306,24 @@ def run_mclcm_sampler(
     model,
     model_args=(),
     model_kwargs={},
-    num_samples=1000,
     num_tuning_steps=500,
+    max_steps=1000,
+    step_interval=100,
     num_chains=1,
     target_varE=1e-4,
     thinning=1,
+    autocorr_tolerance=50.0,
     verbose=False,
 ):
-    init_key, tuning_key, rng_key = random.split(rng_key, 3)
+    init_key, tuning_key, trace_key, rng_key = random.split(rng_key, 4)
+
+    seeded_model = seed(model, trace_key)
+    model_trace = trace(seeded_model).get_trace(*model_args, **model_kwargs)
+    sample_keys = [
+        key
+        for key in model_trace.keys()
+        if model_trace[key]["type"] == "sample" and not model_trace[key]["is_observed"]
+    ]
 
     if verbose:
         print("\nInitializing model...")
@@ -328,6 +338,7 @@ def run_mclcm_sampler(
     )
     t1 = time.time()
     if verbose:
+        print(f"Init state: {init_state.position['loc'].shape}")
         print(f"Initialization completed in {t1-t0:.2f} seconds.\n")
 
     tuned_mlmc = tune_mclmc(
@@ -339,34 +350,33 @@ def run_mclcm_sampler(
         verbose=verbose,
     )
 
-    num_samples = np.atleast_1d(num_samples)
-    n_splits = len(num_samples)
-    total_samples = jnp.sum(num_samples)
-
-    if verbose:
-        print(
-            f"\nBeginning sampling for {num_chains} chains, {total_samples} steps split across {n_splits} runs..."
-        )
+    # if verbose:
+    #     print(
+    #         f"\nBeginning sampling for {num_chains} chains, {total_samples} steps split across {n_splits} runs..."
+    #     )
     t0 = time.time()
 
     transformed_positions = None
     info_history = None
     state = init_state
-    for i in range(n_splits):
-        sampling_key, rng_key = random.split(rng_key)
+    is_converged = False
+    is_at_max_steps = False
+    cumulative_n_steps = 0
+    autocorrs = []
 
-        n_steps = num_samples[i]
-        cumulative_n_steps = jnp.sum(num_samples[: i + 1])
-        print(f"\nSampling Steps: {cumulative_n_steps}/{total_samples}")
+    while not is_converged and not is_at_max_steps:
+        sampling_key, rng_key = random.split(rng_key)
 
         state, state_history, iter_info_history = run_inference_algorithm(
             rng_key=sampling_key,
             initial_state=state,
             inference_algorithm=tuned_mlmc,
-            num_steps=n_steps,
+            num_steps=step_interval,
             num_chains=num_chains,
             progress_bar=verbose,
         )
+
+        print(f"State pos: {state_history.position['loc'].shape}")
 
         state_history = state_history._replace(
             position=thin_chains(
@@ -379,29 +389,79 @@ def run_mclcm_sampler(
             )
         )
 
-        if i == 0:
+        if cumulative_n_steps == 0:
             transformed_positions = constrain_parameters(
                 state_history, constrain_fn, n_chains=num_chains
             )
             info_history = {"energy_change": iter_info_history.energy_change}
         else:
-            info_history["energy_change"] = jnp.concatenate(
-                (info_history["energy_change"], iter_info_history.energy_change), axis=1
+            info_history["energy_change"] = np.concatenate(
+                (
+                    info_history["energy_change"],
+                    iter_info_history.energy_change,
+                ),
+                axis=1,
             )
             iter_transformed_positions = constrain_parameters(
                 state_history, constrain_fn, n_chains=num_chains
             )
             for key in transformed_positions.keys():
-                transformed_positions[key] = jnp.concatenate(
+                transformed_positions[key] = np.concatenate(
                     (transformed_positions[key], iter_transformed_positions[key]),
                     axis=1,
                 )
 
-    t1 = time.time()
-    if verbose:
-        print(f"Sampling completed in {t1-t0:.2f} seconds.\n")
+        print(f"Transformed pos: {transformed_positions['loc'].shape}")
 
-    return state, state_history, info_history, transformed_positions
+        transformed_pos_array = []
+        for key in sample_keys:
+            if key not in transformed_positions.keys():
+                continue
+            sample_arr = transformed_positions[key]
+            sample_shape = sample_arr.shape
+            if len(sample_shape) == 1:
+                transformed_pos_array.append(sample_arr[:, None, None])
+            elif len(sample_shape) == 2:
+                transformed_pos_array.append(sample_arr[:, :, None])
+            else:
+                transformed_pos_array.append(sample_arr)
+
+        cumulative_n_steps += step_interval
+        transformed_pos_array = np.concatenate(transformed_pos_array, axis=-1)
+        autocorr = (
+            np.max(
+                autocorrelation_time(transformed_pos_array, cumulative_n_steps, c=5.0)
+            )
+            * thinning
+        )
+        autocorrs.append(autocorr)
+
+        print(f"Autocorrelation: {autocorr:.2f} at {cumulative_n_steps} steps.")
+
+        if cumulative_n_steps >= max_steps:
+            is_at_max_steps = True
+        if autocorr <= cumulative_n_steps / autocorr_tolerance:
+            is_converged = True
+
+    t1 = time.time()
+
+    if verbose:
+        if is_at_max_steps and not is_converged:
+            print(
+                (
+                    f"\nSampling stopped after {max_steps} steps in {t1 - t0:.2f} seconds without convergence, "
+                    + f"reaching autocorrelation lenght {autocorr:.2f}. Consider increasing the number of steps.\n"
+                )
+            )
+        elif is_converged:
+            print(
+                f"\nSampling has converged after {cumulative_n_steps} steps in {t1 - t0:.2f} seconds with autocorrelation {autocorr}.\n"
+            )
+
+    autocorrs = jnp.array(autocorrs)
+    steps = jnp.arange(autocorrs.shape[0]) * step_interval
+
+    return state, state_history, info_history, transformed_positions, autocorrs, steps
 
 
 def arviz_from_states(positions, stats, chains=1, divergence_threshold=1e3):
@@ -465,6 +525,7 @@ def autocorrelation_time(
     n_t: int,
     c: float = 5.0,
 ):
+    x = jnp.asarray(x)
     n = 2 ** np.ceil(np.log2(n_t)).astype(int)
 
     est_taus = taus(x, c, n_t, n)
