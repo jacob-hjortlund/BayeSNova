@@ -8,6 +8,7 @@ import pygtc
 import blackjax
 import arviz as az
 import numpy as np
+import jax.profiler
 import numpyro as npy
 import jax.numpy as jnp
 import jax.random as random
@@ -349,10 +350,8 @@ def run_mclcm_sampler(
         verbose=verbose,
     )
 
-    # if verbose:
-    #     print(
-    #         f"\nBeginning sampling for {num_chains} chains, {total_samples} steps split across {n_splits} runs..."
-    #     )
+    if verbose:
+        print("\nRunning MCLMC sampler...")
     t0 = time.time()
 
     transformed_positions = None
@@ -364,6 +363,11 @@ def run_mclcm_sampler(
     autocorrs = []
 
     while not is_converged and not is_at_max_steps:
+        if verbose:
+            print(
+                f"\nAt {cumulative_n_steps} steps, sampling for {step_interval} steps."
+            )
+
         sampling_key, rng_key = random.split(rng_key)
 
         state, state_history, iter_info_history = run_inference_algorithm(
@@ -431,7 +435,10 @@ def run_mclcm_sampler(
         )
         autocorrs.append(autocorr)
 
-        print(f"Autocorrelation: {autocorr:.2f} / {cumulative_n_steps/autocorr_tolerance:.2f} at {cumulative_n_steps} steps with tolerance {autocorr_tolerance}.")
+        if verbose:
+            print(
+                f"Autocorrelation: {autocorr:.2f} / {cumulative_n_steps/autocorr_tolerance:.2f} at {cumulative_n_steps} steps with tolerance {autocorr_tolerance}."
+            )
 
         if cumulative_n_steps >= max_steps:
             is_at_max_steps = True
