@@ -290,14 +290,14 @@ def thin_chains(chains, n_chains, thinning):
 
 
 def constrain_parameters(state_history, constrain_fn, n_chains=1):
-    if n_chains > 1:
-        flattened_positions = jax.tree_map(flatten_parameter, state_history.position)
-        constrained_positions = jax.vmap(constrain_fn)(flattened_positions)
-        constrained_positions = jax.tree_map(
-            lambda x: unflatten_parameter(x, n_chains), constrained_positions
-        )
-    else:
-        constrained_positions = jax.vmap(constrain_fn)(state_history.position)
+    # if n_chains > 1:
+    flattened_positions = jax.tree_map(flatten_parameter, state_history.position)
+    constrained_positions = jax.vmap(constrain_fn)(flattened_positions)
+    constrained_positions = jax.tree_map(
+        lambda x: unflatten_parameter(x, n_chains), constrained_positions
+    )
+    # else:
+    #     constrained_positions = jax.vmap(constrain_fn)(state_history.position)
 
     return constrained_positions
 
@@ -315,6 +315,7 @@ def run_mclcm_sampler(
     thinning=1,
     autocorr_tolerance=50.0,
     verbose=False,
+    use_autocorr=True,
 ):
     init_key, tuning_key, trace_key, rng_key = random.split(rng_key, 4)
 
@@ -426,13 +427,18 @@ def run_mclcm_sampler(
                 transformed_pos_array.append(sample_arr)
 
         cumulative_n_steps += step_interval
-        transformed_pos_array = np.concatenate(transformed_pos_array, axis=-1)
-        autocorr = (
-            np.max(
-                autocorrelation_time(transformed_pos_array, cumulative_n_steps, c=5.0)
+        if use_autocorr:
+            transformed_pos_array = np.concatenate(transformed_pos_array, axis=-1)
+            autocorr = (
+                np.max(
+                    autocorrelation_time(
+                        transformed_pos_array, cumulative_n_steps, c=5.0
+                    )
+                )
+                * thinning
             )
-            * thinning
-        )
+        else:
+            autocorr = jnp.inf
         autocorrs.append(autocorr)
 
         if verbose:

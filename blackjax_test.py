@@ -44,6 +44,7 @@ from bayesnova.numpyro_models import (
     run_mcmc,
     sigmoid,
     distance_moduli,
+    SingleSNTwoPopDust,
 )
 
 import blackjax
@@ -80,7 +81,7 @@ def tripp_mag(
 # -------------------------- SETTINGS --------------------------------- #
 
 NUM_ADAPTATION = int(1e6)
-MAX_STEPS = int(1e8)
+MAX_STEPS = int(1e6)
 STEP_INTERVAL = int(1e5)
 AUTOCORR_TOL = 25.0
 THINNING = int(1e0)
@@ -100,7 +101,7 @@ UPPER_R_B_bound = 100.0
 
 DATASET_NAME = "supercal_hubble_flow"
 RUN_NAME = "Base"  # "Supercal_MCLMC"
-MODEL_NAME = "SNDelta"
+MODEL_NAME = "SingleSNTwoPopDust"  # "SNDelta"
 MODEL = globals()[MODEL_NAME]
 # MODEL = do(MODEL, {"f_SN_1": 0.35})
 
@@ -161,7 +162,9 @@ shared_params = [
     "alpha",
     "beta",
     "R_B",
+    "delta_R_B",
     "R_B_scatter",
+    "delta_R_B_scatter",
     "gamma_EBV",
     "scaling",
     "M_host",
@@ -182,7 +185,7 @@ shared_params = [
     "delta_tau_EBV",
 ]
 
-if MODEL_NAME == "SN" or MODEL_NAME == "SNDelta":
+if MODEL_NAME == "SN" or MODEL_NAME == "SNDelta" or MODEL_NAME == "SingleSNTwoPopDust":
     shared_params += ["f_sn_1"]
 
 independent_params = []

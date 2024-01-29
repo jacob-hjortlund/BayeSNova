@@ -77,6 +77,166 @@ def run_mcmc(
     return mcmc
 
 
+def model_builder(
+    cosmology_priors,
+    intrinsic_population_priors,
+    extrinsic_population_priors,
+    cosmology_model,
+    extrinsic_model,
+    intrinsic_model,
+    observables_model,
+):
+    def model(
+        n_sn: int,
+        observables: dict,
+        settings=None,
+    ):
+        if settings is None:
+            settings = {}
+
+        cosmology_parameters = cosmology_priors(**settings)
+        intrinsic_parameters = intrinsic_population_priors(**settings)
+        extrinsic_parameters = extrinsic_population_priors(**settings)
+
+        cosmology = cosmology_model(**cosmology_parameters)
+
+        with npy.plate("sn", size=n_sn):
+            latent_intrinsic_parameters = intrinsic_model(**intrinsic_parameters)
+            latent_extrinsic_parameters = extrinsic_model(**extrinsic_parameters)
+            observables_model_input = {
+                "observables": observables,
+                "cosmology": cosmology,
+                "latent_intrinsic_parameters": latent_intrinsic_parameters,
+                "latent_extrinsic_parameters": latent_extrinsic_parameters,
+            }
+            observables_model(**observables_model_input)
+
+    return model
+
+
+# ------------------- INTRINSIC PRIOR AND MODEL DEFINITIONS ------------------- #
+
+
+def intrinsic_1pop_priors(**kwargs):
+    M_int = npy.sample("M_int", dist.TruncatedNormal(-19.5, 5.0, high=-15.0, low=-25.0))
+    X_int = npy.sample("X_int", dist.Normal(-1, 2.0))
+    X_int_scatter = npy.sample("X_int_scatter", dist.HalfNormal(5.0))
+    C_int = npy.sample("C_int", dist.Normal(0.0, 1.0))
+    C_int_scatter = npy.sample("C_int_scatter", dist.HalfNormal(1.0))
+
+    intrinsic_parameters = {
+        "M_int": M_int,
+        "X_int": X_int,
+        "X_int_scatter": X_int_scatter,
+        "C_int": C_int,
+        "C_int_scatter": C_int_scatter,
+    }
+
+    return intrinsic_parameters
+
+
+def intrinsic_2pop_priors(**kwargs):
+    M_int_1 = npy.sample(
+        "M_int", dist.TruncatedNormal(-19.5, 5.0, high=-15.0, low=-25.0)
+    )
+    X_int_1 = npy.sample("X_int", dist.Normal(-1, 2.0))
+    X_int_scatter_1 = npy.sample("X_int_scatter", dist.HalfNormal(5.0))
+    C_int_1 = npy.sample("C_int", dist.Normal(0.0, 1.0))
+    C_int_scatter_1 = npy.sample("C_int_scatter", dist.HalfNormal(1.0))
+
+    delta_M_int = npy.sample("delta_M_int", dist.Normal(0.0, 1.0))
+    delta_X_int = npy.sample("delta_X_int", dist.HalfNormal(2.0))
+    delta_X_int_scatter = npy.sample("delta_X_int_scatter", dist.HalfNormal(1.0))
+    delta_C_int = npy.sample("delta_C_int", dist.Normal(0.0, 1.0))
+    delta_C_int_scatter = npy.sample("delta_C_int_scatter", dist.HalfNormal(1.0))
+
+    M_int_2 = npy.deterministic("M_int_2", M_int_1 + delta_M_int)
+    X_int_2 = npy.deterministic("X_int_2", X_int_1 + delta_X_int)
+    X_int_scatter_2 = npy.deterministic(
+        "X_int_scatter_2", X_int_scatter_1 * delta_X_int_scatter
+    )
+    C_int_2 = npy.deterministic("C_int_2", C_int_1 + delta_C_int)
+    C_int_scatter_2 = npy.deterministic(
+        "C_int_scatter_2", C_int_scatter_1 * delta_C_int_scatter
+    )
+
+    M_int = jnp.stack([M_int_1, M_int_2], axis=-1)
+    X_int = jnp.stack([X_int_1, X_int_2], axis=-1)
+    X_int_scatter = jnp.stack([X_int_scatter_1, X_int_scatter_2], axis=-1)
+    C_int = jnp.stack([C_int_1, C_int_2], axis=-1)
+    C_int_scatter = jnp.stack([C_int_scatter_1, C_int_scatter_2], axis=-1)
+
+    if kwargs.get("verbose", False):
+        print(f"\nIntrinsic Population Parameter shapes:")
+        print(f"M_int.shape: {M_int.shape}")
+        print(f"X_int.shape: {X_int.shape}")
+        print(f"X_int_scatter.shape: {X_int_scatter.shape}")
+        print(f"C_int.shape: {C_int.shape}")
+        print(f"C_int_scatter.shape: {C_int_scatter.shape}")
+
+    intrinsic_parameters = {
+        "M_int": M_int,
+        "X_int": X_int,
+        "X_int_scatter": X_int_scatter,
+        "C_int": C_int,
+        "C_int_scatter": C_int_scatter,
+    }
+
+    return intrinsic_parameters
+
+
+def intrinsic_latent_model(
+    M_int, X_int, X_int_scatter, C_int, C_int_scatter, population_assignment, **kwargs
+):
+    M_int_latent = Vindex(M_int)[..., population_assignment]
+    X_int_latent = npy.sample(
+        "X_int_latent",
+        dist.Normal(
+            Vindex(X_int)[..., population_assignment],
+            Vindex(X_int_scatter)[..., population_assignment],
+        ),
+    )
+    C_int_latent = npy.sample(
+        "C_int_latent",
+        dist.Normal(
+            Vindex(C_int)[..., population_assignment],
+            Vindex(C_int_scatter)[..., population_assignment],
+        ),
+    )
+
+    latent_intrinsic_parameters = {
+        "M_int_latent": M_int_latent,
+        "X_int_latent": X_int_latent,
+        "C_int_latent": C_int_latent,
+    }
+
+    return latent_intrinsic_parameters
+
+
+# ------------------- EXTRINSIC PRIOR AND MODEL DEFINITIONS ------------------- #
+
+
+def extrinsic_2pop_priors(**kwargs):
+    tau_EBV_1 = npy.sample("tau_EBV", dist.HalfNormal(0.5))
+    delta_tau_EBV = npy.sample("delta_tau_EBV", dist.HalfNormal(1.0))
+    tau_EBV_2 = npy.deterministic("tau_EBV_2", tau_EBV_1 * delta_tau_EBV)
+
+    R_B_1 = npy.sample(
+        "R_B",
+        dist.TruncatedNormal(
+            4.1,
+            3.0,
+            low=kwargs.get("lower_R_B_bound", None),
+            high=kwargs.get("upper_R_B_bound", None),
+        ),
+    )
+    R_B_scatter_1 = npy.sample("R_B_scatter", dist.HalfNormal(5.0))
+    unshifted_gamma_EBV_1 = npy.sample("unshifted_gamma_EBV", dist.HalfNormal(1.0))
+    gamma_EBV_1 = npy.deterministic("gamma_EBV", unshifted_gamma_EBV_1 + 1)
+
+    R_B = jnp.ones([2])
+
+
 # ------------------- BASIC MODEL DEFINITIONS ------------------- #
 
 
@@ -458,6 +618,275 @@ def SNDelta(
         )
         apparent_stretch = npy.deterministic("apparent_stretch", X_int_latent)
         apparent_color = npy.deterministic("apparent_color", C_int_latent + EBV_latent)
+
+        if verbose:
+            print(f"apparent_magnitude.shape: {apparent_magnitude.shape}")
+            print(f"apparent_stretch.shape: {apparent_stretch.shape}")
+            print(f"apparent_color.shape: {apparent_color.shape}")
+
+        # Sample observables
+        mean = jnp.stack(
+            [apparent_magnitude, apparent_stretch, apparent_color], axis=-1
+        )
+
+        if verbose:
+            print(f"mean.shape: {mean.shape}\n")
+            print(f"sn_observables.shape: {sn_observables.shape}")
+            print(f"sn_covariances.shape: {sn_covariances.shape}\n")
+
+        result_dist = dist.MultivariateNormal(mean, sn_covariances)
+        npy.sample("sn_observables", result_dist, obs=sn_observables)
+
+
+SNDelta_reparam_cfg = {
+    "X_int_latent": LocScaleReparam(0.0),
+    "C_int_latent": LocScaleReparam(0.0),
+    # "R_B_latent": LocScaleReparam(0.0),
+}
+
+
+@config_enumerate
+@reparam(config=SNDelta_reparam_cfg)
+def SingleSNTwoPopDust(
+    sn_observables=None,
+    sn_covariances=None,
+    sn_redshifts=None,
+    host_mass=None,
+    host_mass_err=None,
+    cosmology=None,
+    constraint_factor=-500,
+    verbose=False,
+    f_SN_1_min=0.15,
+    lower_R_B_bound=None,
+    upper_R_B_bound=None,
+    *args,
+    **kwargs,
+):
+    # sn_observables: [N, 3] array of observables
+    # sn_covariance: [N, 3, 3] array of covariance matrices
+    # sn_redshifts: [N] array of redshifts
+    # host_mass: [N] array of host masses
+
+    # Define Cosmology
+    cosmo = cosmology
+
+    # Define priors on independent population parameters
+    if verbose:
+        print("\n---------------- MODEL SHAPES ----------------")
+
+    M_int = npy.sample("M_int", dist.TruncatedNormal(-19.5, 5.0, high=-15.0, low=-25.0))
+    X_int = npy.sample("X_int", dist.Normal(-1, 2.0))
+    X_int_scatter = npy.sample("X_int_scatter", dist.HalfNormal(5.0))
+    C_int = npy.sample("C_int", dist.Normal(0.0, 1.0))
+    C_int_scatter = npy.sample("C_int_scatter", dist.HalfNormal(1.0))
+    tau_EBV_1 = npy.sample("tau_EBV", dist.HalfNormal(0.5))
+    R_B_1 = npy.sample(
+        "R_B",
+        dist.TruncatedNormal(
+            4.1,
+            3.0,
+            low=lower_R_B_bound,
+            high=upper_R_B_bound,
+        ),
+    )
+    R_B_scatter_1 = npy.sample("R_B_scatter", dist.HalfNormal(5.0))
+
+    delta_tau_EBV = npy.sample("delta_tau_EBV", dist.HalfNormal(1.0))
+    tau_EBV_2 = npy.deterministic("tau_EBV_2", tau_EBV_1 * delta_tau_EBV)
+    delta_R_B = npy.sample("delta_R_B", dist.HalfNormal(1.0))
+    R_B_2 = npy.deterministic("R_B_2", R_B_1 + delta_R_B)
+    delta_R_B_scatter = npy.sample("delta_R_B_scatter", dist.HalfNormal(1.0))
+    R_B_scatter_2 = npy.deterministic(
+        "R_B_scatter_2", R_B_scatter_1 * delta_R_B_scatter
+    )
+
+    tau_EBV = jnp.stack([tau_EBV_1, tau_EBV_2], axis=-1)
+    R_B = jnp.stack([R_B_1, R_B_2], axis=-1)
+    R_B_scatter = jnp.stack([R_B_scatter_1, R_B_scatter_2], axis=-1)
+
+    if verbose:
+        print(f"M_int.shape: {M_int.shape}")
+        print(f"X_int.shape: {X_int.shape}")
+        print(f"X_int_scatter.shape: {X_int_scatter.shape}")
+        print(f"C_int.shape: {C_int.shape}")
+        print(f"C_int_scatter.shape: {C_int_scatter.shape}")
+        print(f"tau_EBV.shape: {tau_EBV.shape}\n")
+
+    # Define priors on shared population parameters
+
+    alpha = npy.sample("alpha", dist.Normal(0, 5.0))
+    beta = npy.sample("beta", dist.HalfNormal(5.0))
+    unshifted_gamma_EBV = npy.sample("unshifted_gamma_EBV", dist.HalfNormal(1.0))
+    gamma_EBV = npy.deterministic("gamma_EBV", unshifted_gamma_EBV + 1)
+
+    if verbose:
+        print(f"alpha.shape: {alpha.shape}")
+        print(f"beta.shape: {beta.shape}")
+        print(f"R_B.shape: {R_B.shape}")
+        print(f"R_B_scatter.shape: {R_B_scatter.shape}")
+        print(f"unshifted_gamma_EBV.shape: {unshifted_gamma_EBV.shape}")
+        print(f"gamma_EBV.shape: {gamma_EBV.shape}")
+
+    # Population fractions
+    f_sn_1 = npy.sample("f_sn_1", dist.Uniform(f_SN_1_min, 1 - f_SN_1_min))
+    f_sn = jnp.array([f_sn_1, 1 - f_sn_1])
+
+    if verbose:
+        print(f"f_sn_1.shape: {f_sn_1.shape}")
+        print(f"f_sn.shape: {f_sn.shape}\n")
+
+    with npy.plate("sn", size=len(sn_redshifts)):
+        # Dust Population assignment
+
+        population_assignment = npy.sample(
+            "population_assignment",
+            dist.Categorical(f_sn),
+            # infer={"enumerate": "parallel"},
+        )
+        M_int_latent = M_int
+
+        if verbose:
+            print(f"population_assignment.shape: {population_assignment.shape}")
+            print(f"M_int_latent.shape: {M_int_latent.shape}\n")
+
+        X_int_latent = npy.sample(
+            "X_int_latent",
+            dist.Normal(X_int, X_int_scatter),
+        )
+
+        if verbose:
+            print(f"X_int_latent.shape: {X_int_latent.shape}\n")
+
+        C_int_latent = npy.sample(
+            "C_int_latent",
+            dist.Normal(C_int, C_int_scatter),
+        )
+
+        if verbose:
+            print(f"C_int_latent.shape: {C_int_latent.shape}\n")
+
+        EBV_latent_decentered = npy.sample(
+            "EBV_latent_decentered", dist.Gamma(gamma_EBV)
+        )
+        EBV_latent_pop_1 = npy.deterministic(
+            "EBV_latent_pop_1", EBV_latent_decentered * Vindex(tau_EBV)[..., 0]
+        )
+        EBV_latent_pop_2 = npy.deterministic(
+            "EBV_latent_pop_2", EBV_latent_decentered * Vindex(tau_EBV)[..., 1]
+        )
+        EBV_latent_values = jnp.stack([EBV_latent_pop_1, EBV_latent_pop_2], axis=-1)
+        EBV_latent = npy.deterministic(
+            "EBV_latent", Vindex(EBV_latent_values)[..., population_assignment]
+        )
+
+        if verbose:
+            print(f"EBV_latent_decentered.shape: {EBV_latent_decentered.shape}")
+            print(f"EBV_latent_pop_1.shape: {EBV_latent_pop_1.shape}")
+            print(f"EBV_latent_pop_2.shape: {EBV_latent_pop_2.shape}")
+            print(f"EBV_latent_values.shape: {EBV_latent_values.shape}")
+            print(f"EBV_latent.shape: {EBV_latent.shape}\n")
+
+        R_B_latent_pop_1 = npy.sample(
+            "R_B_latent_pop_1",
+            dist.TruncatedNormal(
+                loc=Vindex(R_B)[..., 0],
+                scale=Vindex(R_B_scatter)[..., 0],
+                low=lower_R_B_bound,
+                high=upper_R_B_bound,
+            ),
+        )
+
+        R_B_latent_pop_2 = npy.sample(
+            "R_B_latent_pop_2",
+            dist.TruncatedNormal(
+                loc=Vindex(R_B)[..., 1],
+                scale=Vindex(R_B_scatter)[..., 1],
+                low=lower_R_B_bound,
+                high=upper_R_B_bound,
+            ),
+        )
+
+        R_B_latent_values = jnp.stack([R_B_latent_pop_1, R_B_latent_pop_2], axis=-1)
+
+        R_B_latent = npy.deterministic(
+            "R_B_latent", Vindex(R_B_latent_values)[..., population_assignment]
+        )
+
+        if verbose:
+            print(f"R_B_latent_pop_1.shape: {R_B_latent_pop_1.shape}")
+            print(f"R_B_latent_pop_2.shape: {R_B_latent_pop_2.shape}")
+            print(f"R_B_latent_values.shape: {R_B_latent_values.shape}")
+            print(f"R_B_latent.shape: {R_B_latent.shape}\n")
+
+        distance_modulus = distance_moduli(cosmo, sn_redshifts)
+
+        if verbose:
+            print(f"distance_modulus.shape: {distance_modulus.shape}\n")
+
+        app_mag_1 = (
+            M_int
+            + distance_modulus
+            + alpha * X_int_latent
+            + beta * C_int_latent
+            + R_B_latent_pop_1 * EBV_latent_pop_1
+        )
+        app_stretch_1 = X_int_latent
+        app_color_1 = C_int_latent + EBV_latent_pop_1
+        if verbose:
+            print(f"app_mag_1.shape: {app_mag_1.shape}")
+            print(f"app_stretch_1.shape: {app_stretch_1.shape}")
+            print(f"app_color_1.shape: {app_color_1.shape}")
+        mean_1 = jnp.stack([app_mag_1, app_stretch_1, app_color_1], axis=-1)
+        sn_dist_1 = dist.MultivariateNormal(mean_1, sn_covariances)
+
+        if verbose:
+            print(f"mean_1.shape: {mean_1.shape}")
+            print(f"sn_dist_1.shape: {sn_dist_1.shape()}\n")
+
+        app_mag_2 = (
+            M_int
+            + distance_modulus
+            + alpha * X_int_latent
+            + beta * C_int_latent
+            + R_B_latent_pop_2 * EBV_latent_pop_2
+        )
+        app_stretch_2 = X_int_latent
+        app_color_2 = C_int_latent + EBV_latent_pop_2
+        if verbose:
+            print(f"app_mag_2.shape: {app_mag_2.shape}")
+            print(f"app_stretch_2.shape: {app_stretch_2.shape}")
+            print(f"app_color_2.shape: {app_color_2.shape}")
+        mean_2 = jnp.stack([app_mag_2, app_stretch_2, app_color_2], axis=-1)
+        sn_dist_2 = dist.MultivariateNormal(mean_2, sn_covariances)
+
+        if verbose:
+            print(f"mean_2.shape: {mean_2.shape}")
+            print(f"sn_dist_2.shape: {sn_dist_2.shape()}\n")
+
+        apparent_magnitude_values = jnp.stack([app_mag_1, app_mag_2], axis=-1).squeeze()
+        stretch_values = jnp.stack([app_stretch_1, app_stretch_2], axis=-1).squeeze()
+        color_values = jnp.stack([app_color_1, app_color_2], axis=-1).squeeze()
+
+        if verbose:
+            print(f"apparent_magnitude_values.shape: {apparent_magnitude_values.shape}")
+
+        if sn_observables is not None:
+            sn_log_prob_1 = sn_dist_1.log_prob(sn_observables) + jnp.log(f_sn_1)
+            sn_log_prob_2 = sn_dist_2.log_prob(sn_observables) + jnp.log(1 - f_sn_1)
+            npy.deterministic(
+                "sn_log_membership_ratio", (sn_log_prob_1 - sn_log_prob_2) / jnp.log(10)
+            )
+
+        apparent_magnitude = npy.deterministic(
+            "apparent_magnitude",
+            Vindex(apparent_magnitude_values)[..., population_assignment],
+        )
+        apparent_stretch = npy.deterministic(
+            "apparent_stretch", Vindex(stretch_values)[..., population_assignment]
+        )
+        apparent_color = npy.deterministic(
+            "apparent_color", Vindex(color_values)[..., population_assignment]
+        )
 
         if verbose:
             print(f"apparent_magnitude.shape: {apparent_magnitude.shape}")
@@ -1092,6 +1521,7 @@ SNMass_reparam_cfg = {
     "R_B_latent": LocScaleReparam(0.0),
     "M_host_latent": LocScaleReparam(0.0),
 }
+
 
 @config_enumerate
 @reparam(config=SNMass_reparam_cfg)
