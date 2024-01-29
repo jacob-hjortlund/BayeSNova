@@ -101,6 +101,7 @@ RNG_KEY = random.PRNGKey(SEED)
 NUM_CHAINS = 4
 F_SN_1_MIN = 0.0
 VERBOSE = False
+USE_AUTOCORR = False
 CONTINUE = False
 LOWER_HOST_MASS_BOUND = 6.0
 UPPER_HOST_MASS_BOUND = 12.0
@@ -407,6 +408,7 @@ SAMPLING_KEY, RNG_KEY = random.split(RNG_KEY)
     autocorr_tolerance=AUTOCORR_TOL,
     thinning=THINNING,
     verbose=True,
+    use_autocorr=USE_AUTOCORR,
 )
 
 print("\nSaving MCMC...\n")
