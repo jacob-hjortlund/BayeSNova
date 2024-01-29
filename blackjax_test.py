@@ -1,13 +1,17 @@
 # -------------------------- IMPORTS --------------------------------- #
 
+print("No imports yet...")
+
 import os
 
-os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=4"
+# os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=4"
+print("os imported...")
 
 import numpyro as npy
 
 npy.util.enable_x64()
 npy.util.set_platform("cpu")
+print("numpyro imported...")
 
 import re
 import jax
@@ -25,6 +29,8 @@ import scipy.stats as stats
 import matplotlib.pyplot as plt
 import bayesnova.old_src.preprocessing as prep
 import bayesnova.sampling as sampling
+
+print("first import block done...")
 
 from jax import random
 from pathlib import Path
@@ -51,6 +57,8 @@ import blackjax
 from jax.lax import cond
 from fastprogress.fastprogress import progress_bar
 from jax.experimental import host_callback
+
+print("second import block done...")
 
 default_colors = sns.color_palette("colorblind")
 
