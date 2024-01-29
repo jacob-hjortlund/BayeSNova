@@ -83,7 +83,7 @@ NUM_ADAPTATION = int(1e6)
 MAX_STEPS = int(1e8)
 STEP_INTERVAL = int(1e5)
 AUTOCORR_TOL = 25.0
-THINNING = int(1e3)
+THINNING = int(1e0)
 N_PLOT_SAMPLES = int(1e4)
 TARGET_VARE = 5e-4  # 5e-4
 SEED = 4928873
@@ -96,7 +96,7 @@ CONTINUE = False
 LOWER_HOST_MASS_BOUND = 6.0
 UPPER_HOST_MASS_BOUND = 12.0
 LOWER_R_B_bound = 1.2
-UPPER_R_B_bound = 100.
+UPPER_R_B_bound = 100.0
 
 DATASET_NAME = "supercal_hubble_flow"
 RUN_NAME = "Base"  # "Supercal_MCLMC"
