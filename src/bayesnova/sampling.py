@@ -490,13 +490,6 @@ class AutocorrError(Exception):
         super(AutocorrError, self).__init__(*args, **kwargs)
 
 
-def function_1d(x, n_t, n):
-    f = jnp.fft.fft(x - jnp.mean(x), n)
-    acf = jnp.fft.ifft(f * jnp.conjugate(f))[:n_t].real
-    normed_acf = acf / acf[0]
-    return normed_acf
-
-
 def auto_window(taus, c):
     m = jnp.arange(taus.shape[0]) < c * taus
     any_m = jnp.any(m)
@@ -508,17 +501,26 @@ def auto_window(taus, c):
     return window_size
 
 
-def tau(x, c, n_t, n):
-    f = jnp.mean(jax.vmap(function_1d, in_axes=(0, None, None))(x, n_t, n), axis=0)
-    taus = 2.0 * jnp.cumsum(f) - 1.0
-    window = auto_window(taus, c)
-    tau_est = taus[window]
-    return tau_est
-
-
 @partial(jax.jit, static_argnums=(2, 3))
-def taus(x, c, n_t, n):
-    taus = jax.vmap(tau, in_axes=(-1, None, None, None))(x, c, n_t, n)
+def taus_scan(x, c, n_t, n):
+    def _function_1d(carry, x):
+        f = jnp.fft.fft(x - jnp.mean(x), n)
+        acf = jnp.fft.ifft(f * jnp.conjugate(f))[:n_t].real
+        normed_acf = acf / acf[0]
+        return carry, normed_acf
+
+    def _tau(carry, x):
+        _, f_scan = jax.lax.scan(_function_1d, carry, x)
+        f = jnp.mean(f_scan, axis=0)
+        taus = 2.0 * jnp.cumsum(f) - 1.0
+        window = auto_window(taus, c)
+        tau_est = taus[window]
+        return carry, tau_est
+
+    swapped_x = jnp.swapaxes(x, 0, -1)
+    swapped_x = jnp.swapaxes(swapped_x, 1, -1)
+    _, taus = jax.lax.scan(_tau, 0.0, swapped_x)
+
     return taus
 
 
@@ -530,5 +532,5 @@ def autocorrelation_time(
     x = jnp.asarray(x)
     n = 2 ** np.ceil(np.log2(n_t)).astype(int)
 
-    est_taus = taus(x, c, n_t, n)
+    est_taus = taus_scan(x, c, n_t, n)
     return est_taus
