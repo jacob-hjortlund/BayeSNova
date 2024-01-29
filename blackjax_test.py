@@ -80,9 +80,9 @@ def tripp_mag(
 # -------------------------- SETTINGS --------------------------------- #
 
 NUM_ADAPTATION = int(1e6)
-MAX_STEPS = int(1e6)
-STEP_INTERVAL = int(1e3)
-AUTOCORR_TOL = 50.0
+MAX_STEPS = int(1e8)
+STEP_INTERVAL = int(1e5)
+AUTOCORR_TOL = 25.0
 THINNING = int(1e3)
 N_PLOT_SAMPLES = int(1e4)
 TARGET_VARE = 5e-4  # 5e-4
@@ -95,11 +95,11 @@ VERBOSE = False
 CONTINUE = False
 LOWER_HOST_MASS_BOUND = 6.0
 UPPER_HOST_MASS_BOUND = 12.0
-LOWER_R_B_bound = 1.5
-UPPER_R_B_bound = 6.5
+LOWER_R_B_bound = 1.2
+UPPER_R_B_bound = 100.
 
 DATASET_NAME = "supercal_hubble_flow"
-RUN_NAME = "test"  # "Supercal_MCLMC"
+RUN_NAME = "Base"  # "Supercal_MCLMC"
 MODEL_NAME = "SNDelta"
 MODEL = globals()[MODEL_NAME]
 # MODEL = do(MODEL, {"f_SN_1": 0.35})
@@ -397,6 +397,14 @@ SAMPLING_KEY, RNG_KEY = random.split(RNG_KEY)
     thinning=THINNING,
     verbose=True,
 )
+
+print("\nSaving MCMC...\n")
+with open(posterior_path / ("final_state" + RUN_MODIFIER + ".pkl"), "wb") as f:
+    dill.dump(final_state, f)
+with open(posterior_path / ("state_history" + RUN_MODIFIER + ".pkl"), "wb") as f:
+    dill.dump(state_history, f)
+with open(posterior_path / ("info_history" + RUN_MODIFIER + ".pkl"), "wb") as f:
+    dill.dump(info_history, f)
 
 seeded_model = seed(MODEL, RNG_KEY)
 model_trace = trace(seeded_model).get_trace(**model_inputs)
