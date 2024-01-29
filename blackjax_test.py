@@ -1,13 +1,17 @@
 # -------------------------- IMPORTS --------------------------------- #
 
+print("No imports yet...")
+
 import os
 
-os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=4"
+#os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=4"
+print("os imported...")
 
 import numpyro as npy
 
 npy.util.enable_x64()
 npy.util.set_platform("cpu")
+print("numpyro imported...")
 
 import re
 import jax
@@ -25,6 +29,7 @@ import scipy.stats as stats
 import matplotlib.pyplot as plt
 import bayesnova.old_src.preprocessing as prep
 import bayesnova.sampling as sampling
+print("first import block done...")
 
 from jax import random
 from pathlib import Path
@@ -50,6 +55,7 @@ import blackjax
 from jax.lax import cond
 from fastprogress.fastprogress import progress_bar
 from jax.experimental import host_callback
+print("second import block done...")
 
 default_colors = sns.color_palette("colorblind")
 
@@ -80,7 +86,7 @@ def tripp_mag(
 # -------------------------- SETTINGS --------------------------------- #
 
 NUM_ADAPTATION = int(1e6)
-MAX_STEPS = int(1e8)
+MAX_STEPS = int(1e6)
 STEP_INTERVAL = int(1e5)
 AUTOCORR_TOL = 25.0
 THINNING = int(1e0)
@@ -99,7 +105,7 @@ LOWER_R_B_bound = 1.2
 UPPER_R_B_bound = 100.0
 
 DATASET_NAME = "supercal_hubble_flow"
-RUN_NAME = "Base"  # "Supercal_MCLMC"
+RUN_NAME = "test"  # "Supercal_MCLMC"
 MODEL_NAME = "SNDelta"
 MODEL = globals()[MODEL_NAME]
 # MODEL = do(MODEL, {"f_SN_1": 0.35})
